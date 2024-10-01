@@ -2,7 +2,9 @@
 from base64 import b64decode, b64encode
 import pickle
 
-from dash import dash_table, html, callback, MATCH, Input, State, Output, ctx, dcc
+from dash import (
+    dash_table, html, callback, MATCH, Input, State, Output, ctx, dcc
+)
 import dash_bootstrap_components as dbc
 
 from sstatics.core import Node
@@ -11,7 +13,9 @@ from sstatics.core import Node
 class Store(dcc.Store):
 
     def __init__(self, name):
-        super().__init__(id={'type': 'store', 'index': name}, storage_type='session')
+        super().__init__(
+            id={'type': 'store', 'index': name}, storage_type='session'
+        )
         self._data = None
         self.data = {}
         self.available_properties.append('test')
@@ -30,7 +34,9 @@ class Store(dcc.Store):
 
 class Card(dbc.Card):
 
-    def __init__(self, header: str, tab_names: list[str], tab_children: list[html.Div]):
+    def __init__(
+        self, header: str, tab_names: list[str], tab_children: list[html.Div]
+    ):
         children = [
             dbc.CardHeader([
                 dbc.Row([
@@ -72,6 +78,7 @@ class Table(html.Div):
     prevent_initial_call=True
 )
 def add_row(_, obj_dict, columns):
+    obj = None
     if ctx.triggered_id['index'] == 'nodes':
         obj = Node(len(obj_dict) + 1)
     obj_dict[obj.id] = obj
@@ -80,6 +87,7 @@ def add_row(_, obj_dict, columns):
         for obj in obj_dict.values()
     ]
     return rows, obj_dict
+
 
 node_input_table = Table(
     'nodes',

@@ -2,10 +2,14 @@
 import numpy as np
 from typing import Optional
 
+
 class CrossSection:
 
-    def __init__(self, id: int, mom_of_int: float = 0, area: float = 0, height: float = 0, width: float = 0,
-                 cor_far: float = 0, m_plast: float = 0):
+    def __init__(
+        self, id: int, mom_of_int: float = 0, area: float = 0,
+        height: float = 0, width: float = 0, cor_far: float = 0,
+        m_plast: float = 0
+    ):
         self.id = id
         self.mom_of_int = mom_of_int
         self.area = area
@@ -16,15 +20,17 @@ class CrossSection:
 
 
 class Material:
-    def __init__(self, id: int, young_mod: float = 0, poisson: float = 0, shear_mod: float = 0,
-                 therm_exp_coeff: float = 0,
-                 weight: float = 0):
+    def __init__(
+        self, id: int, young_mod: float = 0, poisson: float = 0,
+        shear_mod: float = 0, therm_exp_coeff: float = 0, weight: float = 0
+    ):
         self.id = id
         self.young_mod = young_mod
         self.poisson = poisson
         self.shear_mod = shear_mod
         self.therm_exp_coeff = therm_exp_coeff
         self.weight = weight
+
 
 class Angle:
 
@@ -66,14 +72,18 @@ class NodeLoadCalc:
 
     def rotate(self, node_rot: Angle):
         """ rotates NodeLoad-vector in the node coordination-system """
-        t_matrix = Transformation(self._rotation.radiant, node_rot.radiant).matrix
+        t_matrix = Transformation(
+            self._rotation.radiant, node_rot.radiant
+        ).matrix
         load_vector = np.dot(t_matrix, self._vec)
         return load_vector
 
 
 class NodeLoad:
 
-    def __init__(self, x: float = 0, z: float = 0, phi: float = 0, rotation: float = 0):
+    def __init__(
+        self, x: float = 0, z: float = 0, phi: float = 0, rotation: float = 0
+    ):
         self.x = x
         self.z = z
         self.phi = phi
@@ -87,22 +97,18 @@ class NodeLoad:
     def rotation(self, value):
         self._rotation = Angle(value)
 
-    # @property
-    # def vector(self):
-    #     return NodeLoadCalc(np.array([[self.x], [self.z], [self.phi]]), self._rotation)
-
     def get_vector(self, n):
-        return NodeLoadCalc(np.array([[self.x], [self.z], [self.phi]]), self._rotation).rotate(n)
-
-    # @property
-    # def plot(self):
-    #     return NodeLoadView()
+        return NodeLoadCalc(
+            np.array([[self.x], [self.z], [self.phi]]), self._rotation
+        ).rotate(n)
 
 
 class Node:
 
-    def __init__(self, id: int, x: float = 0, z: float = 0, rotation: float = 0, load: NodeLoad = None):
-
+    def __init__(
+        self, id: int, x: float = 0, z: float = 0, rotation: float = 0,
+        load: NodeLoad = None
+    ):
         self.id = id
         self.x = x
         self.z = z
@@ -118,13 +124,13 @@ class Node:
         self._rotation = Angle(value)
 
 
-
-
-
 class BarLoad:
 
-    def __init__(self, id: int, pi: float = 0, pj: float = 0, local_x: any = None, local_z: any = None, global_x: any = None,
-                 global_z: any = None, pro_length: any = None, true_length: any = None):
+    def __init__(
+        self, id: int, pi: float = 0, pj: float = 0, local_x: any = None,
+        local_z: any = None, global_x: any = None, global_z: any = None,
+        pro_length: any = None, true_length: any = None
+    ):
         self.id = id
         self.pi = pi
         self.pj = pj
@@ -135,17 +141,16 @@ class BarLoad:
         self.pro_length = pro_length
         self.true_length = true_length
 
-    # @property
-    # def vector_distributed_loads(self):
-    #     print(BarLoadCalc.set_p())
-    #     return BarLoadCalc.set_p
 
 class Bar:
 
-    def __init__(self, id: int, node_i: Node, node_j: Node, cross_section: CrossSection, material: Material,
-                 hinge_u_i: str = 'x', hinge_w_i: str = 'x', hinge_phi_i: str = 'x', hinge_u_j: str = 'x',
-                 hinge_w_j: str = 'x',
-                 hinge_phi_j: str = 'x', dis_loads: BarLoad = None):
+    def __init__(
+        self, id: int, node_i: Node, node_j: Node,
+        cross_section: CrossSection, material: Material,
+        hinge_u_i: str = 'x', hinge_w_i: str = 'x', hinge_phi_i: str = 'x',
+        hinge_u_j: str = 'x', hinge_w_j: str = 'x', hinge_phi_j: str = 'x',
+        dis_loads: BarLoad = None
+    ):
         self.id = id
         self.node_i = node_i
         self.node_j = node_j
@@ -162,11 +167,16 @@ class Bar:
     @property
     def alpha(self):
         """ bar inclination angle """
-        return Angle(np.arctan2((-self.node_i.z + self.node_j.z), (self.node_j.x - self.node_i.x))).radiant
+        return np.arctan2(
+            -self.node_j.z + self.node_i.z, self.node_j.x - self.node_i.x
+        )
 
     @property
     def length(self):
-        return np.sqrt((self.node_j.x - self.node_i.x) ** 2 + (self.node_j.z - self.node_i.z) ** 2)
+        return np.sqrt(
+            (self.node_j.x - self.node_i.x) ** 2 +
+            (self.node_j.z - self.node_i.z) ** 2
+        )
 
 
 class BarLoadCalc:
@@ -176,7 +186,7 @@ class BarLoadCalc:
         self.bar = bar
 
     def set_p(self):
-        p_vec = np.zeros((6,1))
+        p_vec = np.zeros((6, 1))
         alpha = self.bar.alpha
         print(alpha)
         pi = self.loads.pi
@@ -191,23 +201,34 @@ class BarLoadCalc:
                 p_vec += np.array([[sign * pi * np.cos(alpha) * np.sin(alpha)],
                                    [sign * pi * (np.sin(alpha)) ** 2],
                                    [0],
-                                  [sign * pj * np.cos(alpha) * np.sin(alpha)],
-                                  [sign * pj * (np.sin(alpha)) ** 2],
-                                 [0]])
+                                   [sign * pj * np.cos(alpha) * np.sin(alpha)],
+                                   [sign * pj * (np.sin(alpha)) ** 2],
+                                   [0]])
             elif self.loads.true_length == 'x':
-                p_vec += np.array([[pi * np.cos(alpha)], [pi * np.sin(alpha)],[0],
-                                   [pj * np.cos(alpha)], [pj * np.sin(alpha)], [0]])
+                p_vec += np.array([[pi * np.cos(alpha)],
+                                   [pi * np.sin(alpha)],
+                                   [0],
+                                   [pj * np.cos(alpha)],
+                                   [pj * np.sin(alpha)],
+                                   [0]])
         elif self.loads.global_z == 'x':
             if self.loads.pro_length == 'x':
                 sign_1 = -1 if abs(alpha) <= 1/2 * np.pi else 1
                 sign_2 = 1 if abs(alpha) <= 1/2 * np.pi else -1
-                p_vec += np.array([[sign_1 * pi * np.cos(alpha) * np.sin(alpha)],
-                                   [sign_2 * pi * (np.cos(alpha)) ** 2],
-                                   [0],
-                                   [sign_1 * pj * np.cos(alpha) * np.sin(alpha)],
-                                   [sign_2 * pj * (np.cos(alpha)) ** 2],
-                                   [0]])
+                p_vec += np.array(
+                    [[sign_1 * pi * np.cos(alpha) * np.sin(alpha)],
+                     [sign_2 * pi * (np.cos(alpha)) ** 2],
+                     [0],
+                     [sign_1 * pj * np.cos(alpha) * np.sin(alpha)],
+                     [sign_2 * pj * (np.cos(alpha)) ** 2],
+                     [0]]
+                )
             elif self.loads.true_length == 'x':
-                p_vec += np.array([[- pi * np.sin(alpha)], [pi * np.cos(alpha)], [0],
-                                   [- pj * np.sin(alpha)], [pj * np.cos(alpha)], [0]])
+                p_vec += np.array([[- pi * np.sin(alpha)],
+                                   [pi * np.cos(alpha)],
+                                   [0],
+                                   [- pj * np.sin(alpha)],
+                                   [pj * np.cos(alpha)],
+                                   [0]]
+                                  )
         return p_vec
