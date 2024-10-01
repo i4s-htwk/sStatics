@@ -1,16 +1,14 @@
 
 import numpy as np
-from typing import Optional
 
 
 class CrossSection:
 
     def __init__(
-        self, id: int, mom_of_int: float = 0, area: float = 0,
+        self, mom_of_int: float = 0, area: float = 0,
         height: float = 0, width: float = 0, cor_far: float = 0,
         m_plast: float = 0
     ):
-        self.id = id
         self.mom_of_int = mom_of_int
         self.area = area
         self.height = height
@@ -20,11 +18,11 @@ class CrossSection:
 
 
 class Material:
+
     def __init__(
-        self, id: int, young_mod: float = 0, poisson: float = 0,
+        self, young_mod: float = 0, poisson: float = 0,
         shear_mod: float = 0, therm_exp_coeff: float = 0, weight: float = 0
     ):
-        self.id = id
         self.young_mod = young_mod
         self.poisson = poisson
         self.shear_mod = shear_mod
@@ -32,51 +30,11 @@ class Material:
         self.weight = weight
 
 
-class Angle:
-
-    def __init__(self, rotation, kind='degree'):
-        if kind not in ('degree', 'radiant'):
-            raise ValueError("'kind' has to be either 'degree' or 'radiant'.")
-        self.kind = kind
-        self.rotation = rotation
-
-    @property
-    def degree(self):
-        if self.kind == 'degree':
-            return self.rotation % 360
-        else:
-            return np.rad2deg(self.rotation)
-
-    @property
-    def radiant(self):
-        if self.kind == 'degree':
-            return np.deg2rad(self.rotation)
-        else:
-            return self.rotation % (2 * np.pi)
-
-
-class Transformation:
-
-    def __init__(self, alpha: float = 0, beta: Optional[float] = 0):
-        gamma = alpha - beta
-        self.matrix = np.array([[np.cos(gamma), np.sin(gamma), 0],
-                                [- np.sin(gamma), np.cos(gamma), 0],
-                                [0, 0, 1]])
-
-
-class NodeLoadCalc:
-
-    def __init__(self, vec, rotation):
-        self._rotation = rotation
-        self._vec = vec
-
-    def rotate(self, node_rot: Angle):
-        """ rotates NodeLoad-vector in the node coordination-system """
-        t_matrix = Transformation(
-            self._rotation.radiant, node_rot.radiant
-        ).matrix
-        load_vector = np.dot(t_matrix, self._vec)
-        return load_vector
+def get_transformation_matrix(alpha: float, beta: float = 0):
+    gamma = alpha - beta
+    return np.array([[np.cos(gamma), np.sin(gamma), 0],
+                     [- np.sin(gamma), np.cos(gamma), 0],
+                     [0, 0, 1]])
 
 
 class NodeLoad:
@@ -84,54 +42,46 @@ class NodeLoad:
     def __init__(
         self, x: float = 0, z: float = 0, phi: float = 0, rotation: float = 0
     ):
-        self.x = x
-        self.z = z
-        self.phi = phi
-        self._rotation = Angle(rotation)
+        self.vector = np.array([[x], [z], [phi]])
+        self.rotation = np.deg2rad(rotation)
 
-    @property
-    def rotation(self):
-        return self._rotation
-
-    @rotation.setter
-    def rotation(self, value):
-        self._rotation = Angle(value)
-
-    def get_vector(self, n):
-        return NodeLoadCalc(
-            np.array([[self.x], [self.z], [self.phi]]), self._rotation
-        ).rotate(n)
+    def rotate(self, node_rot: float):
+        rotated_vector = np.dot(
+            get_transformation_matrix(self.rotation, node_rot), self.vector
+        )
+        return NodeLoad(
+            rotated_vector[0][0], rotated_vector[1][0], rotated_vector[2][0]
+        )
 
 
 class Node:
 
     def __init__(
-        self, id: int, x: float = 0, z: float = 0, rotation: float = 0,
+        self, x: float = 0, z: float = 0, rotation: float = 0,
         load: NodeLoad = None
     ):
-        self.id = id
         self.x = x
         self.z = z
-        self._rotation = Angle(rotation)
+        self.rotation = np.deg2rad(rotation)
         self.load = load
 
-    @property
-    def rotation(self):
-        return self._rotation
-
-    @rotation.setter
-    def rotation(self, value):
-        self._rotation = Angle(value)
+    def rotate_load(self):
+        rotated_vector = np.dot(
+            get_transformation_matrix(self.load.rotation, self.rotation),
+            self.load.vector
+        )
+        return NodeLoad(
+            rotated_vector[0][0], rotated_vector[1][0], rotated_vector[2][0]
+        )
 
 
 class BarLoad:
 
     def __init__(
-        self, id: int, pi: float = 0, pj: float = 0, local_x: any = None,
+        self, pi: float = 0, pj: float = 0, local_x: any = None,
         local_z: any = None, global_x: any = None, global_z: any = None,
         pro_length: any = None, true_length: any = None
     ):
-        self.id = id
         self.pi = pi
         self.pj = pj
         self.local_x = local_x
@@ -145,13 +95,12 @@ class BarLoad:
 class Bar:
 
     def __init__(
-        self, id: int, node_i: Node, node_j: Node,
+        self, node_i: Node, node_j: Node,
         cross_section: CrossSection, material: Material,
         hinge_u_i: str = 'x', hinge_w_i: str = 'x', hinge_phi_i: str = 'x',
         hinge_u_j: str = 'x', hinge_w_j: str = 'x', hinge_phi_j: str = 'x',
         dis_loads: BarLoad = None
     ):
-        self.id = id
         self.node_i = node_i
         self.node_j = node_j
         self.material = material
@@ -188,7 +137,6 @@ class BarLoadCalc:
     def set_p(self):
         p_vec = np.zeros((6, 1))
         alpha = self.bar.alpha
-        print(alpha)
         pi = self.loads.pi
         pj = self.loads.pj
         if self.loads.local_x == 'x':
