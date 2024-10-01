@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools >= 74.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sstatics"
+version = "0.0.0"
+dependencies = [
+    "dash~=2.18",
+    "dash-bootstrap-components~=2.18",
+    "numpy~=2.1",
+]
+requires-python = ">=3.11"
+readme = "README.md"
