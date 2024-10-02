@@ -19,5 +19,8 @@ dev = [
     "pylint>=3.1.1",
 ]
 
+[tool.setuptools.packages.find]
+where = ["sstatics"]
+
 [tool.pylint.'MESSAGES CONTROL']
 errors-only = "True"
