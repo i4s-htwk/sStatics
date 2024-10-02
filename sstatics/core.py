@@ -7,14 +7,12 @@ class CrossSection:
     def __init__(
         self, mom_of_int: float = 0, area: float = 0,
         height: float = 0, width: float = 0, cor_far: float = 0,
-        m_plast: float = 0
     ):
         self.mom_of_int = mom_of_int
         self.area = area
         self.height = height
         self.width = width
         self.cor_far = cor_far
-        self.m_plast = m_plast
 
 
 class Material:
