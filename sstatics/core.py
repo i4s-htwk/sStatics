@@ -1,76 +1,88 @@
 
+from dataclasses import asdict, dataclass, field, replace
+
 import numpy as np
 
 
-class CrossSection:
-
-    def __init__(
-        self, mom_of_int: float = 0, area: float = 0,
-        height: float = 0, width: float = 0, cor_far: float = 0,
-    ):
-        self.mom_of_int = mom_of_int
-        self.area = area
-        self.height = height
-        self.width = width
-        self.cor_far = cor_far
-
-
-class Material:
-
-    def __init__(
-        self, young_mod: float = 0, poisson: float = 0,
-        shear_mod: float = 0, therm_exp_coeff: float = 0, weight: float = 0
-    ):
-        self.young_mod = young_mod
-        self.poisson = poisson
-        self.shear_mod = shear_mod
-        self.therm_exp_coeff = therm_exp_coeff
-        self.weight = weight
-
-
-def get_transformation_matrix(alpha: float, beta: float = 0):
-    gamma = alpha - beta
-    return np.array([[np.cos(gamma), np.sin(gamma), 0],
-                     [- np.sin(gamma), np.cos(gamma), 0],
-                     [0, 0, 1]])
-
-
+@dataclass
 class NodeLoad:
 
-    def __init__(
-        self, x: float = 0, z: float = 0, phi: float = 0, rotation: float = 0
-    ):
-        self.vector = np.array([[x], [z], [phi]])
-        self.rotation = np.deg2rad(rotation)
+    x: float
+    z: float
+    phi: float
+    rotation: float = 0
 
-    def rotate(self, node_rot: float):
-        rotated_vector = np.dot(
-            get_transformation_matrix(self.rotation, node_rot), self.vector
-        )
-        return NodeLoad(
-            rotated_vector[0][0], rotated_vector[1][0], rotated_vector[2][0]
-        )
+    def __post_init__(self):
+        self.rotation = self.rotation % (2 * np.pi)
+
+    def __eq__(self, other):
+        return bool(np.isclose(
+            list(asdict(self).values()), list(asdict(other).values())
+        ).all())
+
+    @property
+    def vector(self):
+        return np.array([[self.x], [self.z], [self.phi]])
+
+    def rotate(self, node_rotation):
+        diff = self.rotation - node_rotation
+        transformation = np.array([
+            [np.cos(diff), np.sin(diff), 0],
+            [-np.sin(diff), np.cos(diff), 0],
+            [0, 0, 1]
+        ])
+        x, z, phi = np.dot(transformation, self.vector).flatten().tolist()
+        return replace(self, x=x, z=z, phi=phi, rotation=0)
 
 
+@dataclass
 class Node:
 
-    def __init__(
-        self, x: float = 0, z: float = 0, rotation: float = 0,
-        load: NodeLoad = None
-    ):
-        self.x = x
-        self.z = z
-        self.rotation = np.deg2rad(rotation)
-        self.load = load
+    x: float
+    z: float
+    rotation: float = 0
+    load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
+
+    def __eq__(self, other):
+        return self.x == other.x and self.z == other.z
+
+    def __post_init__(self):
+        self.rotation = self.rotation % (2 * np.pi)
+        self.load = replace(self.load)
 
     def rotate_load(self):
-        rotated_vector = np.dot(
-            get_transformation_matrix(self.load.rotation, self.rotation),
-            self.load.vector
-        )
-        return NodeLoad(
-            rotated_vector[0][0], rotated_vector[1][0], rotated_vector[2][0]
-        )
+        rotated_load = self.load.rotate(self.rotation)
+        return replace(self, load=rotated_load)
+
+
+@dataclass
+class CrossSection:
+
+    mom_of_int: float
+    area: float
+    height: float
+    width: float
+    cor_far: float
+
+    def __eq__(self, other):
+        return bool(np.isclose(
+            list(asdict(self).values()), list(asdict(other).values())
+        ).all())
+
+
+@dataclass
+class Material:
+
+    young_mod: float
+    poisson: float
+    shear_mod: float
+    therm_exp_coeff: float
+    weight: float
+
+    def __eq__(self, other):
+        return bool(np.isclose(
+            list(asdict(self).values()), list(asdict(other).values())
+        ).all())
 
 
 class BarLoad:
