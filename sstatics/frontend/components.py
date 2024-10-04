@@ -81,7 +81,7 @@ def add_row(_, obj_dict, columns):
     obj = None
     new_obj_id = len(obj_dict) + 1
     if ctx.triggered_id['index'] == 'nodes':
-        obj = Node()
+        obj = Node(0, 0)
     obj_dict[new_obj_id] = obj
     rows = [
         {c['id']: getattr(obj, c['id']) for c in columns}
