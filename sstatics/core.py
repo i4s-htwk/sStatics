@@ -4,6 +4,22 @@ from dataclasses import asdict, dataclass, field, replace
 import numpy as np
 
 
+def get_transformation_matrix(alpha: float, beta: float = 0):
+    gamma = alpha - beta
+    return np.array([[np.cos(gamma), np.sin(gamma), 0],
+                     [- np.sin(gamma), np.cos(gamma), 0],
+                     [0, 0, 1]])
+
+
+def get_trans_mat_bar(
+        rot_bar: float, rot_node_i: float = 0, rot_node_j: float = 0
+):
+    mat = np.zeros((6, 6))
+    mat[:3, :3] = get_transformation_matrix(rot_bar, rot_node_i)
+    mat[3:, 3:] = get_transformation_matrix(rot_bar, rot_node_j)
+    return mat
+
+
 @dataclass
 class NodeLoad:
 
@@ -25,13 +41,10 @@ class NodeLoad:
         return np.array([[self.x], [self.z], [self.phi]])
 
     def rotate(self, node_rotation):
-        diff = self.rotation - node_rotation
-        transformation = np.array([
-            [np.cos(diff), np.sin(diff), 0],
-            [-np.sin(diff), np.cos(diff), 0],
-            [0, 0, 1]
-        ])
-        x, z, phi = np.dot(transformation, self.vector).flatten().tolist()
+        x, z, phi = np.dot(
+            get_transformation_matrix(self.rotation, node_rotation),
+            self.vector
+        ).flatten().tolist()
         return replace(self, x=x, z=z, phi=phi, rotation=0)
 
 
@@ -77,7 +90,6 @@ class Material:
     poisson: float
     shear_mod: float
     therm_exp_coeff: float
-    weight: float
 
     def __eq__(self, other):
         return bool(np.isclose(
@@ -85,46 +97,102 @@ class Material:
         ).all())
 
 
+@dataclass
 class BarLoad:
 
-    def __init__(
-        self, pi: float = 0, pj: float = 0, local_x: any = None,
-        local_z: any = None, global_x: any = None, global_z: any = None,
-        pro_length: any = None, true_length: any = None
-    ):
-        self.pi = pi
-        self.pj = pj
-        self.local_x = local_x
-        self.local_z = local_z
-        self.global_x = global_x
-        self.global_z = global_z
-        self.pro_length = pro_length
-        self.true_length = true_length
-
-
-class Bar:
-
-    def __init__(
-        self, node_i: Node, node_j: Node,
-        cross_section: CrossSection, material: Material,
-        hinge_u_i: str = 'x', hinge_w_i: str = 'x', hinge_phi_i: str = 'x',
-        hinge_u_j: str = 'x', hinge_w_j: str = 'x', hinge_phi_j: str = 'x',
-        dis_loads: BarLoad = None
-    ):
-        self.node_i = node_i
-        self.node_j = node_j
-        self.material = material
-        self.cross_section = cross_section
-        self.hinge_u_i = hinge_u_i
-        self.hinge_w_i = hinge_w_i
-        self.hinge_phi_i = hinge_phi_i
-        self.hinge_u_j = hinge_u_j
-        self.hinge_w_j = hinge_w_j
-        self.hinge_phi_j = hinge_phi_j
-        self.dis_loads = dis_loads
+    pi: float
+    pj: float
+    direction: str
+    coord: str
+    length: str
 
     @property
-    def alpha(self):
+    def vector(self):
+        if self.direction == 'x':
+            return np.array([[self.pi], [0], [0], [self.pj], [0], [0]])
+        elif self.direction == 'z':
+            return np.array([[0], [self.pi], [0], [0], [self.pj], [0]])
+        else:
+            raise ValueError("'direction' has to be either 'x' or 'z'.")
+
+    def rotate(self, bar_rotation):
+        p_vec = self.vector
+        if self.coord == 'system':
+            if self.length == 'exact':
+                if self.direction == 'x':
+                    perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
+                else:  # passt
+                    perm_mat = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]])
+                perm_trans = (
+                        perm_mat @ get_transformation_matrix(bar_rotation)
+                )
+
+                trans_mat = np.zeros((6, 6))
+                trans_mat[:3, :3] = trans_mat[3:, 3:] = perm_trans
+                print(trans_mat)
+                return trans_mat @ p_vec
+            elif self.length == 'proj':
+                if self.direction == 'x':
+                    perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
+                else:  # passt
+                    perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
+                perm_trans = (
+                        perm_mat @ get_transformation_matrix(bar_rotation)
+                )
+                trans_mat = np.zeros((6, 6))
+                trans_mat[:3, :3] = trans_mat[3:, 3:] = perm_trans
+                mat_a = np.diag([1, 0, 0, 1, 0, 0])
+                print((trans_mat @ mat_a @ np.transpose(trans_mat)))
+                return (
+                        (trans_mat @ mat_a @ np.transpose(trans_mat)) @ p_vec
+                )
+            else:
+                raise ValueError(
+                    "'length' has to be either 'exact' or 'proj'."
+                )
+        elif self.coord == 'bar':
+            return p_vec
+        else:
+            raise ValueError(
+                "'coord' has to be either 'bar' or 'system'."
+            )
+
+
+@dataclass
+class BarTemp:
+
+    temp_o: float
+    temp_u: float
+
+    def __post_init__(self):
+        self.temp_s = (self.temp_o + self.temp_u) / 2
+        self.temp_delta = self.temp_u - self.temp_o
+
+
+@dataclass
+class Bar:
+
+    node_i: Node
+    node_j: Node
+    cross_section: CrossSection
+    material: Material
+    hinge_u_i: bool
+    hinge_w_i: bool
+    hinge_phi_i: bool
+    hinge_u_j: bool
+    hinge_w_j: bool
+    hinge_phi_j: bool
+    load: BarLoad
+    temp: BarTemp
+
+    def __post_init__(self):
+        self.hinge = [
+            self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
+            self.hinge_u_j, self.hinge_w_j, self.hinge_phi_j
+        ]
+
+    @property
+    def rotation(self):
         """ bar inclination angle """
         return np.arctan2(
             -self.node_j.z + self.node_i.z, self.node_j.x - self.node_i.x
@@ -137,56 +205,87 @@ class Bar:
             (self.node_j.z - self.node_i.z) ** 2
         )
 
+    def get_p(self):
+        return self.load.rotate(self.rotation)
 
-class BarLoadCalc:
+    def f0_load(self):
+        p_vec = self.get_p()
 
-    def __init__(self, loads: BarLoad, bar: Bar):
-        self.loads = loads
-        self.bar = bar
+        EI = self.material.young_mod * self.cross_section.mom_of_int
+        GA_s = (
+                self.material.shear_mod * self.cross_section.area *
+                self.cross_section.cor_far
+        )
 
-    def set_p(self):
-        p_vec = np.zeros((6, 1))
-        alpha = self.bar.alpha
-        pi = self.loads.pi
-        pj = self.loads.pj
-        if self.loads.local_x == 'x':
-            p_vec += np.array([[pi], [0], [0], [pj], [0], [0]])
-        elif self.loads.local_z == 'x':
-            p_vec += np.array([[0], [pi], [0], [0], [pj], [0]])
-        elif self.loads.global_x == 'x':
-            if self.loads.pro_length == 'x':
-                sign = 1 if self.bar.alpha > 0 else -1
-                p_vec += np.array([[sign * pi * np.cos(alpha) * np.sin(alpha)],
-                                   [sign * pi * (np.sin(alpha)) ** 2],
-                                   [0],
-                                   [sign * pj * np.cos(alpha) * np.sin(alpha)],
-                                   [sign * pj * (np.sin(alpha)) ** 2],
-                                   [0]])
-            elif self.loads.true_length == 'x':
-                p_vec += np.array([[pi * np.cos(alpha)],
-                                   [pi * np.sin(alpha)],
-                                   [0],
-                                   [pj * np.cos(alpha)],
-                                   [pj * np.sin(alpha)],
-                                   [0]])
-        elif self.loads.global_z == 'x':
-            if self.loads.pro_length == 'x':
-                sign_1 = -1 if abs(alpha) <= 1/2 * np.pi else 1
-                sign_2 = 1 if abs(alpha) <= 1/2 * np.pi else -1
-                p_vec += np.array(
-                    [[sign_1 * pi * np.cos(alpha) * np.sin(alpha)],
-                     [sign_2 * pi * (np.cos(alpha)) ** 2],
-                     [0],
-                     [sign_1 * pj * np.cos(alpha) * np.sin(alpha)],
-                     [sign_2 * pj * (np.cos(alpha)) ** 2],
-                     [0]]
+        M_a = -(
+                self.length ** 2 * (
+                    30 * EI * p_vec[4][0] + 30 * EI * p_vec[1][0] +
+                    2 * GA_s * self.length ** 2 * p_vec[4][0] +
+                    3 * GA_s * self.length ** 2 * p_vec[1][0]
                 )
-            elif self.loads.true_length == 'x':
-                p_vec += np.array([[- pi * np.sin(alpha)],
-                                   [pi * np.cos(alpha)],
-                                   [0],
-                                   [- pj * np.sin(alpha)],
-                                   [pj * np.cos(alpha)],
-                                   [0]]
-                                  )
-        return p_vec
+        ) / (
+                720 * EI + 60 * GA_s * self.length ** 2
+        )
+
+        M_e = -(
+                self.length ** 2 * (
+                    30 * EI * p_vec[4][0] + 30 * EI * p_vec[1][0] +
+                    3 * GA_s * self.length ** 2 * p_vec[4][0] +
+                    2 * GA_s * self.length ** 2 * p_vec[1][0]
+                )
+        ) / (
+                720 * EI + 60 * GA_s * self.length ** 2
+        )
+
+        T_a = (
+                self.length * (
+                      40 * EI * p_vec[4][0] + 80 * EI * p_vec[1][0] +
+                      3 * GA_s * self.length ** 2 * p_vec[4][0] +
+                      7 * GA_s * self.length ** 2 * p_vec[1][0]
+                )
+        ) / (
+                240 * EI + 20 * GA_s * self.length ** 2
+        )
+
+        T_e = -(
+                self.length * (
+                    80 * EI * p_vec[4][0] + 40 * EI * p_vec[1][0] +
+                    7 * GA_s * self.length ** 2 * p_vec[4][0] +
+                    3 * GA_s * self.length ** 2 * p_vec[1][0]
+                )
+        ) / (
+                240 * EI + 20 * GA_s * self.length ** 2
+        )
+        return (
+            np.array(
+                [[-(7 * p_vec[0][0] + 3 * p_vec[3][0]) * self.length / 20],
+                 [-T_a],
+                 [-M_a],
+                 [-(3 * p_vec[0][0] + 7 * p_vec[3][0]) * self.length / 20],
+                 [T_e],
+                 [M_e]])
+        )
+
+    def f0_temp(self):
+        if self.temp.temp_delta == 0 and self.temp.temp_s == 0:
+            return np.zeros((2 * 3, 1))
+        else:
+            f0_i_x = (
+                    self.material.therm_exp_coeff * self.temp.temp_s *
+                    self.material.young_mod * self.cross_section.area
+            )
+            f0_i_m = (
+                    (self.material.therm_exp_coeff * self.temp.temp_delta *
+                     self.material.young_mod * self.cross_section.mom_of_int) /
+                    self.cross_section.height
+            )
+            return np.array([[f0_i_x],
+                             [0],
+                             [f0_i_m],
+                             [-f0_i_x],
+                             [0],
+                             [-f0_i_m]])
+
+    @property
+    def f0(self):
+        return self.f0_load() + self.f0_temp()
