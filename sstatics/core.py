@@ -1,5 +1,5 @@
 
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, field, KW_ONLY, replace
 
 import numpy as np
 
@@ -10,6 +10,7 @@ class NodeLoad:
     x: float
     z: float
     phi: float
+    _: KW_ONLY
     rotation: float = 0
 
     def __post_init__(self):
@@ -40,8 +41,9 @@ class Node:
 
     x: float
     z: float
-    rotation: float = 0
+    _: KW_ONLY
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
+    rotation: float = 0
 
     def __eq__(self, other):
         return self.x == other.x and self.z == other.z
