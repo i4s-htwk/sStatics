@@ -1,6 +1,6 @@
 
 from dataclasses import asdict, dataclass, field, replace
-
+from typing import Literal
 import numpy as np
 
 
@@ -102,18 +102,16 @@ class BarLoad:
 
     pi: float
     pj: float
-    direction: str
-    coord: str
-    length: str
+    direction: Literal['x', 'z']
+    coord: Literal['bar', 'system']
+    length: Literal['exact', 'proj']
 
     @property
     def vector(self):
-        if self.direction == 'x':
-            return np.array([[self.pi], [0], [0], [self.pj], [0], [0]])
-        elif self.direction == 'z':
-            return np.array([[0], [self.pi], [0], [0], [self.pj], [0]])
-        else:
-            raise ValueError("'direction' has to be either 'x' or 'z'.")
+        vec = np.zeros((6, 1))
+        vec[0 if self.direction == 'x' else 1] = self.pi
+        vec[3 if self.direction == 'x' else 4] = self.pj
+        return vec
 
     def rotate(self, bar_rotation):
         p_vec = self.vector
@@ -131,7 +129,7 @@ class BarLoad:
                 trans_mat[:3, :3] = trans_mat[3:, 3:] = perm_trans
                 print(trans_mat)
                 return trans_mat @ p_vec
-            elif self.length == 'proj':
+            else:
                 if self.direction == 'x':
                     perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
                 else:  # passt
@@ -146,16 +144,8 @@ class BarLoad:
                 return (
                         (trans_mat @ mat_a @ np.transpose(trans_mat)) @ p_vec
                 )
-            else:
-                raise ValueError(
-                    "'length' has to be either 'exact' or 'proj'."
-                )
-        elif self.coord == 'bar':
-            return p_vec
         else:
-            raise ValueError(
-                "'coord' has to be either 'bar' or 'system'."
-            )
+            return p_vec
 
 
 @dataclass
@@ -176,14 +166,14 @@ class Bar:
     node_j: Node
     cross_section: CrossSection
     material: Material
-    hinge_u_i: bool
-    hinge_w_i: bool
-    hinge_phi_i: bool
-    hinge_u_j: bool
-    hinge_w_j: bool
-    hinge_phi_j: bool
-    load: BarLoad
-    temp: BarTemp
+    hinge_u_i: bool = False
+    hinge_w_i: bool = False
+    hinge_phi_i: bool = False
+    hinge_u_j: bool = False
+    hinge_w_j: bool = False
+    hinge_phi_j: bool = False
+    load: BarLoad = None
+    temp: BarTemp = None
 
     def __post_init__(self):
         self.hinge = [
