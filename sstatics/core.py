@@ -49,12 +49,26 @@ class NodeLoad:
 
 
 @dataclass
+class NodeDisplace:
+
+    x: float
+    z: float
+    phi: float
+
+    @property
+    def vector(self):
+        return np.array([[self.x], [self.z], [self.phi]])
+
+
+@dataclass
 class Node:
 
     x: float
     z: float
     rotation: float = 0
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
+    displacement: NodeDisplace = field(
+        default_factory=lambda: NodeLoad(0, 0, 0))
 
     def __eq__(self, other):
         return self.x == other.x and self.z == other.z
@@ -98,7 +112,7 @@ class Material:
 
 
 @dataclass
-class BarLoad:
+class BarLineLoad:
 
     pi: float
     pj: float
@@ -117,32 +131,32 @@ class BarLoad:
         p_vec = self.vector
         if self.coord == 'system':
             if self.length == 'exact':
-                if self.direction == 'x':
-                    perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-                else:  # passt
-                    perm_mat = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]])
+                perm_mat = np.array([[1, 0, 0], [0, -1, 0], [0, 0, 1]])
                 perm_trans = (
                         perm_mat @ get_transformation_matrix(bar_rotation)
                 )
-
+                perm_trans = perm_trans @ perm_mat
                 trans_mat = np.zeros((6, 6))
                 trans_mat[:3, :3] = trans_mat[3:, 3:] = perm_trans
-                print(trans_mat)
                 return trans_mat @ p_vec
             else:
                 if self.direction == 'x':
+                    perm_mat = np.array([[1, 0, 0], [0, -1, 0], [0, 0, 1]])
+                    perm_mat_2 = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
+                else:
                     perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-                else:  # passt
-                    perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
+                    perm_mat_2 = np.eye(3)
                 perm_trans = (
                         perm_mat @ get_transformation_matrix(bar_rotation)
                 )
                 trans_mat = np.zeros((6, 6))
                 trans_mat[:3, :3] = trans_mat[3:, 3:] = perm_trans
                 mat_a = np.diag([1, 0, 0, 1, 0, 0])
-                print((trans_mat @ mat_a @ np.transpose(trans_mat)))
+                mat_perm = np.zeros((6, 6))
+                mat_perm[:3, :3] = mat_perm[3:, 3:] = perm_mat_2
                 return (
-                        (trans_mat @ mat_a @ np.transpose(trans_mat)) @ p_vec
+                        (trans_mat @ mat_a @ np.transpose(trans_mat))
+                        @ mat_perm @ p_vec
                 )
         else:
             return p_vec
@@ -160,6 +174,17 @@ class BarTemp:
 
 
 @dataclass
+class BarPointLoad:
+    vector: NodeLoad.vector
+    # TODO: Documentation for variable position
+    position: float = field(default=0)
+
+    def __post_init__(self):
+        if not (0 <= self.position <= 1):
+            raise ValueError("position must be between 0 and 1")
+
+
+@dataclass
 class Bar:
 
     node_i: Node
@@ -172,8 +197,9 @@ class Bar:
     hinge_u_j: bool = False
     hinge_w_j: bool = False
     hinge_phi_j: bool = False
-    load: BarLoad = None
+    line_load: BarLineLoad = None
     temp: BarTemp = None
+    point_load: BarPointLoad = None
 
     def __post_init__(self):
         self.hinge = [
@@ -196,7 +222,7 @@ class Bar:
         )
 
     def get_p(self):
-        return self.load.rotate(self.rotation)
+        return self.line_load.rotate(self.rotation)
 
     def f0_load(self):
         p_vec = self.get_p()
@@ -256,6 +282,19 @@ class Bar:
                  [M_e]])
         )
 
+    def f0_point_load(self):
+        if self.point_load.position == 0:
+            f0_point_load = np.vstack(
+                (self.point_load.vector,
+                 np.zeros((3, 1))))
+        elif self.point_load.position == 1:
+            f0_point_load = np.vstack(
+                (np.zeros((3, 1)), self.point_load.vector))
+        else:
+            return ValueError('The position is not at the ends of the member. '
+                              'Member division occurs.')
+        return f0_point_load
+
     def f0_temp(self):
         if self.temp.temp_delta == 0 and self.temp.temp_s == 0:
             return np.zeros((2 * 3, 1))
@@ -276,6 +315,16 @@ class Bar:
                              [0],
                              [-f0_i_m]])
 
+    def f0_displace(self):
+        f0_displace = np.vstack(
+            (self.node_i.displacement.vector, self.node_j.displacement.vector))
+        return self.k_lok @ get_trans_mat_bar(self.rotation) @ f0_displace
+
     @property
     def f0(self):
-        return self.f0_load() + self.f0_temp()
+        return (self.f0_load() + self.f0_temp() + self.f0_displace()
+                + self.f0_point_load)
+
+    @property
+    def k_lok(self):
+        return None
