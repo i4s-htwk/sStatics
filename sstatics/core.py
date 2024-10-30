@@ -633,8 +633,10 @@ class Bar:
 
         return f0, stiffness_matrix
 
-    def f0(self, order: str = 'first', approach: Optional[str] = 'analytic'):
+    def f0(self, order: str = 'first', approach: Optional[str] = None):
         if order == 'first':
+            if approach:
+                return ValueError('in first order approach has to be "None"')
             f0 = self.f0_load_first_order()
         elif order == 'second':
             if approach == 'analytic':
@@ -652,8 +654,10 @@ class Bar:
         return f0 + self.f0_temp()
 
     def stiffness_matrix(self, order: str = 'first',
-                         approach: Optional[str] = 'analytic'):
+                         approach: Optional[str] = None):
         if order == 'first':
+            if approach:
+                return ValueError('in first order approach has to be "None"')
             if self.phi != 0:
                 return (
                     (self._stiffness_matrix_without_shear_force() @
