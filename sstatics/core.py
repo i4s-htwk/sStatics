@@ -106,6 +106,14 @@ class BarLoad:
     coord: Literal['bar', 'system']
     length: Literal['exact', 'proj']
 
+    def __post_init__(self):
+        if self.direction not in {'x', 'z'}:
+            raise ValueError('direction has to be either "x" or "z".')
+        if self.coord not in {'bar', 'system'}:
+            raise ValueError('coord has to be either "bar" or "system".')
+        if self.length not in {'exact', 'proj'}:
+            raise ValueError('length has to be either "exact" or "proj".')
+
     @property
     def vector(self):
         vec = np.zeros((6, 1))
@@ -307,21 +315,6 @@ class Bar:
                           0, 12 * EI_l3, 6 * EI_l2],
                          [0, -6 * EI_l2, 2 * EI_l,
                           0, 6 * EI_l2, 4 * EI_l]])
-
-        # return np.array([[EA_l, 0, 0, -EA_l, 0, 0],
-        #                  [0, 12 * EI_l3 * factor, -6 * EI_l2 * factor,
-        #                   0, -12 * EI_l3 * factor, -6 * EI_l2 * factor],
-        #                  [0, -6 * EI_l2 * factor,
-        #                   EI_l * (4 + self.phi) * factor,
-        #                   0, 6 * EI_l2 * factor,
-        #                   EI_l * (2 - self.phi) * factor],
-        #                  [-EA_l, 0, 0, EA_l, 0, 0],
-        #                  [0, -12 * EI_l3 * factor, 6 * EI_l2 * factor,
-        #                   0, 12 * EI_l3 * factor, 6 * EI_l2 * factor],
-        #                  [0, -6 * EI_l2 * factor,
-        #                   EI_l * (2 - self.phi) * factor,
-        #                   0, 6 * EI_l2 * factor,
-        #                   EI_l * (4 + self.phi) * factor]])
 
     def _get_matrix_to_apply_shear_force(self):
         f_1 = 1 / (1 + self.phi)
