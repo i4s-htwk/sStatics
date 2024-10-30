@@ -179,13 +179,6 @@ class Bar:
             self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
             self.hinge_u_j, self.hinge_w_j, self.hinge_phi_j
         ]
-        self.EA = self.material.young_mod * self.cross_section.area
-        self.EI = self.material.young_mod * self.cross_section.mom_of_int
-        self.GA_s = (
-                self.material.shear_mod * self.cross_section.area *
-                self.cross_section.cor_far
-        )
-        self.phi = 12 * self.EI / (self.GA_s * self.length ** 2)
 
     @property
     def rotation(self):
@@ -200,6 +193,25 @@ class Bar:
             (self.node_j.x - self.node_i.x) ** 2 +
             (self.node_j.z - self.node_i.z) ** 2
         )
+
+    @property
+    def EI(self):
+        return self.material.young_mod * self.cross_section.mom_of_int
+
+    @property
+    def EA(self):
+        return self.material.young_mod * self.cross_section.area
+
+    @property
+    def GA_s(self):
+        return (
+                self.material.shear_mod * self.cross_section.area *
+                self.cross_section.cor_far
+        )
+
+    @property
+    def phi(self):
+        return 12 * self.EI / (self.GA_s * self.length ** 2)
 
     def get_p(self):
         p = np.zeros((6, 1))
