@@ -291,10 +291,6 @@ class Bar:
                              [0],
                              [-f0_m]])
 
-    # First Order
-    def f0_first_order(self):
-        return self.f0_load_first_order() + self.f0_temp()
-
     def _stiffness_matrix_without_shear_force(self):
         EA_l = self.EA / self.length
         EI_l3 = self.EI / self.length ** 3
@@ -327,7 +323,7 @@ class Bar:
         #                   0, 6 * EI_l2 * factor,
         #                   EI_l * (4 + self.phi) * factor]])
 
-    def _get_matrix_to_apply_shear_force_to_stiffness_matrix(self):
+    def _get_matrix_to_apply_shear_force(self):
         f_1 = 1 / (1 + self.phi)
         f_2 = (f_1 + self.phi / (4 * (1 + self.phi)))
         f_3 = (f_1 + self.phi / (2 * (1 + self.phi)))
@@ -339,23 +335,14 @@ class Bar:
                          [0, f_1, f_1, 0, f_1, f_1],
                          [0, f_1, f_3, 0, f_1, f_2]])
 
-    def stiffness_matrix_first_order(self):
-        if self.phi != 0:
-            return (
-                (self._stiffness_matrix_without_shear_force() @
-                 self._get_matrix_to_apply_shear_force_to_stiffness_matrix()))
-        else:
-            return self._stiffness_matrix_without_shear_force()
-
-    # Second Order
-    def __prepare_factors_sec_order(self):
+    def _prepare_factors_sec_order(self):
         p_vec = self.get_p()
         f0_x_i = (-(7 * p_vec[0][0] + 3 * p_vec[3][0]) * self.length / 20)
         B_s = self.EI * (1 + f0_x_i / self.GA_s)
         return p_vec, f0_x_i, B_s
 
-    def __prepare_factors_sec_order_f0(self):
-        p_vec, f0_x_i, B_s = self.__prepare_factors_sec_order()
+    def _prepare_factors_sec_order_f0(self):
+        p_vec, f0_x_i, B_s = self._prepare_factors_sec_order()
         mu = np.sqrt(abs(f0_x_i) / B_s) * self.length
 
         return (f0_x_i, B_s, mu, (p_vec[1][0] + p_vec[4][0]),
@@ -363,7 +350,7 @@ class Bar:
 
     def _f0_load_second_order_analytic(self):
         f0_x_i, B_s, mu, p_sum, p_diff, p_i, p_j, p_vec = (
-            self.__prepare_factors_sec_order_f0()
+            self._prepare_factors_sec_order_f0()
         )
 
         if f0_x_i < 0:
@@ -476,7 +463,7 @@ class Bar:
 
     def _f0_load_second_order_taylor(self):
         f0_x_i, B_s, mu, p_sum, p_diff, p_i, p_j, p_vec = (
-            self.__prepare_factors_sec_order_f0()
+            self._prepare_factors_sec_order_f0()
         )
 
         f0_z_i = (self.length / 20) * (720 * B_s ** 2 * (p_j + p_i) - (
@@ -532,23 +519,14 @@ class Bar:
                  [f0_m_j]])
         )
 
-    # f0
-    def f0_second_order(self, approach: str = 'analytic'):
-        if approach == 'analytic':
-            return self._f0_load_second_order_analytic() + self.f0_temp()
-        elif approach == 'taylor':
-            return self._f0_load_second_order_taylor() + self.f0_temp()
-        elif approach == 'p_delta':
-            return self.f0_load_first_order() + self.f0_temp()
-
-    def __prepare_factors_sec_order_stiffness_matrix(self):
-        p_vec, f0_x_i, B_s = self.__prepare_factors_sec_order()
+    def _prepare_factors_sec_order_stiffness_matrix(self):
+        p_vec, f0_x_i, B_s = self._prepare_factors_sec_order()
         factor = B_s / (self.GA_s * self.length ** 2)
         return f0_x_i, B_s, factor
 
-    def _get_matrix_to_apply_second_order_analytic_solution(self):
+    def _apply_second_order_analytic_solution(self):
         f0_x_i, B_s, factor = (
-            self.__prepare_factors_sec_order_stiffness_matrix())
+            self._prepare_factors_sec_order_stiffness_matrix())
         mu = np.sqrt(abs(f0_x_i) / B_s) * self.length
 
         if f0_x_i < 0:
@@ -583,9 +561,9 @@ class Bar:
                          [0, f_1, f_2, 0, f_1, f_2],
                          [0, f_2, f_4, 0, f_2, f_3]])
 
-    def _get_matrix_to_apply_second_order_approximate_by_taylor(self):
+    def _apply_second_order_approximate_by_taylor(self):
         f0_x_i, B_s, factor = (
-            self.__prepare_factors_sec_order_stiffness_matrix())
+            self._prepare_factors_sec_order_stiffness_matrix())
         denominator_common = factor + 1/12
         denominator_squared = denominator_common ** 2
         inv_denominator_common = 1 / denominator_common
@@ -615,8 +593,8 @@ class Bar:
                          [0, f_1, f_2, 0, f_1, f_2],
                          [0, f_2, f_4, 0, f_2, f_3]])
 
-    def _get_matrix_to_apply_second_order_approximate_by_p_delta(self):
-        factor = (self.__prepare_factors_sec_order_stiffness_matrix()[0] /
+    def _apply_second_order_approximate_by_p_delta(self):
+        factor = (self._prepare_factors_sec_order_stiffness_matrix()[0] /
                   self.length)
         return np.array([[0, 0, 0, 0, 0, 0],
                          [0, factor, 0, 0, -factor, 0],
@@ -625,25 +603,6 @@ class Bar:
                          [0, -factor, 0, 0, factor, 0],
                          [0, 0, 0, 0, 0, 0]])
 
-    # stiffness matrix
-    def stiffness_matrix_second_order(self, approach: str = 'analytic'):
-        if approach == 'analytic':
-            return (
-                    self._stiffness_matrix_without_shear_force() @
-                    self._get_matrix_to_apply_second_order_analytic_solution())
-        elif approach == 'taylor':
-            return (
-                self._stiffness_matrix_without_shear_force() @
-                self._get_matrix_to_apply_second_order_approximate_by_taylor())
-        elif approach == 'p_delta':
-            return (
-                self.stiffness_matrix_first_order() +
-                self._get_matrix_to_apply_second_order_approximate_by_p_delta()
-                )
-        else:
-            return ValueError('calc_method has to either,....')
-
-    # element relation
     def _apply_hinge_modification(self, f0, stiffness_matrix):
         k = stiffness_matrix
         for i, value in enumerate(self.hinge):
@@ -674,12 +633,71 @@ class Bar:
 
         return f0, stiffness_matrix
 
-    def element_relation_first_order(self):
-        return self._get_element_relation(self.f0_first_order(),
-                                          self.stiffness_matrix_first_order())
+    def f0(self, order: str = 'first', approach: Optional[str] = 'analytic'):
+        if order == 'first':
+            f0 = self.f0_load_first_order()
+        elif order == 'second':
+            if approach == 'analytic':
+                f0 = self._f0_load_second_order_analytic()
+            elif approach == 'taylor':
+                f0 = self._f0_load_second_order_taylor()
+            elif approach == 'p_delta':
+                f0 = self.f0_load_first_order()
+            else:
+                return ValueError(
+                    'approach has to be either "analytic", '
+                    '"taylor" or "p_delta".')
+        else:
+            return ValueError('order has to be either "first" or "second".')
+        return f0 + self.f0_temp()
 
-    def element_relation_second_order(self, approach: str = 'analytic'):
+    def stiffness_matrix(self, order: str = 'first',
+                         approach: Optional[str] = 'analytic'):
+        if order == 'first':
+            if self.phi != 0:
+                return (
+                    (self._stiffness_matrix_without_shear_force() @
+                     self._get_matrix_to_apply_shear_force()))
+            else:
+                return self._stiffness_matrix_without_shear_force()
+        elif order == 'second':
+            if approach == 'analytic':
+                return (
+                        self._stiffness_matrix_without_shear_force() @
+                        self._apply_second_order_analytic_solution())
+            elif approach == 'taylor':
+                return (
+                        self._stiffness_matrix_without_shear_force() @
+                        self._apply_second_order_approximate_by_taylor())
+            elif approach == 'p_delta':
+                if self.phi != 0:
+                    return (
+                        self._stiffness_matrix_without_shear_force() @
+                        self._get_matrix_to_apply_shear_force() +
+                        self._apply_second_order_approximate_by_p_delta())
+                else:
+                    return (self._stiffness_matrix_without_shear_force() +
+                            self._apply_second_order_approximate_by_p_delta())
+            else:
+                return ValueError(
+                    'approach has to be either "analytic", '
+                    '"taylor" or "p_delta".')
+        else:
+            return ValueError('order has to be either "first" or "second".')
+
+    def element_relation(self, order: str = 'first',
+                         approach: Optional[str] = None):
+        if order == 'first':
+            if approach:
+                return ValueError('in first order approach has to be "None"')
+        elif order == 'second':
+            if approach not in {'analytic', 'taylor', 'p_delta'}:
+                return ValueError(
+                    'approach has to be either "analytic", '
+                    '"taylor" or "p_delta".')
+        else:
+            return ValueError('order has to be either "first" or "second".')
         return (
             self._get_element_relation(
-                self.f0_second_order(approach),
-                self.stiffness_matrix_second_order(approach)))
+                self.f0(order, approach),
+                self.stiffness_matrix(order, approach)))
