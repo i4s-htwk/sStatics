@@ -127,7 +127,7 @@ class BarLoad:
             if self.length == 'exact':
                 if self.direction == 'x':
                     perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-                else:  # passt
+                else:
                     perm_mat = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]])
                 perm_trans = (
                         perm_mat @ get_transformation_matrix(bar_rotation)
@@ -139,7 +139,7 @@ class BarLoad:
             else:
                 if self.direction == 'x':
                     perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-                else:  # passt
+                else:
                     perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
                 perm_trans = (
                         perm_mat @ get_transformation_matrix(bar_rotation)
