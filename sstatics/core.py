@@ -1,5 +1,6 @@
 
 from dataclasses import asdict, dataclass, field, replace
+
 from typing import Literal, List, Optional
 import numpy as np
 
@@ -54,6 +55,9 @@ class Node:
     x: float
     z: float
     rotation: float = 0
+    u: Optional[Literal['fixed', 'free']] = 'free'
+    w: Optional[Literal['fixed', 'free']] = 'free'
+    phi: Optional[Literal['fixed', 'free']] = 'free'
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
 
     def __eq__(self, other):
@@ -698,3 +702,142 @@ class Bar:
             self._get_element_relation(
                 self.f0(order, approach),
                 self.stiffness_matrix(order, approach)))
+
+
+@dataclass
+class System:
+
+    input_bars: List[Bar]
+
+    def __post_init__(self):
+        self.bars = self.input_bars
+        self.nodes = self._get_nodes()
+        self.dof = 3
+
+    def _get_zero_matrix(self):
+        x = len(self.nodes) * self.dof
+        return np.zeros((x, x))
+
+    def _get_zero_vec(self):
+        x = len(self.nodes) * self.dof
+        return np.zeros((x, 1))
+
+    def _get_nodes(self):
+        nodes = []
+        for bar in self.bars:
+            if bar.node_i not in nodes:
+                nodes.append(bar.node_i)
+            if bar.node_j not in nodes:
+                nodes.append(bar.node_j)
+
+        return nodes
+
+    def stiffness_matrix(self, order: str = 'first',
+                         approach: Optional[str] = None):
+        k_system = self._get_zero_matrix()
+        for bar in self.bars:
+            i = self.nodes.index(bar.node_i) * self.dof
+            j = self.nodes.index(bar.node_j) * self.dof
+
+            k = bar.stiffness_matrix(order=order, approach=approach)
+
+            k_system[i:i + self.dof, i:i + self.dof] += k[:self.dof, :self.dof]
+            k_system[i:i + self.dof, j:j + self.dof] += (
+                k[:self.dof, self.dof:2 * self.dof])
+            k_system[j:j + self.dof, i:i + self.dof] += (
+                k[self.dof:2 * self.dof, :self.dof])
+            k_system[j:j + self.dof, j:j + self.dof] += (
+                k[self.dof:2 * self.dof, self.dof:2 * self.dof])
+        return k_system
+
+    def elastic_matrix(self):
+        el = self._get_zero_matrix()
+        return el
+
+    def system_matrix(self, order: str = 'first',
+                      approach: Optional[str] = None):
+        return self.stiffness_matrix(order, approach) + self.elastic_matrix()
+
+    def f0(self, order: str = 'first', approach: Optional[str] = None):
+        f0_system = self._get_zero_vec()
+        for bar in self.bars:
+            i = self.nodes.index(bar.node_i) * self.dof
+            j = self.nodes.index(bar.node_j) * self.dof
+
+            f0 = bar.f0(order=order, approach=approach)
+
+            f0_system[i:i + self.dof, :] += f0[:self.dof, :]
+            f0_system[j:j + self.dof, :] += f0[self.dof:2 * self.dof, :]
+        return f0_system
+
+    def p0(self):
+        p0 = self._get_zero_vec()
+        for i, node in enumerate(self.nodes):
+            p0[i * self.dof:i * self.dof + self.dof, :] = (
+                node.rotate_load().load.vector)
+        return p0
+
+    def p(self):
+        return self.p0() - self.f0()
+
+    def apply_boundary_conditions(self, order: str = 'first',
+                                  approach: Optional[str] = None):
+        k = self.system_matrix(order, approach)
+        p = self.p()
+        for idx, node in enumerate(self.nodes):
+            node_offset = idx * self.dof
+            for dof_nr, attribute in enumerate(['u', 'w', 'phi']):
+                condition = getattr(node, attribute, 'free')
+                if condition == 'fixed':
+                    k[node_offset + dof_nr, :] = 0
+                    k[:, node_offset + dof_nr] = 0
+                    k[node_offset + dof_nr, node_offset + dof_nr] = 1
+                    p[node_offset + dof_nr] = 0
+        return k, p
+
+    def node_deformation(self, order: str = 'first',
+                         approach: Optional[str] = None):
+        modified_stiffness_matrix, modified_p = (
+            self.apply_boundary_conditions(order, approach))
+        return np.linalg.solve(modified_stiffness_matrix, modified_p)
+
+    def create_list_of_bar_deform(self, order: str = 'first',
+                                  approach: Optional[str] = None):
+        node_deform = self.node_deformation(order, approach)
+        deform_list = []
+        for idx, bar in enumerate(self.bars):
+            i = self.nodes.index(bar.node_i) * self.dof
+            j = self.nodes.index(bar.node_j) * self.dof
+            # extract the deformation for node_i and node_j for every bar and
+            # save them in a 6x1-vector
+            deform_node = np.zeros((2 * self.dof, 1))
+            deform_node[:self.dof, :] = node_deform[i:i + self.dof, :]
+            deform_node[self.dof:2 * self.dof, :] = (
+                node_deform[j:j + self.dof, :])
+            # transform the deformation into the node coordination
+            deform_bar = (np.transpose(get_trans_mat_bar(
+                bar.rotation, bar.node_i.rotation, bar.node_j.rotation))
+                          @ deform_node)
+            deform_list.append(deform_bar)
+
+        return deform_list
+
+    # TODO: def create_list_of_bar_force(...)
+
+
+@dataclass
+class Model:
+
+    system: System
+    order: Literal['first', 'second'] = 'first'
+    approach: Optional[Literal['analytic', 'taylor', 'p_delta']] = None
+
+    def calc(self):
+        if self.order == 'first':
+            # e.g. get list of bar deformation
+            return (
+                self.system.create_list_of_bar_deform(
+                    self.order, self.approach))
+        elif self.order == 'second':
+            # TODO: integrate MA Ludwig
+            return None
