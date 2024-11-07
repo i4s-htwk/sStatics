@@ -55,6 +55,12 @@ class Node:
     x: float
     z: float
     rotation: float = 0
+    u: Literal['free', 'fixed'] = 'free'
+    w: Literal['free', 'fixed'] = 'free'
+    phi: Literal['free', 'fixed'] = 'free'
+    u_spring: Optional[float] = 0
+    w_spring: Optional[float] = 0
+    phi_spring: Optional[float] = 0
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
     displacement: Optional[List[NodeDisplace]] = field(
         default_factory=lambda: [NodeDisplace(0, 0, 0)])
@@ -65,6 +71,12 @@ class Node:
     def __post_init__(self):
         self.rotation = self.rotation % (2 * np.pi)
         self.load = replace(self.load)
+        if self.u not in {'free', 'fixed'} and self.u_spring == 0:
+            raise ValueError('u must be either "fixed" or "free".')
+        if self.w not in {'free', 'fixed'} and self.w_spring == 0:
+            raise ValueError('w must be either "fixed" or "free".')
+        if self.phi not in {'free', 'fixed'} and self.phi_spring == 0:
+            raise ValueError('phi must be either "fixed" or "free".')
 
     def rotate_load(self):
         rotated_load = self.load.rotate(self.rotation)
@@ -330,6 +342,12 @@ class Bar:
                              [-f0_x],
                              [0],
                              [-f0_m]])
+
+    def el_bar(self):
+        return np.diag([
+            self.node_i.u_spring, self.node_i.w_spring, self.node_i.phi_spring,
+            self.node_j.u_spring, self.node_j.w_spring, self.node_j.phi_spring
+        ])
 
     def _stiffness_matrix_without_shear_force(self):
         EA_l = self.EA / self.length
