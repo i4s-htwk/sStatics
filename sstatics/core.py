@@ -22,11 +22,20 @@ def get_trans_mat_bar(
 
 
 @dataclass
-class NodeLoad:
+class NodeDisplace:
 
     x: float
     z: float
     phi: float
+
+    @property
+    def vector(self):
+        return np.array([[self.x], [self.z], [self.phi]])
+
+
+@dataclass
+class NodeLoad(NodeDisplace):
+
     rotation: float = 0
 
     def __post_init__(self):
@@ -36,10 +45,6 @@ class NodeLoad:
         return bool(np.isclose(
             list(asdict(self).values()), list(asdict(other).values())
         ).all())
-
-    @property
-    def vector(self):
-        return np.array([[self.x], [self.z], [self.phi]])
 
     def rotate(self, node_rotation):
         x, z, phi = np.dot(
@@ -59,6 +64,8 @@ class Node:
     w: Optional[Literal['fixed', 'free']] = 'free'
     phi: Optional[Literal['fixed', 'free']] = 'free'
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
+    displacement: Optional[List[NodeDisplace]] = field(
+        default_factory=lambda: [NodeDisplace(0, 0, 0)])
 
     def __eq__(self, other):
         return self.x == other.x and self.z == other.z
@@ -70,6 +77,9 @@ class Node:
     def rotate_load(self):
         rotated_load = self.load.rotate(self.rotation)
         return replace(self, load=rotated_load)
+
+    def displace_vec(self):
+        return np.sum([load.vector for load in self.displacement], axis=0)
 
 
 @dataclass
@@ -102,7 +112,7 @@ class Material:
 
 
 @dataclass
-class BarLoad:
+class BarLineLoad:
 
     pi: float
     pj: float
@@ -170,6 +180,17 @@ class BarTemp:
 
 
 @dataclass
+class BarPointLoad(NodeLoad):
+
+    # TODO: Documentation for variable position
+    position: float = field(default=0)
+
+    def __post_init__(self):
+        if not (0 <= self.position <= 1):
+            raise ValueError("position must be between 0 and 1")
+
+
+@dataclass
 class Bar:
 
     node_i: Node
@@ -182,9 +203,12 @@ class Bar:
     hinge_u_j: Optional[bool] = False
     hinge_w_j: Optional[bool] = False
     hinge_phi_j: Optional[bool] = False
-    load: Optional[List[BarLoad]] = field(
-        default_factory=lambda: [BarLoad(0, 0, 'z', 'bar', 'exact')])
+    line_load: Optional[List[BarLineLoad]] = field(
+        default_factory=lambda: [BarLineLoad(0, 0, 'z', 'bar', 'exact')])
     temp: Optional[BarTemp] = field(default_factory=lambda: BarTemp(0, 0))
+    point_load: Optional[List[BarPointLoad]] = field(
+        default_factory=lambda: [BarPointLoad(0, 0, 0, 0, 0)])
+    segments: Optional[int] = 0
 
     def __post_init__(self):
         self.hinge = [
@@ -227,8 +251,8 @@ class Bar:
 
     def get_p(self):
         p = np.zeros((6, 1))
-        for load in self.load:
-            p = p + load.rotate(self.rotation)
+        for line_load in self.line_load:
+            p = p + line_load.rotate(self.rotation)
         return p
 
     def f0_load_first_order(self):
@@ -283,6 +307,19 @@ class Bar:
                  [f0_m_j]])
         )
 
+    def f0_point_load(self):
+        if self.point_load.position == 0:
+            f0_point_load = np.vstack(
+                (self.point_load.vector,
+                 np.zeros((3, 1))))
+        elif self.point_load.position == 1:
+            f0_point_load = np.vstack(
+                (np.zeros((3, 1)), self.point_load.vector))
+        else:
+            return ValueError('The position is not at the ends of the member. '
+                              'Member division occurs.')
+        return f0_point_load
+
     def f0_temp(self):
         if self.temp.temp_delta == 0 and self.temp.temp_s == 0:
             return np.zeros((2 * 3, 1))
@@ -302,6 +339,12 @@ class Bar:
                              [-f0_x],
                              [0],
                              [-f0_m]])
+
+    def f0_displace(self):
+        f0_displace = np.vstack(
+            (self.node_i.displace_vec(), self.node_j.displace_vec()))
+        return (self.stiffness_matrix() @ get_trans_mat_bar(self.rotation)
+                @ f0_displace)
 
     def _stiffness_matrix_without_shear_force(self):
         EA_l = self.EA / self.length
@@ -707,10 +750,11 @@ class Bar:
 @dataclass
 class System:
 
-    input_bars: List[Bar]
+    _bars: List[Bar]
+    bars: List[Bar] = field(default_factory=lambda: [])
 
     def __post_init__(self):
-        self.bars = self.input_bars
+        self.bars = self.bar_segmentation()
         self.nodes = self._get_nodes()
         self.dof = 3
 
@@ -731,6 +775,82 @@ class System:
                 nodes.append(bar.node_j)
 
         return nodes
+
+    def bar_segmentation(self):
+        bars = []
+        for bar in self._bars:
+            positions = []
+            bar_point_load = [[], []]
+
+            for i in bar.point_load:
+                if i.position == 0:
+                    bar_point_load[0].append(i)
+                elif i.position == 1:
+                    bar_point_load[1].append(i)
+                else:
+                    positions.append((i.position, i))
+
+            for i in range(bar.segments):
+                position = (i + 1) / (bar.segments + 1)
+                if position not in [pos[0] for pos in positions]:
+                    positions.append((position, None))
+
+            positions.sort(key=lambda x: x[0])
+
+            if positions:
+                for i, (position, point_load) in enumerate(positions):
+                    new_x = (bar.node_i.x + np.cos(bar.rotation) * position
+                             * bar.length)
+                    new_z = (bar.node_i.z - np.sin(bar.rotation) * position
+                             * bar.length)
+
+                    if point_load:
+                        new_node_load = NodeLoad(point_load.x, point_load.z,
+                                                 point_load.phi,
+                                                 point_load.rotation)
+                        new_node_j = Node(new_x, new_z, load=new_node_load)
+                    else:
+                        new_node_j = Node(new_x, new_z)
+
+                    new_bar_line_load = []
+                    for j, line_load in enumerate(bar.line_load):
+                        line_load_i = bars[-1].line_load[j].pj if i \
+                            else bar.line_load[j].pi
+                        new_line_load_j = (
+                                (line_load.pj - line_load.pi) * position +
+                                line_load.pi
+                        )
+                        new_bar_line_load.append(
+                            BarLineLoad(line_load_i, new_line_load_j,
+                                        line_load.direction, line_load.coord,
+                                        line_load.length))
+
+                    if i:
+                        bars.append(Bar(bars[-1].node_j, new_node_j,
+                                        bar.cross_section, bar.material,
+                                        line_load=new_bar_line_load,
+                                        temp=bar.temp))
+                    else:
+                        bars.append(Bar(bar.node_i, new_node_j,
+                                        bar.cross_section, bar.material,
+                                        line_load=new_bar_line_load,
+                                        temp=bar.temp,
+                                        point_load=bar_point_load[0]))
+
+                new_bar_line_load = []
+                for i, line_load in enumerate(bar.line_load):
+                    new_bar_line_load.append(
+                        BarLineLoad(bars[-1].line_load[i].pj, line_load.pj,
+                                    line_load.direction, line_load.coord,
+                                    line_load.length))
+                bars.append(Bar(bars[-1].node_j, bar.node_j, bar.cross_section,
+                                bar.material, line_load=new_bar_line_load,
+                                temp=bar.temp, point_load=bar_point_load[1]))
+
+            else:
+                bars.append(bar)
+
+        return bars
 
     def stiffness_matrix(self, order: str = 'first',
                          approach: Optional[str] = None):
