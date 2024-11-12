@@ -1,5 +1,5 @@
 
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field, replace
 
 from typing import Literal, List, Optional
 import numpy as np
@@ -21,7 +21,7 @@ def get_trans_mat_bar(
     return mat
 
 
-@dataclass
+@dataclass(eq=False)
 class NodeDisplace:
 
     x: float
@@ -33,18 +33,13 @@ class NodeDisplace:
         return np.array([[self.x], [self.z], [self.phi]])
 
 
-@dataclass
+@dataclass(eq=False)
 class NodeLoad(NodeDisplace):
 
     rotation: float = 0
 
     def __post_init__(self):
         self.rotation = self.rotation % (2 * np.pi)
-
-    def __eq__(self, other):
-        return bool(np.isclose(
-            list(asdict(self).values()), list(asdict(other).values())
-        ).all())
 
     def rotate(self, node_rotation):
         x, z, phi = np.dot(
@@ -54,7 +49,7 @@ class NodeLoad(NodeDisplace):
         return replace(self, x=x, z=z, phi=phi, rotation=0)
 
 
-@dataclass
+@dataclass(eq=False)
 class Node:
 
     x: float
@@ -82,7 +77,7 @@ class Node:
         return np.sum([load.vector for load in self.displacement], axis=0)
 
 
-@dataclass
+@dataclass(eq=False)
 class CrossSection:
 
     mom_of_int: float
@@ -91,13 +86,8 @@ class CrossSection:
     width: float
     cor_far: float
 
-    def __eq__(self, other):
-        return bool(np.isclose(
-            list(asdict(self).values()), list(asdict(other).values())
-        ).all())
 
-
-@dataclass
+@dataclass(eq=False)
 class Material:
 
     young_mod: float
@@ -105,13 +95,8 @@ class Material:
     shear_mod: float
     therm_exp_coeff: float
 
-    def __eq__(self, other):
-        return bool(np.isclose(
-            list(asdict(self).values()), list(asdict(other).values())
-        ).all())
 
-
-@dataclass
+@dataclass(eq=False)
 class BarLineLoad:
 
     pi: float
@@ -168,7 +153,7 @@ class BarLineLoad:
             return p_vec
 
 
-@dataclass
+@dataclass(eq=False)
 class BarTemp:
 
     temp_o: float
@@ -179,7 +164,7 @@ class BarTemp:
         self.temp_delta = self.temp_u - self.temp_o
 
 
-@dataclass
+@dataclass(eq=False)
 class BarPointLoad(NodeLoad):
 
     # TODO: Documentation for variable position
@@ -190,7 +175,7 @@ class BarPointLoad(NodeLoad):
             raise ValueError("position must be between 0 and 1")
 
 
-@dataclass
+@dataclass(eq=False)
 class Bar:
 
     node_i: Node
@@ -747,7 +732,7 @@ class Bar:
                 self.stiffness_matrix(order, approach)))
 
 
-@dataclass
+@dataclass(eq=False)
 class System:
 
     _bars: List[Bar]
@@ -945,7 +930,7 @@ class System:
     # TODO: def create_list_of_bar_force(...)
 
 
-@dataclass
+@dataclass(eq=False)
 class Model:
 
     system: System
