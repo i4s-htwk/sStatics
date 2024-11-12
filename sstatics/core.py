@@ -21,6 +21,7 @@ def get_trans_mat_bar(
     return mat
 
 
+# another name?
 @dataclass(eq=False)
 class NodeDisplace:
 
@@ -41,6 +42,7 @@ class NodeLoad(NodeDisplace):
     def __post_init__(self):
         self.rotation = self.rotation % (2 * np.pi)
 
+    # parameter neu setzen, kein replace
     def rotate(self, node_rotation):
         x, z, phi = np.dot(
             get_transformation_matrix(self.rotation, node_rotation),
@@ -59,24 +61,30 @@ class Node:
     w: Optional[Literal['fixed', 'free']] = 'free'
     phi: Optional[Literal['fixed', 'free']] = 'free'
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
+    # warum displacement?
     displacement: Optional[List[NodeDisplace]] = field(
         default_factory=lambda: [NodeDisplace(0, 0, 0)])
 
+    # lieber dort wo verglichen wird
     def __eq__(self, other):
         return self.x == other.x and self.z == other.z
 
+    # displacement replacen, validation der parameter
     def __post_init__(self):
         self.rotation = self.rotation % (2 * np.pi)
         self.load = replace(self.load)
 
+    # kein replace -> gleich rotieren
     def rotate_load(self):
         rotated_load = self.load.rotate(self.rotation)
         return replace(self, load=rotated_load)
 
+    # property?
     def displace_vec(self):
         return np.sum([load.vector for load in self.displacement], axis=0)
 
 
+# validierung
 @dataclass(eq=False)
 class CrossSection:
 
@@ -87,6 +95,7 @@ class CrossSection:
     cor_far: float
 
 
+# validierung
 @dataclass(eq=False)
 class Material:
 
@@ -96,6 +105,7 @@ class Material:
     therm_exp_coeff: float
 
 
+# pi, pj validierung?
 @dataclass(eq=False)
 class BarLineLoad:
 
@@ -120,6 +130,7 @@ class BarLineLoad:
         vec[3 if self.direction == 'x' else 4] = self.pj
         return vec
 
+    # kein rückgabewert, parameter werden überschrieben
     def rotate(self, bar_rotation):
         p_vec = self.vector
         if self.coord == 'system':
@@ -153,12 +164,14 @@ class BarLineLoad:
             return p_vec
 
 
+# validierung
 @dataclass(eq=False)
 class BarTemp:
 
     temp_o: float
     temp_u: float
 
+    # properties?
     def __post_init__(self):
         self.temp_s = (self.temp_o + self.temp_u) / 2
         self.temp_delta = self.temp_u - self.temp_o
@@ -168,13 +181,15 @@ class BarTemp:
 class BarPointLoad(NodeLoad):
 
     # TODO: Documentation for variable position
-    position: float = field(default=0)
+    position: float = 0.0
 
     def __post_init__(self):
         if not (0 <= self.position <= 1):
             raise ValueError("position must be between 0 and 1")
 
 
+# validierung?
+# muss dringend zusammengefasst werden :$
 @dataclass(eq=False)
 class Bar:
 
@@ -191,10 +206,14 @@ class Bar:
     line_load: Optional[List[BarLineLoad]] = field(
         default_factory=lambda: [BarLineLoad(0, 0, 'z', 'bar', 'exact')])
     temp: Optional[BarTemp] = field(default_factory=lambda: BarTemp(0, 0))
+    # list?
     point_load: Optional[List[BarPointLoad]] = field(
         default_factory=lambda: [BarPointLoad(0, 0, 0, 0, 0)])
+    # segments?
     segments: Optional[int] = 0
 
+    # property?
+    # line_load, temp, point_load replacen
     def __post_init__(self):
         self.hinge = [
             self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
@@ -226,8 +245,8 @@ class Bar:
     @property
     def GA_s(self):
         return (
-                self.material.shear_mod * self.cross_section.area *
-                self.cross_section.cor_far
+            self.material.shear_mod * self.cross_section.area *
+            self.cross_section.cor_far
         )
 
     @property
@@ -292,6 +311,8 @@ class Bar:
                  [f0_m_j]])
         )
 
+    # fehler? was mit 0 < position < 1?
+    # property
     def f0_point_load(self):
         if self.point_load.position == 0:
             f0_point_load = np.vstack(
@@ -305,6 +326,8 @@ class Bar:
                               'Member division occurs.')
         return f0_point_load
 
+    # Fallunterscheidung nicht nötig? Was wenn cross_section.height = 0?
+    # property
     def f0_temp(self):
         if self.temp.temp_delta == 0 and self.temp.temp_s == 0:
             return np.zeros((2 * 3, 1))
@@ -325,12 +348,14 @@ class Bar:
                              [0],
                              [-f0_m]])
 
+    # property
     def f0_displace(self):
         f0_displace = np.vstack(
             (self.node_i.displace_vec(), self.node_j.displace_vec()))
         return (self.stiffness_matrix() @ get_trans_mat_bar(self.rotation)
                 @ f0_displace)
 
+    # property
     def _stiffness_matrix_without_shear_force(self):
         EA_l = self.EA / self.length
         EI_l3 = self.EI / self.length ** 3
@@ -348,6 +373,7 @@ class Bar:
                          [0, -6 * EI_l2, 2 * EI_l,
                           0, 6 * EI_l2, 4 * EI_l]])
 
+    # property
     def _get_matrix_to_apply_shear_force(self):
         f_1 = 1 / (1 + self.phi)
         f_2 = (f_1 + self.phi / (4 * (1 + self.phi)))
@@ -930,6 +956,7 @@ class System:
     # TODO: def create_list_of_bar_force(...)
 
 
+# -> System
 @dataclass(eq=False)
 class Model:
 
