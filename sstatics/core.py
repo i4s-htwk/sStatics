@@ -178,17 +178,31 @@ class BarLineLoad:
             return p_vec
 
 
-# validierung
 @dataclass(eq=False)
 class BarTemp:
 
     temp_o: float
     temp_u: float
 
-    # properties?
     def __post_init__(self):
-        self.temp_s = (self.temp_o + self.temp_u) / 2
-        self.temp_delta = self.temp_u - self.temp_o
+        if self.temp_o < 0:
+            raise ValueError(
+                'temp_o has to be greater than or equal to zero since its '
+                'unit is Kelvin.'
+            )
+        if self.temp_u < 0:
+            raise ValueError(
+                'temp_u has to be greater than or equal to zero since its '
+                'unit is Kelvin.'
+            )
+
+    @property
+    def temp_s(self):
+        return (self.temp_o + self.temp_u) / 2
+
+    @property
+    def temp_delta(self):
+        return self.temp_u - self.temp_o
 
 
 @dataclass(eq=False)
