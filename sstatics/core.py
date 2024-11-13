@@ -75,7 +75,6 @@ class Node:
         return np.sum([d.vector for d in self.displacements], axis=0)
 
 
-# validierung
 @dataclass(eq=False)
 class CrossSection:
 
@@ -84,6 +83,21 @@ class CrossSection:
     height: float
     width: float
     cor_far: float
+
+    def __post_init__(self):
+        if self.mom_of_int <= 0:
+            raise ValueError('mom_of_int has to be greater than zero.')
+        if self.height <= 0:
+            raise ValueError('height has to be greater than zero.')
+        if self.width <= 0:
+            raise ValueError('width has to be greater than zero.')
+        if self.cor_far <= 0:
+            raise ValueError('cor_far has to be greater than zero.')
+        if not 0 < self.area <= self.width * self.height:
+            raise ValueError(
+                'area has to be greater than zero and less than or equal to '
+                'width * height.'
+            )
 
 
 # validierung
