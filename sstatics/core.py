@@ -53,9 +53,9 @@ class Node:
     w: Optional[Literal['fixed', 'free']] = 'free'
     phi: Optional[Literal['fixed', 'free']] = 'free'
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
-    # warum displacement?
-    displacement: Optional[List[NodeDisplace]] = field(
-        default_factory=lambda: [NodeDisplace(0, 0, 0)])
+    displacements: Optional[List[NodeDisplace]] = field(
+        default_factory=lambda: []
+    )
 
     # lieber dort wo verglichen wird
     def __eq__(self, other):
@@ -71,9 +71,9 @@ class Node:
         rotated_load = self.load.rotate(self.rotation)
         return replace(self, load=rotated_load)
 
-    # property?
-    def displace_vec(self):
-        return np.sum([load.vector for load in self.displacement], axis=0)
+    @property
+    def displacement(self):
+        return np.sum([d.vector for d in self.displacements], axis=0)
 
 
 # validierung
@@ -354,7 +354,7 @@ class Bar:
     # property
     def f0_displace(self):
         f0_displace = np.vstack(
-            (self.node_i.displace_vec(), self.node_j.displace_vec())
+            (self.node_i.displacement, self.node_j.displacement)
         )
         trans_m = self.transformation_matrix(to_node_coord=False)
         return self.stiffness_matrix() @ trans_m @ f0_displace
