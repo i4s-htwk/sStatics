@@ -5,20 +5,12 @@ from typing import Literal, List, Optional
 import numpy as np
 
 
-def get_transformation_matrix(alpha: float, beta: float = 0):
-    gamma = alpha - beta
-    return np.array([[np.cos(gamma), np.sin(gamma), 0],
-                     [- np.sin(gamma), np.cos(gamma), 0],
-                     [0, 0, 1]])
-
-
-def get_trans_mat_bar(
-        rot_bar: float, rot_node_i: float = 0, rot_node_j: float = 0
-):
-    mat = np.zeros((6, 6))
-    mat[:3, :3] = get_transformation_matrix(rot_bar, rot_node_i)
-    mat[3:, 3:] = get_transformation_matrix(rot_bar, rot_node_j)
-    return mat
+def transformation_matrix(alpha: float):
+    return np.array([
+        [np.cos(alpha), np.sin(alpha), 0],
+        [-np.sin(alpha), np.cos(alpha), 0],
+        [0, 0, 1]
+    ])
 
 
 # another name?
@@ -45,7 +37,7 @@ class NodeLoad(NodeDisplace):
     # parameter neu setzen, kein replace
     def rotate(self, node_rotation):
         x, z, phi = np.dot(
-            get_transformation_matrix(self.rotation, node_rotation),
+            transformation_matrix(self.rotation - node_rotation),
             self.vector
         ).flatten().tolist()
         return replace(self, x=x, z=z, phi=phi, rotation=0)
@@ -140,7 +132,7 @@ class BarLineLoad:
                 else:
                     perm_mat = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]])
                 perm_trans = (
-                        perm_mat @ get_transformation_matrix(bar_rotation)
+                        perm_mat @ transformation_matrix(bar_rotation)
                 )
 
                 trans_mat = np.zeros((6, 6))
@@ -152,7 +144,7 @@ class BarLineLoad:
                 else:
                     perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
                 perm_trans = (
-                        perm_mat @ get_transformation_matrix(bar_rotation)
+                        perm_mat @ transformation_matrix(bar_rotation)
                 )
                 trans_mat = np.zeros((6, 6))
                 trans_mat[:3, :3] = trans_mat[3:, 3:] = perm_trans
@@ -219,6 +211,17 @@ class Bar:
             self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
             self.hinge_u_j, self.hinge_w_j, self.hinge_phi_j
         ]
+
+    # TODO: Parameter sinnvoll? Wird es noch andere Rotationsmatrizen geben?
+    def transformation_matrix(self, to_node_coord=True):
+        alpha_i = alpha_j = self.rotation
+        if to_node_coord:
+            alpha_i -= self.node_i.rotation
+            alpha_j -= self.node_j.rotation
+        return np.vstack((
+            np.hstack((transformation_matrix(alpha_i), np.zeros((3, 3)))),
+            np.hstack((np.zeros((3, 3)), transformation_matrix(alpha_j))),
+        ))
 
     @property
     def rotation(self):
@@ -351,9 +354,10 @@ class Bar:
     # property
     def f0_displace(self):
         f0_displace = np.vstack(
-            (self.node_i.displace_vec(), self.node_j.displace_vec()))
-        return (self.stiffness_matrix() @ get_trans_mat_bar(self.rotation)
-                @ f0_displace)
+            (self.node_i.displace_vec(), self.node_j.displace_vec())
+        )
+        trans_m = self.transformation_matrix(to_node_coord=False)
+        return self.stiffness_matrix() @ trans_m @ f0_displace
 
     # property
     def _stiffness_matrix_without_shear_force(self):
@@ -665,11 +669,11 @@ class Bar:
         return f0, k
 
     def _transform_from_bar_in_node_coord(self, f0, stiffness_matrix):
-        trans_mat = get_trans_mat_bar(
-            self.rotation, self.node_i.rotation, self.node_j.rotation
+        trans_m = self.transformation_matrix()
+        return (
+            trans_m @ f0,
+            trans_m @ stiffness_matrix @ np.transpose(trans_m)
         )
-        return (trans_mat @ f0,
-                (trans_mat @ stiffness_matrix @ np.transpose(trans_mat)))
 
     def _get_element_relation(self, f0, stiffness_matrix):
         # modification hinge
@@ -946,9 +950,9 @@ class System:
             deform_node[self.dof:2 * self.dof, :] = (
                 node_deform[j:j + self.dof, :])
             # transform the deformation into the node coordination
-            deform_bar = (np.transpose(get_trans_mat_bar(
-                bar.rotation, bar.node_i.rotation, bar.node_j.rotation))
-                          @ deform_node)
+            deform_bar = (
+                np.transpose(bar.transformation_matrix()) @ deform_node
+            )
             deform_list.append(deform_bar)
 
         return deform_list
