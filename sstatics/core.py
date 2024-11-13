@@ -57,14 +57,13 @@ class Node:
         default_factory=lambda: []
     )
 
-    # lieber dort wo verglichen wird
-    def __eq__(self, other):
-        return self.x == other.x and self.z == other.z
-
     # displacement replacen, validation der parameter
     def __post_init__(self):
         self.rotation = self.rotation % (2 * np.pi)
         self.load = replace(self.load)
+
+    def same_location(self, other):
+        return self.x == other.x and self.z == other.z
 
     # kein replace -> gleich rotieren
     def rotate_load(self):
@@ -782,14 +781,12 @@ class System:
         return np.zeros((x, 1))
 
     def _get_nodes(self):
-        nodes = []
-        for bar in self.bars:
-            if bar.node_i not in nodes:
-                nodes.append(bar.node_i)
-            if bar.node_j not in nodes:
-                nodes.append(bar.node_j)
-
-        return nodes
+        all_nodes = [n for bar in self.bars for n in (bar.node_i, bar.node_j)]
+        unique_nodes = []
+        for node in all_nodes:
+            if any([node.same_location(n) for n in unique_nodes]) is False:
+                unique_nodes.append(node)
+        return unique_nodes
 
     def bar_segmentation(self):
         bars = []
