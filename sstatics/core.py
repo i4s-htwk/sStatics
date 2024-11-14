@@ -15,7 +15,7 @@ def transformation_matrix(alpha: float):
 
 # TODO: Find another name
 @dataclass(eq=False)
-class NodeDisplace:
+class NodeDisplacement:
 
     x: float
     z: float
@@ -27,7 +27,7 @@ class NodeDisplace:
 
 
 @dataclass(eq=False)
-class NodeLoad(NodeDisplace):
+class NodeLoad(NodeDisplacement):
 
     rotation: float = 0
 
@@ -50,7 +50,7 @@ class Node:
     w: Optional[Literal['fixed', 'free']] = 'free'
     phi: Optional[Literal['fixed', 'free']] = 'free'
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
-    displacements: Optional[List[NodeDisplace]] = field(
+    displacements: Optional[List[NodeDisplacement]] = field(
         default_factory=lambda: []
     )
 
