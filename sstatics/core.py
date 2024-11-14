@@ -1,5 +1,5 @@
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
 from typing import Literal, List, Optional
 import numpy as np
@@ -13,7 +13,7 @@ def transformation_matrix(alpha: float):
     ])
 
 
-# another name?
+# TODO: Find another name
 @dataclass(eq=False)
 class NodeDisplace:
 
@@ -31,18 +31,15 @@ class NodeLoad(NodeDisplace):
 
     rotation: float = 0
 
-    def __post_init__(self):
-        self.rotation = self.rotation % (2 * np.pi)
-
-    # parameter neu setzen, kein replace
-    def rotate(self, node_rotation):
-        x, z, phi = np.dot(
-            transformation_matrix(self.rotation - node_rotation),
-            self.vector
-        ).flatten().tolist()
-        return replace(self, x=x, z=z, phi=phi, rotation=0)
+    def rotate(self, rotation: float):
+        return np.dot(
+            transformation_matrix(self.rotation - rotation), self.vector
+        )
 
 
+# TODO: Find a solution for springs
+# TODO: load -> loads
+# TODO: validation for load and displacements?
 @dataclass(eq=False)
 class Node:
 
@@ -57,22 +54,23 @@ class Node:
         default_factory=lambda: []
     )
 
-    # displacement replacen, validation der parameter
     def __post_init__(self):
-        self.rotation = self.rotation % (2 * np.pi)
-        self.load = replace(self.load)
-
-    def same_location(self, other):
-        return self.x == other.x and self.z == other.z
-
-    # kein replace -> gleich rotieren
-    def rotate_load(self):
-        rotated_load = self.load.rotate(self.rotation)
-        return replace(self, load=rotated_load)
+        for param in (self.u, self.w, self.phi):
+            if param not in ('fixed', 'free'):
+                raise ValueError(
+                    f'"{param}" is an invalid argument. Has to be either '
+                    f'"fixed" or "free".'
+                )
 
     @property
     def displacement(self):
         return np.sum([d.vector for d in self.displacements], axis=0)
+
+    def same_location(self, other):
+        return self.x == other.x and self.z == other.z
+
+    def rotate_load(self):
+        return self.load.rotate(self.rotation)
 
 
 @dataclass(eq=False)
@@ -943,7 +941,7 @@ class System:
         p0 = self._get_zero_vec()
         for i, node in enumerate(self.nodes):
             p0[i * self.dof:i * self.dof + self.dof, :] = (
-                node.rotate_load().load.vector)
+                node.rotate_load())
         return p0
 
     def p(self):
