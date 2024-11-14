@@ -203,6 +203,7 @@ class BarPointLoad(NodeLoad):
 
 # validierung?
 # muss dringend zusammengefasst werden :$
+# TODO: find descriptive names for EA, EI, ...?
 @dataclass(eq=False)
 class Bar:
 
@@ -219,14 +220,11 @@ class Bar:
     line_load: Optional[List[BarLineLoad]] = field(
         default_factory=lambda: [BarLineLoad(0, 0, 'z', 'bar', 'exact')])
     temp: Optional[BarTemp] = field(default_factory=lambda: BarTemp(0, 0))
-    # list?
     point_load: Optional[List[BarPointLoad]] = field(
         default_factory=lambda: [BarPointLoad(0, 0, 0, 0, 0)])
-    # segments?
     segments: Optional[int] = 0
 
     # property?
-    # line_load, temp, point_load replacen
     def __post_init__(self):
         self.hinge = [
             self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
@@ -244,6 +242,7 @@ class Bar:
             np.hstack((np.zeros((3, 3)), transformation_matrix(alpha_j))),
         ))
 
+    # TODO: another name? inclination?
     @property
     def rotation(self):
         """ bar inclination angle """
