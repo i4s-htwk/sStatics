@@ -29,7 +29,7 @@ class NodeDisplacement:
 @dataclass(eq=False)
 class NodeLoad(NodeDisplacement):
 
-    rotation: float = 0
+    rotation: float = 0.0
 
     def rotate(self, rotation: float):
         return np.dot(
@@ -45,7 +45,7 @@ class Node:
 
     x: float
     z: float
-    rotation: float = 0
+    rotation: float = 0.0
     u: Optional[Literal['fixed', 'free']] = 'free'
     w: Optional[Literal['fixed', 'free']] = 'free'
     phi: Optional[Literal['fixed', 'free']] = 'free'
