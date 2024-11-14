@@ -117,7 +117,7 @@ class Material:
             raise ValueError('therm_exp_coeff has to be greater than zero.')
 
 
-# pi, pj validierung?
+# TODO: default values for direction, coord and length?
 @dataclass(eq=False)
 class BarLineLoad:
 
@@ -128,11 +128,11 @@ class BarLineLoad:
     length: Literal['exact', 'proj']
 
     def __post_init__(self):
-        if self.direction not in {'x', 'z'}:
+        if self.direction not in ('x', 'z'):
             raise ValueError('direction has to be either "x" or "z".')
-        if self.coord not in {'bar', 'system'}:
+        if self.coord not in ('bar', 'system'):
             raise ValueError('coord has to be either "bar" or "system".')
-        if self.length not in {'exact', 'proj'}:
+        if self.length not in ('exact', 'proj'):
             raise ValueError('length has to be either "exact" or "proj".')
 
     @property
@@ -142,38 +142,25 @@ class BarLineLoad:
         vec[3 if self.direction == 'x' else 4] = self.pj
         return vec
 
-    # kein rückgabewert, parameter werden überschrieben
-    def rotate(self, bar_rotation):
-        p_vec = self.vector
-        if self.coord == 'system':
-            if self.length == 'exact':
-                if self.direction == 'x':
-                    perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-                else:
-                    perm_mat = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]])
-                perm_trans = (
-                        perm_mat @ transformation_matrix(bar_rotation)
-                )
-
-                trans_mat = np.zeros((6, 6))
-                trans_mat[:3, :3] = trans_mat[3:, 3:] = perm_trans
-                return trans_mat @ p_vec
-            else:
-                if self.direction == 'x':
-                    perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-                else:
-                    perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-                perm_trans = (
-                        perm_mat @ transformation_matrix(bar_rotation)
-                )
-                trans_mat = np.zeros((6, 6))
-                trans_mat[:3, :3] = trans_mat[3:, 3:] = perm_trans
-                mat_a = np.diag([1, 0, 0, 1, 0, 0])
-                return (
-                        (trans_mat @ mat_a @ np.transpose(trans_mat)) @ p_vec
-                )
+    def rotate(self, rotation):
+        if self.coord == 'bar':
+            return self.vector
         else:
-            return p_vec
+            perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
+            if self.length == 'exact' and self.direction == 'z':
+                perm_mat = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]])
+            perm_trans = perm_mat @ transformation_matrix(rotation)
+            trans_mat = np.vstack((
+                np.hstack((perm_trans, np.zeros((3, 3)))),
+                np.hstack((np.zeros((3, 3)), perm_trans)),
+            ))
+            if self.length == 'exact':
+                return trans_mat @ self.vector
+            else:
+                return (
+                    trans_mat @ np.diag([1, 0, 0, 1, 0, 0]) @
+                    np.transpose(trans_mat) @ self.vector
+                )
 
 
 @dataclass(eq=False)
