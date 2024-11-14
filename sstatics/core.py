@@ -64,6 +64,8 @@ class Node:
 
     @property
     def displacement(self):
+        if len(self.displacements) == 0:
+            return np.array([[0], [0], [0]])
         return np.sum([d.vector for d in self.displacements], axis=0)
 
     def same_location(self, other):
