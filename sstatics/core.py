@@ -22,7 +22,7 @@ def get_trans_mat_bar(
     return mat
 
 
-@dataclass
+@dataclass(eq=False)
 class DegreesOfFreedom:
     x: float
     z: float
@@ -36,7 +36,7 @@ class DegreesOfFreedom:
 NodeDisplace = DegreesOfFreedom
 
 
-@dataclass
+@dataclass(eq=False)
 class NodeLoad(DegreesOfFreedom):
     rotation: float = 0
 
@@ -48,6 +48,7 @@ class NodeLoad(DegreesOfFreedom):
             list(asdict(self).values()), list(asdict(other).values())
         ).all())
 
+    # parameter neu setzen, kein replace
     def rotate(self, node_rotation):
         x, z, phi = np.dot(
             get_transformation_matrix(self.rotation, node_rotation),
@@ -56,8 +57,9 @@ class NodeLoad(DegreesOfFreedom):
         return replace(self, x=x, z=z, phi=phi, rotation=0)
 
 
-@dataclass
+@dataclass(eq=False)
 class Node:
+
     x: float
     z: float
     rotation: float = 0
@@ -71,9 +73,11 @@ class Node:
     displacements: Optional[List[NodeDisplace]] = field(
         default_factory=lambda: [NodeDisplace(0, 0, 0)])
 
+    # lieber dort wo verglichen wird
     def __eq__(self, other):
         return self.x == other.x and self.z == other.z
 
+    # displacement replacen, validation der parameter
     def __post_init__(self):
         self.rotation = self.rotation % (2 * np.pi)
         self.load = replace(self.load)
@@ -84,6 +88,7 @@ class Node:
         if self.phi not in {'free', 'fixed'} and self.phi_spring == 0:
             raise ValueError('phi must be either "fixed" or "free".')
 
+    # kein replace -> gleich rotieren
     def rotate_load(self):
         rotated_load = self.load.rotate(self.rotation)
         return replace(self, load=rotated_load)
@@ -93,7 +98,8 @@ class Node:
         return np.sum([load.vector for load in self.displacements], axis=0)
 
 
-@dataclass
+# validierung
+@dataclass(eq=False)
 class CrossSection:
 
     mom_of_int: float
@@ -102,13 +108,9 @@ class CrossSection:
     width: float
     cor_far: float
 
-    def __eq__(self, other):
-        return bool(np.isclose(
-            list(asdict(self).values()), list(asdict(other).values())
-        ).all())
 
-
-@dataclass
+# validierung
+@dataclass(eq=False)
 class Material:
 
     young_mod: float
@@ -116,14 +118,11 @@ class Material:
     shear_mod: float
     therm_exp_coeff: float
 
-    def __eq__(self, other):
-        return bool(np.isclose(
-            list(asdict(self).values()), list(asdict(other).values())
-        ).all())
 
-
-@dataclass
+# pi, pj validierung?
+@dataclass(eq=False)
 class BarLineLoad:
+
     pi: float
     pj: float
     direction: Literal['x', 'z']
@@ -145,6 +144,7 @@ class BarLineLoad:
         vec[3 if self.direction == 'x' else 4] = self.pj
         return vec
 
+    # kein rückgabewert, parameter werden überschrieben
     def rotate(self, bar_rotation):
         p_vec = self.vector
         if self.coord == 'system':
@@ -166,7 +166,8 @@ class BarLineLoad:
             return p_vec
 
 
-@dataclass
+# validierung
+@dataclass(eq=False)
 class BarTemp:
 
     temp_o: float
@@ -181,7 +182,7 @@ class BarTemp:
         return self.temp_u - self.temp_o
 
 
-@dataclass
+@dataclass(eq=False)
 class BarPointLoad(NodeLoad):
     # TODO: Documentation for variable position
     position: float = field(default=0)
@@ -201,7 +202,9 @@ class BarPointLoad(NodeLoad):
             return np.zeros((6, 1))
 
 
-@dataclass
+# validierung?
+# muss dringend zusammengefasst werden :$
+@dataclass(eq=False)
 class Bar:
 
     node_i: Node
@@ -220,7 +223,11 @@ class Bar:
     temp: Optional[BarTemp] = field(default_factory=lambda: BarTemp(0, 0))
     point_loads: Optional[List[BarPointLoad]] = field(
         default_factory=lambda: [BarPointLoad(0, 0, 0, 0, 0)])
+    # segments?
+    segments: Optional[int] = 0
 
+    # property?
+    # line_load, temp, point_load replacen
     def __post_init__(self):
         self.node_i = replace(self.node_i)
         self.node_j = replace(self.node_j)
@@ -340,6 +347,7 @@ class Bar:
 
     @cached_property
     def f0_point_load(self):
+        print(self.pointload)
         return get_trans_mat_bar(self.rotation) @ self.pointload
 
     @cached_property
@@ -349,6 +357,8 @@ class Bar:
         return (self.stiffness_matrix() @ get_trans_mat_bar(self.rotation)
                 @ f0_displace)
 
+    # Fallunterscheidung nicht nötig? Was wenn cross_section.height = 0?
+    # property
     @cached_property
     def f0_temp(self):
         if self.temp.temp_delta == 0 and self.temp.temp_s == 0:
@@ -790,13 +800,14 @@ class Bar:
                 self.stiffness_matrix(order, approach)))
 
 
-@dataclass
+@dataclass(eq=False)
 class System:
 
-    input_bars: List[Bar]
+    _bars: List[Bar]
+    bars: List[Bar] = field(default_factory=lambda: [])
 
     def __post_init__(self):
-        self.bars = self.input_bars
+        self.bars = self.bar_segmentation()
         self.nodes = self._get_nodes()
         self.dof = 3
 
@@ -817,6 +828,83 @@ class System:
                 nodes.append(bar.node_j)
 
         return nodes
+
+    def bar_segmentation(self):
+        bars = []
+        for bar in self._bars:
+            positions = []
+            bar_point_load = [[BarPointLoad(0, 0, 0, 0, 0)],
+                              [BarPointLoad(0, 0, 0, 0, 0)]]
+
+            for i in bar.point_loads:
+                if i.position == 0:
+                    bar_point_load[0].append(i)
+                elif i.position == 1:
+                    bar_point_load[1].append(i)
+                else:
+                    positions.append((i.position, i))
+
+            for i in range(bar.segments):
+                position = (i + 1) / (bar.segments + 1)
+                if position not in [pos[0] for pos in positions]:
+                    positions.append((position, None))
+
+            positions.sort(key=lambda x: x[0])
+
+            if positions:
+                for i, (position, point_load) in enumerate(positions):
+                    new_x = (bar.node_i.x + np.cos(bar.rotation) * position
+                             * bar.length)
+                    new_z = (bar.node_i.z - np.sin(bar.rotation) * position
+                             * bar.length)
+
+                    if point_load:
+                        new_node_load = NodeLoad(point_load.x, point_load.z,
+                                                 point_load.phi,
+                                                 point_load.rotation)
+                        new_node_j = Node(new_x, new_z, load=new_node_load)
+                    else:
+                        new_node_j = Node(new_x, new_z)
+
+                    new_bar_line_load = []
+                    for j, line_load in enumerate(bar.line_loads):
+                        line_load_i = bars[-1].line_loads[j].pj if i \
+                            else bar.line_loads[j].pi
+                        new_line_load_j = (
+                                (line_load.pj - line_load.pi) * position +
+                                line_load.pi
+                        )
+                        new_bar_line_load.append(
+                            BarLineLoad(line_load_i, new_line_load_j,
+                                        line_load.direction, line_load.coord,
+                                        line_load.length))
+
+                    if i:
+                        bars.append(Bar(bars[-1].node_j, new_node_j,
+                                        bar.cross_section, bar.material,
+                                        line_loads=new_bar_line_load,
+                                        temp=bar.temp))
+                    else:
+                        bars.append(Bar(bar.node_i, new_node_j,
+                                        bar.cross_section, bar.material,
+                                        line_loads=new_bar_line_load,
+                                        temp=bar.temp,
+                                        point_loads=bar_point_load[0]))
+
+                new_bar_line_load = []
+                for i, line_load in enumerate(bar.line_loads):
+                    new_bar_line_load.append(
+                        BarLineLoad(bars[-1].line_loads[i].pj, line_load.pj,
+                                    line_load.direction, line_load.coord,
+                                    line_load.length))
+                bars.append(Bar(bars[-1].node_j, bar.node_j, bar.cross_section,
+                                bar.material, line_loads=new_bar_line_load,
+                                temp=bar.temp, point_loads=bar_point_load[1]))
+
+            else:
+                bars.append(bar)
+
+        return bars
 
     def stiffness_matrix(self, order: str = 'first',
                          approach: Optional[str] = None):
@@ -941,7 +1029,8 @@ class System:
         return f_node, f_bar
 
 
-@dataclass
+# -> System
+@dataclass(eq=False)
 class Model:
 
     system: System
