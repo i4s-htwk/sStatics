@@ -1,7 +1,8 @@
 
 from dataclasses import dataclass, field
-
+from functools import cached_property
 from typing import Literal, List, Optional
+
 import numpy as np
 
 
@@ -21,7 +22,7 @@ class NodeDisplacement:
     z: float
     phi: float
 
-    @property
+    @cached_property
     def vector(self):
         return np.array([[self.x], [self.z], [self.phi]])
 
@@ -62,7 +63,7 @@ class Node:
                     f'"fixed" or "free".'
                 )
 
-    @property
+    @cached_property
     def displacement(self):
         if len(self.displacements) == 0:
             return np.array([[0], [0], [0]])
@@ -137,7 +138,7 @@ class BarLineLoad:
         if self.length not in ('exact', 'proj'):
             raise ValueError('length has to be either "exact" or "proj".')
 
-    @property
+    @cached_property
     def vector(self):
         vec = np.zeros((6, 1))
         vec[0 if self.direction == 'x' else 1] = self.pi
@@ -183,11 +184,11 @@ class BarTemp:
                 'unit is Kelvin.'
             )
 
-    @property
+    @cached_property
     def temp_s(self):
         return (self.temp_o + self.temp_u) / 2
 
-    @property
+    @cached_property
     def temp_delta(self):
         return self.temp_u - self.temp_o
 
