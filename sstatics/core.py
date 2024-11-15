@@ -120,15 +120,14 @@ class Material:
             raise ValueError('therm_exp_coeff has to be greater than zero.')
 
 
-# TODO: default values for direction, coord and length?
 @dataclass(eq=False)
 class BarLineLoad:
 
     pi: float
     pj: float
-    direction: Literal['x', 'z']
-    coord: Literal['bar', 'system']
-    length: Literal['exact', 'proj']
+    direction: Literal['x', 'z'] = 'z'
+    coord: Literal['bar', 'system'] = 'bar'
+    length: Literal['exact', 'proj'] = 'exact'
 
     def __post_init__(self):
         if self.direction not in ('x', 'z'):
