@@ -33,9 +33,7 @@ class NodeLoad(NodeDisplacement):
     rotation: float = 0.0
 
     def rotate(self, rotation: float):
-        return np.dot(
-            transformation_matrix(self.rotation - rotation), self.vector
-        )
+        return transformation_matrix(self.rotation - rotation) @ self.vector
 
 
 # TODO: Find a solution for springs
