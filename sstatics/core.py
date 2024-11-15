@@ -142,7 +142,7 @@ class BarLineLoad:
         vec[3 if self.direction == 'x' else 4] = self.pj
         return vec
 
-    def rotate(self, rotation):
+    def rotate(self, rotation: float):
         if self.coord == 'bar':
             return self.vector
         sin, cos = np.sin(rotation), np.cos(rotation)
