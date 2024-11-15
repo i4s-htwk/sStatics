@@ -147,22 +147,14 @@ class BarLineLoad:
     def rotate(self, rotation):
         if self.coord == 'bar':
             return self.vector
-        else:
-            perm_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-            if self.length == 'exact' and self.direction == 'z':
-                perm_mat = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]])
-            perm_trans = perm_mat @ transformation_matrix(rotation)
-            trans_mat = np.vstack((
-                np.hstack((perm_trans, np.zeros((3, 3)))),
-                np.hstack((np.zeros((3, 3)), perm_trans)),
-            ))
-            if self.length == 'exact':
-                return trans_mat @ self.vector
-            else:
-                return (
-                    trans_mat @ np.diag([1, 0, 0, 1, 0, 0]) @
-                    np.transpose(trans_mat) @ self.vector
-                )
+        sin, cos = np.sin(rotation), np.cos(rotation)
+        m = np.array([[cos, -sin, 0], [sin, cos, 0], [0, 0, 0]])
+        if self.length == 'proj':
+            m = m @ np.diag([sin, cos, 0])
+        m = np.vstack((
+            np.hstack((m, np.zeros((3, 3)))), np.hstack((np.zeros((3, 3)), m))
+        ))
+        return m @ self.vector
 
 
 @dataclass(eq=False)
