@@ -94,6 +94,12 @@ class Node:
         return replace(self, load=rotated_load)
 
     @cached_property
+    def el_node(self):
+        return np.diag([
+            self.u_spring, self.w_spring, self.phi_spring
+        ])
+
+    @cached_property
     def displacement(self):
         return np.sum([load.vector for load in self.displacements], axis=0)
 
@@ -106,7 +112,7 @@ class CrossSection:
     area: float
     height: float
     width: float
-    cor_far: float
+    shear_cor: float
 
 
 # validierung
@@ -271,7 +277,7 @@ class Bar:
 
     def _GA_s(self):
         return (self.material.shear_mod * self.cross_section.area *
-                self.cross_section.cor_far)
+                self.cross_section.shear_cor)
 
     @cached_property
     def GA_s(self):
@@ -347,8 +353,11 @@ class Bar:
 
     @cached_property
     def f0_point_load(self):
-        print(self.pointload)
-        return get_trans_mat_bar(self.rotation) @ self.pointload
+        return (np.transpose(
+            get_trans_mat_bar(self.rotation,
+                              self.node_i.rotation,
+                              self.node_j.rotation))
+                @ self.pointload)
 
     @cached_property
     def f0_displace(self):
@@ -379,14 +388,6 @@ class Bar:
                              [-f0_x],
                              [0],
                              [-f0_m]])
-
-    # Name? -> Knotenklasse
-    @cached_property
-    def el_bar(self):
-        return np.diag([
-            self.node_i.u_spring, self.node_i.w_spring, self.node_i.phi_spring,
-            self.node_j.u_spring, self.node_j.w_spring, self.node_j.phi_spring
-        ])
 
     @cached_property
     def _stiffness_matrix_without_shear_force(self):
@@ -930,15 +931,18 @@ class System:
             i = self.nodes.index(bar.node_i) * self.dof
             j = self.nodes.index(bar.node_j) * self.dof
 
-            el_bar = bar.el_bar
+            el_bar = np.vstack((
+                np.hstack((bar.node_i.el_node, np.zeros((3, 3)))),
+                np.hstack((np.zeros((3, 3)), bar.node_j.el_node))
+            ))
 
-            elastic[i:i + self.dof, i:i + self.dof] += (
+            elastic[i:i + self.dof, i:i + self.dof] = (
                 el_bar)[:self.dof, :self.dof]
-            elastic[i:i + self.dof, j:j + self.dof] += (
+            elastic[i:i + self.dof, j:j + self.dof] = (
                 el_bar[:self.dof, self.dof:2 * self.dof])
-            elastic[j:j + self.dof, i:i + self.dof] += (
+            elastic[j:j + self.dof, i:i + self.dof] = (
                 el_bar[self.dof:2 * self.dof, :self.dof])
-            elastic[j:j + self.dof, j:j + self.dof] += (
+            elastic[j:j + self.dof, j:j + self.dof] = (
                 el_bar[self.dof:2 * self.dof, self.dof:2 * self.dof])
         return elastic
 
@@ -989,44 +993,65 @@ class System:
             self.apply_boundary_conditions(order, approach))
         return np.linalg.solve(modified_stiffness_matrix, modified_p)
 
-    def bar_deform(self, order: str = 'first',
-                   approach: Optional[str] = None):
+    def bar_deform(self, order: str = 'first', approach: Optional[str] = None):
         node_deform = self.node_deformation(order, approach)
-        deform_list = []
-        for idx, bar in enumerate(self.bars):
-            i = self.nodes.index(bar.node_i) * self.dof
-            j = self.nodes.index(bar.node_j) * self.dof
-            # extract the deformation for node_i and node_j for every bar and
-            # save them in a 6x1-vector
-            deform_node = np.zeros((2 * self.dof, 1))
-            deform_node[:self.dof, :] = node_deform[i:i + self.dof, :]
-            deform_node[self.dof:2 * self.dof, :] = (
-                node_deform[j:j + self.dof, :])
-            # transform the deformation into the node coordination
-            deform_bar = (np.transpose(get_trans_mat_bar(
-                bar.rotation, bar.node_i.rotation, bar.node_j.rotation))
-                          @ deform_node)
-            deform_list.append(deform_bar)
 
-        return deform_list
+        return [
+            np.transpose(get_trans_mat_bar(bar.rotation, bar.node_i.rotation,
+                                           bar.node_j.rotation))
+            @ np.vstack([
+                node_deform[self.nodes.index(bar.node_i) *
+                            self.dof: self.nodes.index(bar.node_i) * self.dof +
+                            self.dof, :],
+                node_deform[self.nodes.index(bar.node_j) *
+                            self.dof: self.nodes.index(bar.node_j) * self.dof +
+                            self.dof, :]
+            ])
+            for bar in self.bars
+        ]
 
     def create_list_of_bar_forces(self, order: str = 'first',
                                   approach: Optional[str] = None):
-        bar_deform = self.bar_deform(order, approach)[0]
-
+        bar_deform = self.bar_deform(order, approach)
         f_node = [
-            k @ bar_deform + f0
-            for bar in self.bars
-            for f0, k in [bar.element_relation(order, approach)]
+            bar.element_relation(order, approach)[1] @ deform +
+            bar.element_relation(order, approach)[0]
+            for bar, deform in zip(self.bars, bar_deform)
+        ]
+        return [
+            np.transpose(
+                get_trans_mat_bar(bar.rotation)) @ forces - bar.f0_point_load
+            for bar, forces in zip(self.bars, f_node)
         ]
 
-        f_bar = [
-            np.transpose(get_trans_mat_bar(
-                bar.rotation)) @ forces_node - bar.f0_point_load
-            for bar, forces_node in zip(self.bars, f_node)
-        ]
+    def _apply_hinge_modification(self, order: str = 'first',
+                                  approach: Optional[str] = None):
+        deform_list = []
 
-        return f_node, f_bar
+        for bar in self.bars:
+            delta_rel = np.zeros((6, 1))
+            k = bar.stiffness_matrix(order, approach)
+            bar_deform = self.bar_deform(order, approach)
+            f0 = bar.f0(order, approach)
+
+            idx = [i for i, value in enumerate(bar.hinge) if value]
+            if idx:
+                rhs = (-np.dot(k[np.ix_(idx, range(6))], bar_deform)
+                       - f0[idx])
+
+                delta_rel_reduced = (
+                    np.linalg.solve(k[np.ix_(idx, idx)], rhs)
+                )
+                delta_rel[idx] = delta_rel_reduced
+
+            deform_list.append(delta_rel)
+        return deform_list
+
+    @cached_property
+    def create_bar_deform_list(self, order: str = 'first',
+                               approach: Optional[str] = None):
+        return np.add(self.bar_deform(order, approach),
+                      self._apply_hinge_modification(order, approach))
 
 
 # -> System
@@ -1041,7 +1066,7 @@ class Model:
         if self.order == 'first':
             # e.g. get list of bar deformation
             return (
-                self.system.bar_deform(
+                self.system.create_bar_deform_list(
                     self.order, self.approach))
         elif self.order == 'second':
             # TODO: integrate MA Ludwig
