@@ -14,10 +14,8 @@ def transformation_matrix(alpha: float):
     ])
 
 
-# TODO: Find another name
 @dataclass(eq=False)
-class NodeDisplacement:
-
+class DegreesOfFreedom:
     x: float
     z: float
     phi: float
@@ -27,8 +25,11 @@ class NodeDisplacement:
         return np.array([[self.x], [self.z], [self.phi]])
 
 
+NodeDisplacement = DegreesOfFreedom
+
+
 @dataclass(eq=False)
-class NodeLoad(NodeDisplacement):
+class NodeLoad(DegreesOfFreedom):
 
     rotation: float = 0.0
 
@@ -45,9 +46,12 @@ class Node:
     x: float
     z: float
     rotation: float = 0.0
-    u: Optional[Literal['fixed', 'free']] = 'free'
-    w: Optional[Literal['fixed', 'free']] = 'free'
-    phi: Optional[Literal['fixed', 'free']] = 'free'
+    u: Literal['free', 'fixed'] = 'free'
+    w: Literal['free', 'fixed'] = 'free'
+    phi: Literal['free', 'fixed'] = 'free'
+    u_spring: Optional[float] = 0
+    w_spring: Optional[float] = 0
+    phi_spring: Optional[float] = 0
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
     displacements: Optional[List[NodeDisplacement]] = field(
         default_factory=lambda: []
@@ -73,6 +77,12 @@ class Node:
     def rotate_load(self):
         return self.load.rotate(self.rotation)
 
+    @cached_property
+    def el_node(self):
+        return np.diag([
+            self.u_spring, self.w_spring, self.phi_spring
+        ])
+
 
 @dataclass(eq=False)
 class CrossSection:
@@ -81,7 +91,7 @@ class CrossSection:
     area: float
     height: float
     width: float
-    cor_far: float
+    shear_cor: float
 
     def __post_init__(self):
         if self.mom_of_int <= 0:
@@ -90,8 +100,8 @@ class CrossSection:
             raise ValueError('height has to be greater than zero.')
         if self.width <= 0:
             raise ValueError('width has to be greater than zero.')
-        if self.cor_far <= 0:
-            raise ValueError('cor_far has to be greater than zero.')
+        if self.shear_cor <= 0:
+            raise ValueError('shear_cor has to be greater than zero.')
         if not 0 < self.area <= self.width * self.height:
             raise ValueError(
                 'area has to be greater than zero and less than or equal to '
@@ -184,13 +194,22 @@ class BarTemp:
 
 @dataclass(eq=False)
 class BarPointLoad(NodeLoad):
-
     # TODO: Documentation for variable position
-    position: float = 0.0
+    position: float = field(default=0)
 
     def __post_init__(self):
+        self.rotation = self.rotation % (2 * np.pi)
         if not (0 <= self.position <= 1):
             raise ValueError("position must be between 0 and 1")
+
+    def rotate_load(self):
+        vec = transformation_matrix(self.rotation) @ self.vector
+        if self.position == 0:
+            return np.vstack((vec, np.zeros((3, 1))))
+        elif self.position == 1:
+            return np.vstack((np.zeros((3, 1)), vec))
+        else:
+            return np.zeros((6, 1))
 
 
 # validierung?
@@ -209,23 +228,21 @@ class Bar:
     hinge_u_j: Optional[bool] = False
     hinge_w_j: Optional[bool] = False
     hinge_phi_j: Optional[bool] = False
-    line_load: Optional[List[BarLineLoad]] = field(
+    deform: List[str] = field(default_factory=lambda: ['moment', 'normal'])
+    line_loads: Optional[List[BarLineLoad]] = field(
         default_factory=lambda: [BarLineLoad(0, 0, 'z', 'bar', 'exact')])
     temp: Optional[BarTemp] = field(default_factory=lambda: BarTemp(0, 0))
-    point_load: Optional[List[BarPointLoad]] = field(
+    point_loads: Optional[List[BarPointLoad]] = field(
         default_factory=lambda: [BarPointLoad(0, 0, 0, 0, 0)])
+    # segments?
     segments: Optional[int] = 0
 
     # property?
-    def __post_init__(self):
-        self.hinge = [
-            self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
-            self.hinge_u_j, self.hinge_w_j, self.hinge_phi_j
-        ]
+    # line_load, temp, point_load replacen
 
     # TODO: Parameter sinnvoll? Wird es noch andere Rotationsmatrizen geben?
     def transformation_matrix(self, to_node_coord=True):
-        alpha_i = alpha_j = self.rotation
+        alpha_i = alpha_j = self.inclination
         if to_node_coord:
             alpha_i -= self.node_i.rotation
             alpha_j -= self.node_j.rotation
@@ -235,47 +252,70 @@ class Bar:
         ))
 
     # TODO: another name? inclination?
-    @property
-    def rotation(self):
+    @cached_property
+    def inclination(self):
         """ bar inclination angle """
         return np.arctan2(
             -self.node_j.z + self.node_i.z, self.node_j.x - self.node_i.x
         )
 
-    @property
+    @cached_property
     def length(self):
         return np.sqrt(
             (self.node_j.x - self.node_i.x) ** 2 +
             (self.node_j.z - self.node_i.z) ** 2
         )
 
-    @property
-    def EI(self):
+    @cached_property
+    def hinge(self):
+        return [
+            self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
+            self.hinge_u_j, self.hinge_w_j, self.hinge_phi_j
+        ]
+
+    def _EI(self):
         return self.material.young_mod * self.cross_section.mom_of_int
 
-    @property
-    def EA(self):
+    @cached_property
+    def EI(self):
+        return self._EI() * 1000 if 'moment' not in self.deform else self._EI()
+
+    def _EA(self):
         return self.material.young_mod * self.cross_section.area
 
-    @property
+    @cached_property
+    def EA(self):
+        return self._EA() * 1000 if 'normal' not in self.deform else self._EA()
+
+    def _GA_s(self):
+        return (self.material.shear_mod * self.cross_section.area *
+                self.cross_section.shear_cor)
+
+    @cached_property
     def GA_s(self):
         return (
-            self.material.shear_mod * self.cross_section.area *
-            self.cross_section.cor_far
+            self._EI() * 1000 if 'shear' not in self.deform else self._GA_s()
         )
 
-    @property
+    @cached_property
     def phi(self):
         return 12 * self.EI / (self.GA_s * self.length ** 2)
 
-    def get_p(self):
-        p = np.zeros((6, 1))
-        for line_load in self.line_load:
-            p = p + line_load.rotate(self.rotation)
-        return p
+    @cached_property
+    def lineload(self):
+        return (
+            np.sum([load.rotate(self.inclination) for load in self.line_loads],
+                   axis=0)
+        )
 
+    @cached_property
+    def pointload(self):
+        return np.sum(
+            [load.rotate_load() for load in self.point_loads], axis=0)
+
+    @cached_property
     def f0_load_first_order(self):
-        p_vec = self.get_p()
+        p_vec = self.lineload
 
         f0_m_i = -(
                 self.length ** 2 * (
@@ -306,7 +346,6 @@ class Bar:
         ) / (
                 240 * self.EI + 20 * self.GA_s * self.length ** 2
         )
-
         f0_z_j = -(
                 self.length * (
                     80 * self.EI * p_vec[4][0] + 40 * self.EI * p_vec[1][0] +
@@ -316,33 +355,24 @@ class Bar:
         ) / (
                 240 * self.EI + 20 * self.GA_s * self.length ** 2
         )
-        return (
-            np.array(
-                [[-(7 * p_vec[0][0] + 3 * p_vec[3][0]) * self.length / 20],
-                 [-f0_z_i],
-                 [-f0_m_i],
-                 [-(3 * p_vec[0][0] + 7 * p_vec[3][0]) * self.length / 20],
-                 [f0_z_j],
-                 [f0_m_j]])
-        )
 
-    # fehler? was mit 0 < position < 1?
-    # property
+        return np.array([
+                [-(7 * p_vec[0][0] + 3 * p_vec[3][0]) * self.length / 20],
+                [-f0_z_i],
+                [-f0_m_i],
+                [-(3 * p_vec[0][0] + 7 * p_vec[3][0]) * self.length / 20],
+                [f0_z_j],
+                [f0_m_j]
+        ])
+
+    @cached_property
     def f0_point_load(self):
-        if self.point_load.position == 0:
-            f0_point_load = np.vstack(
-                (self.point_load.vector,
-                 np.zeros((3, 1))))
-        elif self.point_load.position == 1:
-            f0_point_load = np.vstack(
-                (np.zeros((3, 1)), self.point_load.vector))
-        else:
-            return ValueError('The position is not at the ends of the member. '
-                              'Member division occurs.')
-        return f0_point_load
+        return (np.transpose(
+            self.transformation_matrix(to_node_coord=True)) @ self.pointload)
 
     # Fallunterscheidung nicht nötig? Was wenn cross_section.height = 0?
     # property
+    @cached_property
     def f0_temp(self):
         if self.temp.temp_delta == 0 and self.temp.temp_s == 0:
             return np.zeros((2 * 3, 1))
@@ -363,7 +393,7 @@ class Bar:
                              [0],
                              [-f0_m]])
 
-    # property
+    @cached_property
     def f0_displace(self):
         f0_displace = np.vstack(
             (self.node_i.displacement, self.node_j.displacement)
@@ -371,7 +401,7 @@ class Bar:
         trans_m = self.transformation_matrix(to_node_coord=False)
         return self.stiffness_matrix() @ trans_m @ f0_displace
 
-    # property
+    @cached_property
     def _stiffness_matrix_without_shear_force(self):
         EA_l = self.EA / self.length
         EI_l3 = self.EI / self.length ** 3
@@ -389,7 +419,7 @@ class Bar:
                          [0, -6 * EI_l2, 2 * EI_l,
                           0, 6 * EI_l2, 4 * EI_l]])
 
-    # property
+    @cached_property
     def _get_matrix_to_apply_shear_force(self):
         f_1 = 1 / (1 + self.phi)
         f_2 = (f_1 + self.phi / (4 * (1 + self.phi)))
@@ -402,22 +432,25 @@ class Bar:
                          [0, f_1, f_1, 0, f_1, f_1],
                          [0, f_1, f_3, 0, f_1, f_2]])
 
+    @cached_property
     def _prepare_factors_sec_order(self):
-        p_vec = self.get_p()
+        p_vec = self.lineload
         f0_x_i = (-(7 * p_vec[0][0] + 3 * p_vec[3][0]) * self.length / 20)
         B_s = self.EI * (1 + f0_x_i / self.GA_s)
         return p_vec, f0_x_i, B_s
 
+    @cached_property
     def _prepare_factors_sec_order_f0(self):
-        p_vec, f0_x_i, B_s = self._prepare_factors_sec_order()
+        p_vec, f0_x_i, B_s = self._prepare_factors_sec_order
         mu = np.sqrt(abs(f0_x_i) / B_s) * self.length
 
         return (f0_x_i, B_s, mu, (p_vec[1][0] + p_vec[4][0]),
                 (p_vec[1][0] - p_vec[4][0]), p_vec[1][0], p_vec[4][0], p_vec)
 
+    @cached_property
     def _f0_load_second_order_analytic(self):
         f0_x_i, B_s, mu, p_sum, p_diff, p_i, p_j, p_vec = (
-            self._prepare_factors_sec_order_f0()
+            self._prepare_factors_sec_order_f0
         )
 
         if f0_x_i < 0:
@@ -472,7 +505,6 @@ class Bar:
             denominator = (
                     2 * (self.GA_s * self.length ** 2 - B_s * mu ** 2) *
                     (1 - cos_mu) + self.GA_s * self.length ** 2 * mu * sin_mu)
-            print(mu)
 
             c_1 = (self.length ** 2 / (6 * B_s * mu ** 3)) * (
                     (3 * (self.GA_s * self.length ** 4 - (
@@ -528,9 +560,10 @@ class Bar:
                  [f0_m_j]])
         )
 
+    @cached_property
     def _f0_load_second_order_taylor(self):
         f0_x_i, B_s, mu, p_sum, p_diff, p_i, p_j, p_vec = (
-            self._prepare_factors_sec_order_f0()
+            self._prepare_factors_sec_order_f0
         )
 
         f0_z_i = (self.length / 20) * (720 * B_s ** 2 * (p_j + p_i) - (
@@ -586,14 +619,16 @@ class Bar:
                  [f0_m_j]])
         )
 
+    @cached_property
     def _prepare_factors_sec_order_stiffness_matrix(self):
-        p_vec, f0_x_i, B_s = self._prepare_factors_sec_order()
+        p_vec, f0_x_i, B_s = self._prepare_factors_sec_order
         factor = B_s / (self.GA_s * self.length ** 2)
         return f0_x_i, B_s, factor
 
+    @cached_property
     def _apply_second_order_analytic_solution(self):
         f0_x_i, B_s, factor = (
-            self._prepare_factors_sec_order_stiffness_matrix())
+            self._prepare_factors_sec_order_stiffness_matrix)
         mu = np.sqrt(abs(f0_x_i) / B_s) * self.length
 
         if f0_x_i < 0:
@@ -628,10 +663,11 @@ class Bar:
                          [0, f_1, f_2, 0, f_1, f_2],
                          [0, f_2, f_4, 0, f_2, f_3]])
 
+    @cached_property
     def _apply_second_order_approximate_by_taylor(self):
         f0_x_i, B_s, factor = (
-            self._prepare_factors_sec_order_stiffness_matrix())
-        denominator_common = factor + 1/12
+            self._prepare_factors_sec_order_stiffness_matrix)
+        denominator_common = factor + 1 / 12
         denominator_squared = denominator_common ** 2
         inv_denominator_common = 1 / denominator_common
 
@@ -644,12 +680,12 @@ class Bar:
                inv_denominator_common ** 2)
 
         f_3 = (B_s * (factor + 1 / 3) / (
-                    4 * self.EI * denominator_common) +
+                4 * self.EI * denominator_common) +
                f0_x_i * self.length ** 2 / (48 * self.EI) *
                (1 / (240 * denominator_squared) + 1))
 
         f_4 = (-B_s * (factor - 1 / 6) / (
-                    2 * self.EI * denominator_common) +
+                2 * self.EI * denominator_common) +
                f0_x_i * self.length ** 2 / (24 * self.EI) *
                (1 / (240 * denominator_squared) - 1))
 
@@ -660,8 +696,9 @@ class Bar:
                          [0, f_1, f_2, 0, f_1, f_2],
                          [0, f_2, f_4, 0, f_2, f_3]])
 
+    @cached_property
     def _apply_second_order_approximate_by_p_delta(self):
-        factor = (self._prepare_factors_sec_order_stiffness_matrix()[0] /
+        factor = (self._prepare_factors_sec_order_stiffness_matrix[0] /
                   self.length)
         return np.array([[0, 0, 0, 0, 0, 0],
                          [0, factor, 0, 0, -factor, 0],
@@ -694,7 +731,8 @@ class Bar:
                 self._apply_hinge_modification(f0, stiffness_matrix))
 
         # transformation
-        if self.node_i.rotation or self.node_j.rotation or self.rotation != 0:
+        if (self.node_i.rotation or self.node_j.rotation or
+                self.inclination != 0):
             f0, stiffness_matrix = (
                 self._transform_from_bar_in_node_coord(f0, stiffness_matrix))
 
@@ -704,51 +742,53 @@ class Bar:
         if order == 'first':
             if approach:
                 return ValueError('in first order approach has to be "None"')
-            f0 = self.f0_load_first_order()
+            f0 = self.f0_load_first_order
         elif order == 'second':
             if approach == 'analytic':
-                f0 = self._f0_load_second_order_analytic()
+                f0 = self._f0_load_second_order_analytic
             elif approach == 'taylor':
-                f0 = self._f0_load_second_order_taylor()
+                f0 = self._f0_load_second_order_taylor
             elif approach == 'p_delta':
-                f0 = self.f0_load_first_order()
+                f0 = self.f0_load_first_order
             else:
                 return ValueError(
                     'approach has to be either "analytic", '
                     '"taylor" or "p_delta".')
         else:
             return ValueError('order has to be either "first" or "second".')
-        return f0 + self.f0_temp()
+        return (
+                f0 + self.f0_temp + self.f0_displace - self.f0_point_load
+        )
 
     def stiffness_matrix(self, order: str = 'first',
                          approach: Optional[str] = None):
         if order == 'first':
             if approach:
                 return ValueError('in first order approach has to be "None"')
-            if self.phi != 0:
+            if 'shear' in self.deform:
                 return (
-                    (self._stiffness_matrix_without_shear_force() @
-                     self._get_matrix_to_apply_shear_force()))
+                    (self._stiffness_matrix_without_shear_force @
+                     self._get_matrix_to_apply_shear_force))
             else:
-                return self._stiffness_matrix_without_shear_force()
+                return self._stiffness_matrix_without_shear_force
         elif order == 'second':
             if approach == 'analytic':
                 return (
-                        self._stiffness_matrix_without_shear_force() @
-                        self._apply_second_order_analytic_solution())
+                        self._stiffness_matrix_without_shear_force @
+                        self._apply_second_order_analytic_solution)
             elif approach == 'taylor':
                 return (
-                        self._stiffness_matrix_without_shear_force() @
-                        self._apply_second_order_approximate_by_taylor())
+                        self._stiffness_matrix_without_shear_force @
+                        self._apply_second_order_approximate_by_taylor)
             elif approach == 'p_delta':
-                if self.phi != 0:
+                if 'shear' in self.deform:
                     return (
-                        self._stiffness_matrix_without_shear_force() @
-                        self._get_matrix_to_apply_shear_force() +
-                        self._apply_second_order_approximate_by_p_delta())
+                            self._stiffness_matrix_without_shear_force @
+                            self._get_matrix_to_apply_shear_force +
+                            self._apply_second_order_approximate_by_p_delta)
                 else:
-                    return (self._stiffness_matrix_without_shear_force() +
-                            self._apply_second_order_approximate_by_p_delta())
+                    return (self._stiffness_matrix_without_shear_force +
+                            self._apply_second_order_approximate_by_p_delta)
             else:
                 return ValueError(
                     'approach has to be either "analytic", '
@@ -805,9 +845,10 @@ class System:
         bars = []
         for bar in self._bars:
             positions = []
-            bar_point_load = [[], []]
+            bar_point_load = [[BarPointLoad(0, 0, 0, 0, 0)],
+                              [BarPointLoad(0, 0, 0, 0, 0)]]
 
-            for i in bar.point_load:
+            for i in bar.point_loads:
                 if i.position == 0:
                     bar_point_load[0].append(i)
                 elif i.position == 1:
@@ -824,9 +865,9 @@ class System:
 
             if positions:
                 for i, (position, point_load) in enumerate(positions):
-                    new_x = (bar.node_i.x + np.cos(bar.rotation) * position
+                    new_x = (bar.node_i.x + np.cos(bar.inclination) * position
                              * bar.length)
-                    new_z = (bar.node_i.z - np.sin(bar.rotation) * position
+                    new_z = (bar.node_i.z - np.sin(bar.inclination) * position
                              * bar.length)
 
                     if point_load:
@@ -838,9 +879,9 @@ class System:
                         new_node_j = Node(new_x, new_z)
 
                     new_bar_line_load = []
-                    for j, line_load in enumerate(bar.line_load):
-                        line_load_i = bars[-1].line_load[j].pj if i \
-                            else bar.line_load[j].pi
+                    for j, line_load in enumerate(bar.line_loads):
+                        line_load_i = bars[-1].line_loads[j].pj if i \
+                            else bar.line_loads[j].pi
                         new_line_load_j = (
                                 (line_load.pj - line_load.pi) * position +
                                 line_load.pi
@@ -853,24 +894,24 @@ class System:
                     if i:
                         bars.append(Bar(bars[-1].node_j, new_node_j,
                                         bar.cross_section, bar.material,
-                                        line_load=new_bar_line_load,
+                                        line_loads=new_bar_line_load,
                                         temp=bar.temp))
                     else:
                         bars.append(Bar(bar.node_i, new_node_j,
                                         bar.cross_section, bar.material,
-                                        line_load=new_bar_line_load,
+                                        line_loads=new_bar_line_load,
                                         temp=bar.temp,
-                                        point_load=bar_point_load[0]))
+                                        point_loads=bar_point_load[0]))
 
                 new_bar_line_load = []
-                for i, line_load in enumerate(bar.line_load):
+                for i, line_load in enumerate(bar.line_loads):
                     new_bar_line_load.append(
-                        BarLineLoad(bars[-1].line_load[i].pj, line_load.pj,
+                        BarLineLoad(bars[-1].line_loads[i].pj, line_load.pj,
                                     line_load.direction, line_load.coord,
                                     line_load.length))
                 bars.append(Bar(bars[-1].node_j, bar.node_j, bar.cross_section,
-                                bar.material, line_load=new_bar_line_load,
-                                temp=bar.temp, point_load=bar_point_load[1]))
+                                bar.material, line_loads=new_bar_line_load,
+                                temp=bar.temp, point_loads=bar_point_load[1]))
 
             else:
                 bars.append(bar)
@@ -884,7 +925,7 @@ class System:
             i = self.nodes.index(bar.node_i) * self.dof
             j = self.nodes.index(bar.node_j) * self.dof
 
-            k = bar.stiffness_matrix(order=order, approach=approach)
+            k = bar.element_relation(order=order, approach=approach)[1]
 
             k_system[i:i + self.dof, i:i + self.dof] += k[:self.dof, :self.dof]
             k_system[i:i + self.dof, j:j + self.dof] += (
@@ -896,8 +937,25 @@ class System:
         return k_system
 
     def elastic_matrix(self):
-        el = self._get_zero_matrix()
-        return el
+        elastic = self._get_zero_matrix()
+        for bar in self.bars:
+            i = self.nodes.index(bar.node_i) * self.dof
+            j = self.nodes.index(bar.node_j) * self.dof
+
+            el_bar = np.vstack((
+                np.hstack((bar.node_i.el_node, np.zeros((3, 3)))),
+                np.hstack((np.zeros((3, 3)), bar.node_j.el_node))
+            ))
+
+            elastic[i:i + self.dof, i:i + self.dof] = (
+                el_bar)[:self.dof, :self.dof]
+            elastic[i:i + self.dof, j:j + self.dof] = (
+                el_bar[:self.dof, self.dof:2 * self.dof])
+            elastic[j:j + self.dof, i:i + self.dof] = (
+                el_bar[self.dof:2 * self.dof, :self.dof])
+            elastic[j:j + self.dof, j:j + self.dof] = (
+                el_bar[self.dof:2 * self.dof, self.dof:2 * self.dof])
+        return elastic
 
     def system_matrix(self, order: str = 'first',
                       approach: Optional[str] = None):
@@ -909,7 +967,7 @@ class System:
             i = self.nodes.index(bar.node_i) * self.dof
             j = self.nodes.index(bar.node_j) * self.dof
 
-            f0 = bar.f0(order=order, approach=approach)
+            f0 = bar.element_relation(order=order, approach=approach)[0]
 
             f0_system[i:i + self.dof, :] += f0[:self.dof, :]
             f0_system[j:j + self.dof, :] += f0[self.dof:2 * self.dof, :]
@@ -946,28 +1004,64 @@ class System:
             self.apply_boundary_conditions(order, approach))
         return np.linalg.solve(modified_stiffness_matrix, modified_p)
 
-    def create_list_of_bar_deform(self, order: str = 'first',
-                                  approach: Optional[str] = None):
+    def bar_deform(self, order: str = 'first', approach: Optional[str] = None):
         node_deform = self.node_deformation(order, approach)
-        deform_list = []
-        for idx, bar in enumerate(self.bars):
-            i = self.nodes.index(bar.node_i) * self.dof
-            j = self.nodes.index(bar.node_j) * self.dof
-            # extract the deformation for node_i and node_j for every bar and
-            # save them in a 6x1-vector
-            deform_node = np.zeros((2 * self.dof, 1))
-            deform_node[:self.dof, :] = node_deform[i:i + self.dof, :]
-            deform_node[self.dof:2 * self.dof, :] = (
-                node_deform[j:j + self.dof, :])
-            # transform the deformation into the node coordination
-            deform_bar = (
-                np.transpose(bar.transformation_matrix()) @ deform_node
-            )
-            deform_list.append(deform_bar)
 
+        return [
+            np.transpose(bar.transformation_matrix())
+            @ np.vstack([
+                node_deform[self.nodes.index(bar.node_i) *
+                            self.dof: self.nodes.index(bar.node_i) * self.dof +
+                            self.dof, :],
+                node_deform[self.nodes.index(bar.node_j) *
+                            self.dof: self.nodes.index(bar.node_j) * self.dof +
+                            self.dof, :]
+            ])
+            for bar in self.bars
+        ]
+
+    def create_list_of_bar_forces(self, order: str = 'first',
+                                  approach: Optional[str] = None):
+        bar_deform = self.bar_deform(order, approach)
+        f_node = [
+            bar.element_relation(order, approach)[1] @ deform +
+            bar.element_relation(order, approach)[0]
+            for bar, deform in zip(self.bars, bar_deform)
+        ]
+        return [
+            np.transpose(
+                bar.transformation_matrix()) @ forces - bar.f0_point_load
+            for bar, forces in zip(self.bars, f_node)
+        ]
+
+    def _apply_hinge_modification(self, order: str = 'first',
+                                  approach: Optional[str] = None):
+        deform_list = []
+
+        for bar in self.bars:
+            delta_rel = np.zeros((6, 1))
+            k = bar.stiffness_matrix(order, approach)
+            bar_deform = self.bar_deform(order, approach)
+            f0 = bar.f0(order, approach)
+
+            idx = [i for i, value in enumerate(bar.hinge) if value]
+            if idx:
+                rhs = (-np.dot(k[np.ix_(idx, range(6))], bar_deform)
+                       - f0[idx])
+
+                delta_rel_reduced = (
+                    np.linalg.solve(k[np.ix_(idx, idx)], rhs)
+                )
+                delta_rel[idx] = delta_rel_reduced
+
+            deform_list.append(delta_rel)
         return deform_list
 
-    # TODO: def create_list_of_bar_force(...)
+    @cached_property
+    def create_bar_deform_list(self, order: str = 'first',
+                               approach: Optional[str] = None):
+        return np.add(self.bar_deform(order, approach),
+                      self._apply_hinge_modification(order, approach))
 
 
 # -> System
@@ -982,7 +1076,7 @@ class Model:
         if self.order == 'first':
             # e.g. get list of bar deformation
             return (
-                self.system.create_list_of_bar_deform(
+                self.system.create_bar_deform_list(
                     self.order, self.approach))
         elif self.order == 'second':
             # TODO: integrate MA Ludwig
