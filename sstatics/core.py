@@ -299,20 +299,20 @@ class Bar:
         return 12 * self.EI / (self.GA_s * self.length ** 2)
 
     @cached_property
-    def lineload(self):
-        return (
-            np.sum([load.rotate(self.inclination) for load in self.line_loads],
-                   axis=0)
+    def line_load(self):
+        return np.sum(
+            [load.rotate(self.inclination) for load in self.line_loads], axis=0
         )
 
     @cached_property
-    def pointload(self):
+    def point_load(self):
         return np.sum(
-            [load.rotate_load() for load in self.point_loads], axis=0)
+            [load.rotate_load() for load in self.point_loads], axis=0
+        )
 
     @cached_property
     def f0_load_first_order(self):
-        p_vec = self.lineload
+        p_vec = self.line_load
 
         f0_m_i = -(
                 self.length ** 2 * (
@@ -364,39 +364,24 @@ class Bar:
 
     @cached_property
     def f0_point_load(self):
-        return (np.transpose(
-            self.transformation_matrix(to_node_coord=True)) @ self.pointload)
+        m = np.transpose(self.transformation_matrix(to_node_coord=True))
+        return m @ self.point_load
 
-    # Fallunterscheidung nicht nötig? Was wenn cross_section.height = 0?
-    # property
     @cached_property
     def f0_temp(self):
-        if self.temp.temp_delta == 0 and self.temp.temp_s == 0:
-            return np.zeros((2 * 3, 1))
-        else:
-            f0_x = (
-                    self.material.therm_exp_coeff * self.temp.temp_s *
-                    self.material.young_mod * self.cross_section.area
-            )
-            f0_m = (
-                    (self.material.therm_exp_coeff * self.temp.temp_delta *
-                     self.material.young_mod * self.cross_section.mom_of_int) /
-                    self.cross_section.height
-            )
-            return np.array([[f0_x],
-                             [0],
-                             [f0_m],
-                             [-f0_x],
-                             [0],
-                             [-f0_m]])
+        factor = self.material.therm_exp_coeff * self.material.young_mod
+        f0_x = factor * self.temp.temp_s * self.cross_section.area
+        f0_m = factor * self.temp.temp_delta * self.cross_section.mom_of_int
+        f0_m /= self.cross_section.height
+        return np.array([[f0_x], [0], [f0_m], [-f0_x], [0], [-f0_m]])
 
     @cached_property
-    def f0_displace(self):
-        f0_displace = np.vstack(
+    def f0_displacement(self):
+        f0_displacement = np.vstack(
             (self.node_i.displacement, self.node_j.displacement)
         )
         trans_m = self.transformation_matrix(to_node_coord=False)
-        return self.stiffness_matrix() @ trans_m @ f0_displace
+        return self.stiffness_matrix() @ trans_m @ f0_displacement
 
     @cached_property
     def _stiffness_matrix_without_shear_force(self):
@@ -431,7 +416,7 @@ class Bar:
 
     @cached_property
     def _prepare_factors_sec_order(self):
-        p_vec = self.lineload
+        p_vec = self.line_load
         f0_x_i = (-(7 * p_vec[0][0] + 3 * p_vec[3][0]) * self.length / 20)
         B_s = self.EI * (1 + f0_x_i / self.GA_s)
         return p_vec, f0_x_i, B_s
@@ -754,7 +739,7 @@ class Bar:
         else:
             return ValueError('order has to be either "first" or "second".')
         return (
-                f0 + self.f0_temp + self.f0_displace - self.f0_point_load
+                f0 + self.f0_temp + self.f0_displacement - self.f0_point_load
         )
 
     def stiffness_matrix(self, order: str = 'first',
