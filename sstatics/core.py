@@ -28,6 +28,7 @@ class DegreesOfFreedom:
 NodeDisplacement = DegreesOfFreedom
 
 
+# TODO: name PointLoad, ...?
 @dataclass(eq=False)
 class NodeLoad(DegreesOfFreedom):
 
@@ -195,13 +196,13 @@ class BarTemp:
 @dataclass(eq=False)
 class BarPointLoad(NodeLoad):
     # TODO: Documentation for variable position
-    position: float = field(default=0)
+    position: float = 0.0
 
     def __post_init__(self):
-        self.rotation = self.rotation % (2 * np.pi)
         if not (0 <= self.position <= 1):
             raise ValueError("position must be between 0 and 1")
 
+    # warum nur 0 und 1 wichtig? weil stab geteilt wird?
     def rotate_load(self):
         vec = transformation_matrix(self.rotation) @ self.vector
         if self.position == 0:
@@ -228,6 +229,7 @@ class Bar:
     hinge_u_j: Optional[bool] = False
     hinge_w_j: Optional[bool] = False
     hinge_phi_j: Optional[bool] = False
+    # was gibt es für optionen?
     deform: List[str] = field(default_factory=lambda: ['moment', 'normal'])
     line_loads: Optional[List[BarLineLoad]] = field(
         default_factory=lambda: [BarLineLoad(0, 0, 'z', 'bar', 'exact')])
@@ -236,9 +238,6 @@ class Bar:
         default_factory=lambda: [BarPointLoad(0, 0, 0, 0, 0)])
     # segments?
     segments: Optional[int] = 0
-
-    # property?
-    # line_load, temp, point_load replacen
 
     # TODO: Parameter sinnvoll? Wird es noch andere Rotationsmatrizen geben?
     def transformation_matrix(self, to_node_coord=True):
@@ -251,10 +250,8 @@ class Bar:
             np.hstack((np.zeros((3, 3)), transformation_matrix(alpha_j))),
         ))
 
-    # TODO: another name? inclination?
     @cached_property
     def inclination(self):
-        """ bar inclination angle """
         return np.arctan2(
             -self.node_j.z + self.node_i.z, self.node_j.x - self.node_i.x
         )
