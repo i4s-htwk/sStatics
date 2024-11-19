@@ -103,11 +103,6 @@ class CrossSection:
             raise ValueError('width has to be greater than zero.')
         if self.shear_cor <= 0:
             raise ValueError('shear_cor has to be greater than zero.')
-        if not 0 < self.area <= self.width * self.height:
-            raise ValueError(
-                'area has to be greater than zero and less than or equal to '
-                'width * height.'
-            )
 
 
 @dataclass(eq=False)
@@ -1039,27 +1034,46 @@ class System:
             deform_list.append(delta_rel)
         return deform_list
 
-    @cached_property
     def create_bar_deform_list(self, order: str = 'first',
                                approach: Optional[str] = None):
-        return np.add(self.bar_deform(order, approach),
-                      self._apply_hinge_modification(order, approach))
+        hinge_modifications = self._apply_hinge_modification(order, approach)
+        bar_deforms = self.bar_deform(order, approach)
+        combined_results = []
+        for i in range(len(hinge_modifications)):
+            result = np.add(hinge_modifications[i], bar_deforms[i])
+            combined_results.append(result)
+        return combined_results
+
+    def solvable(self, order: str = 'first', approach: Optional[str] = None,
+                 tolerance: float = 1e-10):
+        k, p = self.apply_boundary_conditions(order, approach)
+        u, s, vt = np.linalg.svd(k)
+
+        if np.any(s < tolerance):
+            print("Stiffness matrix is singular.")
+            if np.allclose(
+                    k @ np.dot(np.linalg.pinv(k), p), p, atol=tolerance):
+                print("The system has infinitely many solutions.")
+            else:
+                print("The system is inconsistent and has no solution.")
+            return False
+        else:
+            return True
 
 
-# -> System
 @dataclass(eq=False)
 class Model:
 
     system: System
     order: Literal['first', 'second'] = 'first'
     approach: Optional[Literal['analytic', 'taylor', 'p_delta']] = None
+    tolerance = 1e-10
 
-    def calc(self):
+    def calc_deform(self):
         if self.order == 'first':
-            # e.g. get list of bar deformation
-            return (
-                self.system.create_bar_deform_list(
-                    self.order, self.approach))
+            if self.system.solvable(self.order, self.approach, self.tolerance):
+                return self.system.create_bar_deform_list(
+                    self.order, self.approach)
         elif self.order == 'second':
             # TODO: integrate MA Ludwig
             return None
