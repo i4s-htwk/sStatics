@@ -85,6 +85,7 @@ class Node:
         ])
 
 
+# Warum area validierung nicht notwendig?
 @dataclass(eq=False)
 class CrossSection:
 
@@ -210,7 +211,6 @@ class BarPointLoad(NodeLoad):
 
 # validierung?
 # muss dringend zusammengefasst werden :$
-# TODO: find descriptive names for EA, EI, ...?
 @dataclass(eq=False)
 class Bar:
 
@@ -260,34 +260,32 @@ class Bar:
 
     @cached_property
     def hinge(self):
-        return [
-            self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
-            self.hinge_u_j, self.hinge_w_j, self.hinge_phi_j
-        ]
-
-    def _EI(self):
-        return self.material.young_mod * self.cross_section.mom_of_int
-
-    @cached_property
-    def EI(self):
-        return self._EI() * 1000 if 'moment' not in self.deform else self._EI()
-
-    def _EA(self):
-        return self.material.young_mod * self.cross_section.area
-
-    @cached_property
-    def EA(self):
-        return self._EA() * 1000 if 'normal' not in self.deform else self._EA()
-
-    def _GA_s(self):
-        return (self.material.shear_mod * self.cross_section.area *
-                self.cross_section.shear_cor)
-
-    @cached_property
-    def GA_s(self):
         return (
-            self._EI() * 1000 if 'shear' not in self.deform else self._GA_s()
+            self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
+            self.hinge_u_j, self.hinge_w_j, self.hinge_phi_j,
         )
+
+    @cached_property
+    def flexural_stiffness(self):
+        EI = self.material.young_mod * self.cross_section.mom_of_int
+        return EI if 'moment' in self.deform else 1_000 * EI
+
+    EI = property(lambda self: self.flexural_stiffness)
+
+    @cached_property
+    def extensional_stiffness(self):
+        EA = self.material.young_mod * self.cross_section.area
+        return EA if 'normal' in self.deform else 1_000 * EA
+
+    EA = property(lambda self: self.extensional_stiffness)
+
+    @cached_property
+    def shear_stiffness(self):
+        GA_s = self.material.shear_mod * self.cross_section.area
+        GA_s *= self.cross_section.shear_cor
+        return GA_s if 'shear' in self.deform else 1_000 * GA_s
+
+    GA_s = property(lambda self: self.shear_stiffness)
 
     @cached_property
     def phi(self):
@@ -409,6 +407,7 @@ class Bar:
                          [0, f_1, f_1, 0, f_1, f_1],
                          [0, f_1, f_3, 0, f_1, f_2]])
 
+    # separate properties?
     @cached_property
     def _prepare_factors_sec_order(self):
         p_vec = self.line_load
