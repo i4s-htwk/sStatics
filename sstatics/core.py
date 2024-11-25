@@ -718,81 +718,62 @@ class Bar:
 
         return f0, stiffness_matrix
 
+    @staticmethod
+    def _validate_order_approach(order, approach):
+        if order not in ('first', 'second'):
+            raise ValueError('order has to be either "first" or "second".')
+        if approach not in ('analytic', 'taylor', 'p_delta', None):
+            raise ValueError(
+                'approach has to be either "analytic", "taylor", "p_delta" or '
+                'None.'
+            )
+        if approach == 'first' and approach is not None:
+            raise ValueError('In first order the approach has to be None.')
+
     def f0(self, order: str = 'first', approach: Optional[str] = None):
+        self._validate_order_approach(order, approach)
         if order == 'first':
-            if approach:
-                return ValueError('in first order approach has to be "None"')
             f0 = self.f0_load_first_order
-        elif order == 'second':
+        else:
             if approach == 'analytic':
                 f0 = self._f0_load_second_order_analytic
             elif approach == 'taylor':
                 f0 = self._f0_load_second_order_taylor
-            elif approach == 'p_delta':
-                f0 = self.f0_load_first_order
             else:
-                return ValueError(
-                    'approach has to be either "analytic", '
-                    '"taylor" or "p_delta".')
-        else:
-            return ValueError('order has to be either "first" or "second".')
-        return (
-                f0 + self.f0_temp + self.f0_displacement - self.f0_point_load
-        )
+                f0 = self.f0_load_first_order
+        return f0 + self.f0_temp + self.f0_displacement - self.f0_point_load
 
     # analytic + taylor und shear not in deform => Error?
-    def stiffness_matrix(self, order: str = 'first',
-                         approach: Optional[str] = None):
+    def stiffness_matrix(
+        self, order: str = 'first', approach: Optional[str] = None
+    ):
+        self._validate_order_approach(order, approach)
+        k = self._stiffness_matrix_without_shear_force
         if order == 'first':
-            if approach:
-                return ValueError('in first order approach has to be "None"')
             if 'shear' in self.deform:
-                return (
-                    (self._stiffness_matrix_without_shear_force @
-                     self._get_matrix_to_apply_shear_force))
+                return k @ self._get_matrix_to_apply_shear_force
             else:
-                return self._stiffness_matrix_without_shear_force
-        elif order == 'second':
+                return k
+        else:
             if approach == 'analytic':
-                return (
-                        self._stiffness_matrix_without_shear_force @
-                        self._apply_second_order_analytic_solution)
+                return k @ self._apply_second_order_analytic_solution
             elif approach == 'taylor':
-                return (
-                        self._stiffness_matrix_without_shear_force @
-                        self._apply_second_order_approximate_by_taylor)
-            elif approach == 'p_delta':
+                return k @ self._apply_second_order_approximate_by_taylor
+            else:
                 if 'shear' in self.deform:
                     return (
-                            self._stiffness_matrix_without_shear_force @
-                            self._get_matrix_to_apply_shear_force +
-                            self._apply_second_order_approximate_by_p_delta)
+                        k @ self._get_matrix_to_apply_shear_force +
+                        self._apply_second_order_approximate_by_p_delta
+                    )
                 else:
-                    return (self._stiffness_matrix_without_shear_force +
-                            self._apply_second_order_approximate_by_p_delta)
-            else:
-                return ValueError(
-                    'approach has to be either "analytic", '
-                    '"taylor" or "p_delta".')
-        else:
-            return ValueError('order has to be either "first" or "second".')
+                    return k + self._apply_second_order_approximate_by_p_delta
 
-    def element_relation(self, order: str = 'first',
-                         approach: Optional[str] = None):
-        if order == 'first':
-            if approach:
-                return ValueError('in first order approach has to be "None"')
-        elif order == 'second':
-            if approach not in {'analytic', 'taylor', 'p_delta'}:
-                return ValueError(
-                    'approach has to be either "analytic", '
-                    '"taylor" or "p_delta".')
-        else:
-            return ValueError('order has to be either "first" or "second".')
-        return (
-            self._get_element_relation(
-                self.f0(order, approach),
-                self.stiffness_matrix(order, approach)))
+    def element_relation(
+        self, order: str = 'first', approach: Optional[str] = None
+    ):
+        return self._get_element_relation(
+            self.f0(order, approach), self.stiffness_matrix(order, approach)
+        )
 
 
 @dataclass(eq=False)
