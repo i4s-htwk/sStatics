@@ -215,6 +215,7 @@ class BarPointLoad(NodeLoad):
 
 # validierung?
 # muss dringend zusammengefasst werden :$
+# TODO: find solution for factor in EI, EA, GA_s
 @dataclass(eq=False)
 class Bar:
 
