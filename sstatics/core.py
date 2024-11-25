@@ -381,24 +381,6 @@ class Bar:
         return self.stiffness_matrix() @ trans_m @ f0_displacement
 
     @cached_property
-    def _stiffness_matrix_without_shear_force(self):
-        EA_l = self.EA / self.length
-        EI_l3 = self.EI / self.length ** 3
-        EI_l2 = self.EI / self.length ** 2
-        EI_l = self.EI / self.length
-
-        return np.array([[EA_l, 0, 0, -EA_l, 0, 0],
-                         [0, 12 * EI_l3, -6 * EI_l2,
-                          0, -12 * EI_l3, -6 * EI_l2],
-                         [0, -6 * EI_l2, 4 * EI_l,
-                          0, 6 * EI_l2, 2 * EI_l],
-                         [-EA_l, 0, 0, EA_l, 0, 0],
-                         [0, -12 * EI_l3, 6 * EI_l2,
-                          0, 12 * EI_l3, 6 * EI_l2],
-                         [0, -6 * EI_l2, 2 * EI_l,
-                          0, 6 * EI_l2, 4 * EI_l]])
-
-    @cached_property
     def _get_matrix_to_apply_shear_force(self):
         f_1 = 1 / (1 + self.phi)
         f_2 = (f_1 + self.phi / (4 * (1 + self.phi)))
@@ -748,7 +730,18 @@ class Bar:
         self, order: str = 'first', approach: Optional[str] = None
     ):
         self._validate_order_approach(order, approach)
-        k = self._stiffness_matrix_without_shear_force
+
+        EI_l = self.EI / self.length
+        EI_l2 = EI_l / self.length
+        k = np.array([
+            [self.EA, 0, 0, -self.EA, 0, 0],
+            [0, 12 * EI_l2, -6 * EI_l, 0, -12 * EI_l2, -6 * EI_l],
+            [0, -6 * EI_l, 4 * self.EI, 0, 6 * EI_l, 2 * self.EI],
+            [-self.EA, 0, 0, self.EA, 0, 0],
+            [0, -12 * EI_l2, 6 * EI_l, 0, 12 * EI_l2, 6 * EI_l],
+            [0, -6 * EI_l, 2 * self.EI, 0, 6 * EI_l, 4 * self.EI],
+        ]) / self.length
+
         if order == 'first':
             if 'shear' in self.deform:
                 return k @ self._get_matrix_to_apply_shear_force
