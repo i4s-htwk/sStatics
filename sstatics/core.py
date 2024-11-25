@@ -38,7 +38,6 @@ class NodeLoad(DegreesOfFreedom):
         return transformation_matrix(self.rotation - rotation) @ self.vector
 
 
-# TODO: Find a solution for springs
 # TODO: load -> loads
 # TODO: validation for load and displacements?
 @dataclass(eq=False)
@@ -47,12 +46,9 @@ class Node:
     x: float
     z: float
     rotation: float = 0.0
-    u: Literal['free', 'fixed'] = 'free'
-    w: Literal['free', 'fixed'] = 'free'
-    phi: Literal['free', 'fixed'] = 'free'
-    u_spring: Optional[float] = 0
-    w_spring: Optional[float] = 0
-    phi_spring: Optional[float] = 0
+    u: Literal['free', 'fixed'] | float = 'free'
+    w: Literal['free', 'fixed'] | float = 'free'
+    phi: Literal['free', 'fixed'] | float = 'free'
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
     displacements: Optional[List[NodeDisplacement]] = field(
         default_factory=lambda: []
@@ -60,10 +56,15 @@ class Node:
 
     def __post_init__(self):
         for param in (self.u, self.w, self.phi):
-            if param not in ('fixed', 'free'):
+            if isinstance(param, str) and param not in ('fixed', 'free'):
                 raise ValueError(
                     f'"{param}" is an invalid argument. Has to be either '
-                    f'"fixed" or "free".'
+                    f'"fixed" or "free" or a real number.'
+                )
+            # TODO: is this correct?
+            elif param == 0:
+                raise ValueError(
+                    'Please set u, w or phi to "free" instead of zero.'
                 )
 
     @cached_property
@@ -72,17 +73,20 @@ class Node:
             return np.array([[0], [0], [0]])
         return np.sum([d.vector for d in self.displacements], axis=0)
 
+    # TODO: name
+    # TODO: test
+    @cached_property
+    def el_node(self):
+        u = 0 if isinstance(self.u, str) else self.u
+        w = 0 if isinstance(self.w, str) else self.w
+        phi = 0 if isinstance(self.phi, str) else self.phi
+        return np.diag([u, w, phi])
+
     def same_location(self, other):
         return self.x == other.x and self.z == other.z
 
     def rotate_load(self):
         return self.load.rotate(self.rotation)
-
-    @cached_property
-    def el_node(self):
-        return np.diag([
-            self.u_spring, self.w_spring, self.phi_spring
-        ])
 
 
 # Warum area validierung nicht notwendig?
@@ -736,6 +740,7 @@ class Bar:
                 f0 + self.f0_temp + self.f0_displacement - self.f0_point_load
         )
 
+    # analytic + taylor und shear not in deform => Error?
     def stiffness_matrix(self, order: str = 'first',
                          approach: Optional[str] = None):
         if order == 'first':
