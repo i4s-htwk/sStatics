@@ -600,6 +600,8 @@ class Bar:
         factor = B_s / (self.GA_s * self.length ** 2)
         return f0_x_i, B_s, factor
 
+    # TODO: Ludwigs Kriterium verwenden, wann man die analytische Lösung
+    # TODO: verwenden kann?
     @cached_property
     def _apply_second_order_analytic_solution(self):
         f0_x_i, B_s, factor = (
@@ -672,15 +674,16 @@ class Bar:
                          [0, f_2, f_4, 0, f_2, f_3]])
 
     @cached_property
-    def _apply_second_order_approximate_by_p_delta(self):
-        factor = (self._prepare_factors_sec_order_stiffness_matrix[0] /
-                  self.length)
-        return np.array([[0, 0, 0, 0, 0, 0],
-                         [0, factor, 0, 0, -factor, 0],
-                         [0, 0, 0, 0, 0, 0],
-                         [0, 0, 0, 0, 0, 0],
-                         [0, -factor, 0, 0, factor, 0],
-                         [0, 0, 0, 0, 0, 0]])
+    def second_order_p_delta(self):
+        c = self.f0_load_first_order[0][0] / self.length
+        return np.array([
+            [0, 0, 0, 0, 0, 0],
+            [0, c, 0, 0, -c, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0],
+            [0, -c, 0, 0, c, 0],
+            [0, 0, 0, 0, 0, 0],
+        ])
 
     def _apply_hinge_modification(self, f0, stiffness_matrix):
         k = stiffness_matrix
@@ -767,12 +770,9 @@ class Bar:
                 return k @ self._apply_second_order_approximate_by_taylor
             else:
                 if 'shear' in self.deformations:
-                    return (
-                        k @ self.shear_force +
-                        self._apply_second_order_approximate_by_p_delta
-                    )
+                    return k @ self.shear_force + self.second_order_p_delta
                 else:
-                    return k + self._apply_second_order_approximate_by_p_delta
+                    return k + self.second_order_p_delta
 
     def element_relation(
         self, order: str = 'first', approach: str | None = None
