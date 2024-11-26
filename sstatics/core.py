@@ -724,7 +724,7 @@ class Bar:
                 f0 = self._f0_load_second_order_taylor
             else:
                 f0 = self.f0_load_first_order
-        return f0 + self.f0_temp + self.f0_displacement - self.f0_point_load
+        return f0 + self.f0_temp + self.f0_displacement + self.f0_point_load
 
     # analytic + taylor und shear not in deform => Error?
     def stiffness_matrix(
@@ -768,6 +768,81 @@ class Bar:
         return self._get_element_relation(
             self.f0(order, approach), self.stiffness_matrix(order, approach)
         )
+
+    def w(self, x, deform: np.array, force: np.array, length: float):
+        # x: [float, numpy.ndarray]
+        line_load = self.line_load
+        temp = (- self.material.therm_exp_coeff * self.temp.temp_delta /
+                self.cross_section.height)
+        c_1 = force[1][0] / self.EI
+        c_2 = force[2][0] / self.EI - line_load[1][0] / self.GA_s
+        c_3 = - deform[2][0] - force[1][0] / self.GA_s
+        c_4 = deform[1][0]
+        return (
+                ((line_load[4][0] - line_load[1][0]) * (x ** 5) /
+                 (120 * length * self.EI)) +
+                (line_load[1][0] * (x ** 4) / (24 * self.EI)) -
+                ((line_load[4][0] - line_load[1][0]) * (x ** 3) /
+                 (6 * self.GA_s * length)) +
+                (c_1 * (x ** 3)) / 6 +
+                (c_2 * (x ** 2)) / 2 +
+                c_3 * x +
+                c_4 +
+                1 / 2 * temp * x ** 2
+        )
+
+    def _get_points_deform_line(self, deform: np.array, force: np.array,
+                                scale: float, num_points: int):
+        deform = np.array(deform)
+        force = np.array(force)
+
+        if deform.shape != (6, 1):
+            raise ValueError("deform must have the shape (6, 1), but has " +
+                             str(deform.shape))
+        if force.shape != (6, 1):
+            raise ValueError("force must have the shape (6, 1), but has " +
+                             str(deform.shape))
+
+        new_length = self.length + (deform[3][0] - deform[0][0]) * scale
+        sample_points = np.linspace(start=0, stop=new_length, num=num_points)
+
+        correctur = ((deform[4][0] -
+                     self.w(new_length, deform, force, new_length)) /
+                     new_length)
+
+        return [
+            sample_points + self.node_i.x + deform[0][0] * scale,
+            ((self.w(sample_points, deform, force, new_length) + correctur *
+              sample_points) * scale + self.node_i.z)
+        ]
+
+    def _rotate_points(self, x: np.array, z: np.array):
+        return [
+            self.node_i.x + np.cos(self.inclination) * (
+                    x - self.node_i.x) + np.sin(self.inclination) * (
+                    z - self.node_i.z),
+            self.node_i.z - np.sin(self.inclination) * (
+                    x - self.node_i.x) + np.cos(self.inclination) * (
+                    z - self.node_i.z)
+        ]
+
+    def deform_line(self, deform: np.array, force: np.array,
+                    scale: float, num_points: int):
+        x, z = self._get_points_deform_line(deform, force, scale, num_points)
+
+        if self.inclination != 0:
+            return self._rotate_points(x, z)
+        return [x, z]
+
+    def max_deform(self, deform: np.array, force: np.array, num_points: int):
+        x, z = self._get_points_deform_line(deform, force, 1, num_points)
+
+        x_ = np.linspace(0, self.length, 100)
+        x__ = np.linspace(deform[0][0], self.length + deform[3][0], 100)
+
+        dif = np.sqrt(np.square(x_ - x__) + np.square(z))
+        idx = np.argmax(dif)
+        return dif[idx], idx
 
 
 @dataclass(eq=False)
@@ -993,33 +1068,42 @@ class System:
     def _apply_hinge_modification(self, order: str = 'first',
                                   approach: Optional[str] = None):
         deform_list = []
-
-        for bar in self.bars:
+        bar_deform_list = self.bar_deform(order, approach)
+        for i, bar in enumerate(self.bars):
             delta_rel = np.zeros((6, 1))
-            k = bar.stiffness_matrix(order, approach)
-            bar_deform = self.bar_deform(order, approach)
-            f0 = bar.f0(order, approach)
+            if True in bar.hinge:
+                k = bar.stiffness_matrix(order, approach)
+                bar_deform = bar_deform_list[i]
+                f0 = bar.f0(order, approach)
 
-            idx = [i for i, value in enumerate(bar.hinge) if value]
-            if idx:
-                rhs = (-np.dot(k[np.ix_(idx, range(6))], bar_deform)
-                       - f0[idx])
-
-                delta_rel_reduced = (
-                    np.linalg.solve(k[np.ix_(idx, idx)], rhs)
-                )
-                delta_rel[idx] = delta_rel_reduced
-
+                idx = [i for i, value in enumerate(bar.hinge) if value]
+                if idx:
+                    rhs = (-np.dot(k[np.ix_(idx, range(6))], bar_deform)
+                           - f0[idx])
+                    delta_rel_reduced = (
+                        np.linalg.solve(k[np.ix_(idx, idx)], rhs)
+                    )
+                    delta_rel[idx] = delta_rel_reduced
             deform_list.append(delta_rel)
         return deform_list
+
+    def bar_deform_node_displacement(self):
+        return [
+            np.transpose(bar.transformation_matrix())
+            @ np.vstack(
+                (bar.node_i.displacement, bar.node_j.displacement))
+            for bar in self.bars
+        ]
 
     def create_bar_deform_list(self, order: str = 'first',
                                approach: Optional[str] = None):
         hinge_modifications = self._apply_hinge_modification(order, approach)
         bar_deforms = self.bar_deform(order, approach)
+        bar_deform_node_displacement = self.bar_deform_node_displacement()
         combined_results = []
         for i in range(len(hinge_modifications)):
-            result = np.add(hinge_modifications[i], bar_deforms[i])
+            result = (hinge_modifications[i] + bar_deforms[i] +
+                      bar_deform_node_displacement[i])
             combined_results.append(result)
         return combined_results
 
@@ -1046,13 +1130,16 @@ class Model:
     system: System
     order: Literal['first', 'second'] = 'first'
     approach: Optional[Literal['analytic', 'taylor', 'p_delta']] = None
-    tolerance = 1e-10
+    tolerance: float = 1e-12
 
-    def calc_deform(self):
+    def calc(self):
         if self.order == 'first':
             if self.system.solvable(self.order, self.approach, self.tolerance):
-                return self.system.create_bar_deform_list(
+                deform = self.system.create_bar_deform_list(
                     self.order, self.approach)
+                force = self.system.create_list_of_bar_forces(
+                    self.order, self.approach)
+                return deform, force
         elif self.order == 'second':
             # TODO: integrate MA Ludwig
             return None
