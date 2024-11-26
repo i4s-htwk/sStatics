@@ -211,7 +211,6 @@ class BarPointLoad(NodeLoad):
             return np.zeros((6, 1))
 
 
-# validierung?
 # muss dringend zusammengefasst werden :$
 # TODO: find solution for factor in EI, EA, GA_s
 @dataclass(eq=False)
@@ -233,6 +232,22 @@ class Bar:
     line_loads: list[BarLineLoad] = field(default_factory=lambda: [])
     temp: BarTemp = field(default_factory=lambda: BarTemp(0, 0))
     point_loads: list[BarPointLoad] = field(default_factory=lambda: [])
+
+    # TODO: other validations?
+    def __post_init__(self):
+        if self.node_i.same_location(self.node_j):
+            raise ValueError(
+                'node_i and node_j need to have different locations.'
+            )
+        for d in self.deformations:
+            if d not in ('moment', 'normal', 'shear'):
+                raise ValueError(
+                    'Valid deformation key words are "moment", "normal" and '
+                    '"shear".'
+                )
+        # TODO: find a solution for this edge case
+        if len(self.deformations) == 0:
+            raise ValueError('There has to be at least one deformation.')
 
     # TODO: Parameter sinnvoll? Wird es noch andere Rotationsmatrizen geben?
     def transformation_matrix(self, to_node_coord=True):
