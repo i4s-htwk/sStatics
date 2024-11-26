@@ -1,7 +1,7 @@
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Literal, List, Optional
+from typing import Literal
 
 import numpy as np
 
@@ -50,9 +50,7 @@ class Node:
     w: Literal['free', 'fixed'] | float = 'free'
     phi: Literal['free', 'fixed'] | float = 'free'
     load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
-    displacements: Optional[List[NodeDisplacement]] = field(
-        default_factory=lambda: []
-    )
+    displacements: list[NodeDisplacement] = field(default_factory=lambda: [])
 
     def __post_init__(self):
         for param in (self.u, self.w, self.phi):
@@ -223,22 +221,18 @@ class Bar:
     node_j: Node
     cross_section: CrossSection
     material: Material
-    hinge_u_i: Optional[bool] = False
-    hinge_w_i: Optional[bool] = False
-    hinge_phi_i: Optional[bool] = False
-    hinge_u_j: Optional[bool] = False
-    hinge_w_j: Optional[bool] = False
-    hinge_phi_j: Optional[bool] = False
+    hinge_u_i: bool = False
+    hinge_w_i: bool = False
+    hinge_phi_i: bool = False
+    hinge_u_j: bool = False
+    hinge_w_j: bool = False
+    hinge_phi_j: bool = False
     deform: tuple[Literal['moment', 'normal', 'shear']] = field(
         default_factory=lambda: ('moment', 'normal')
     )
-    line_loads: Optional[List[BarLineLoad]] = field(
-        default_factory=lambda: []
-    )
-    temp: Optional[BarTemp] = field(default_factory=lambda: BarTemp(0, 0))
-    point_loads: Optional[List[BarPointLoad]] = field(
-        default_factory=lambda: []
-    )
+    line_loads: list[BarLineLoad] = field(default_factory=lambda: [])
+    temp: BarTemp = field(default_factory=lambda: BarTemp(0, 0))
+    point_loads: list[BarPointLoad] = field(default_factory=lambda: [])
 
     # TODO: Parameter sinnvoll? Wird es noch andere Rotationsmatrizen geben?
     def transformation_matrix(self, to_node_coord=True):
@@ -716,7 +710,7 @@ class Bar:
         if approach == 'first' and approach is not None:
             raise ValueError('In first order the approach has to be None.')
 
-    def f0(self, order: str = 'first', approach: Optional[str] = None):
+    def f0(self, order: str = 'first', approach: str | None = None):
         self._validate_order_approach(order, approach)
         if order == 'first':
             f0 = self.f0_load_first_order
@@ -731,7 +725,7 @@ class Bar:
 
     # analytic + taylor und shear not in deform => Error?
     def stiffness_matrix(
-        self, order: str = 'first', approach: Optional[str] = None
+        self, order: str = 'first', approach: str | None = None
     ):
         self._validate_order_approach(order, approach)
 
@@ -766,7 +760,7 @@ class Bar:
                     return k + self._apply_second_order_approximate_by_p_delta
 
     def element_relation(
-        self, order: str = 'first', approach: Optional[str] = None
+        self, order: str = 'first', approach: str | None = None
     ):
         return self._get_element_relation(
             self.f0(order, approach), self.stiffness_matrix(order, approach)
@@ -776,8 +770,8 @@ class Bar:
 @dataclass(eq=False)
 class System:
 
-    _bars: List[Bar]
-    bars: List[Bar] = field(default_factory=lambda: [])
+    _bars: list[Bar]
+    bars: list[Bar] = field(default_factory=lambda: [])
 
     def __post_init__(self):
         self.bars = self.bar_segmentation()
@@ -878,7 +872,7 @@ class System:
         return bars
 
     def stiffness_matrix(self, order: str = 'first',
-                         approach: Optional[str] = None):
+                         approach: str | None = None):
         k_system = self._get_zero_matrix()
         for bar in self.bars:
             i = self.nodes.index(bar.node_i) * self.dof
@@ -917,10 +911,10 @@ class System:
         return elastic
 
     def system_matrix(self, order: str = 'first',
-                      approach: Optional[str] = None):
+                      approach: str | None = None):
         return self.stiffness_matrix(order, approach) + self.elastic_matrix()
 
-    def f0(self, order: str = 'first', approach: Optional[str] = None):
+    def f0(self, order: str = 'first', approach: str | None = None):
         f0_system = self._get_zero_vec()
         for bar in self.bars:
             i = self.nodes.index(bar.node_i) * self.dof
@@ -943,7 +937,7 @@ class System:
         return self.p0() - self.f0()
 
     def apply_boundary_conditions(self, order: str = 'first',
-                                  approach: Optional[str] = None):
+                                  approach: str | None = None):
         k = self.system_matrix(order, approach)
         p = self.p()
         for idx, node in enumerate(self.nodes):
@@ -958,12 +952,12 @@ class System:
         return k, p
 
     def node_deformation(self, order: str = 'first',
-                         approach: Optional[str] = None):
+                         approach: str | None = None):
         modified_stiffness_matrix, modified_p = (
             self.apply_boundary_conditions(order, approach))
         return np.linalg.solve(modified_stiffness_matrix, modified_p)
 
-    def bar_deform(self, order: str = 'first', approach: Optional[str] = None):
+    def bar_deform(self, order: str = 'first', approach: str | None = None):
         node_deform = self.node_deformation(order, approach)
 
         return [
@@ -980,7 +974,7 @@ class System:
         ]
 
     def create_list_of_bar_forces(self, order: str = 'first',
-                                  approach: Optional[str] = None):
+                                  approach: str | None = None):
         bar_deform = self.bar_deform(order, approach)
         f_node = [
             bar.element_relation(order, approach)[1] @ deform +
@@ -994,7 +988,7 @@ class System:
         ]
 
     def _apply_hinge_modification(self, order: str = 'first',
-                                  approach: Optional[str] = None):
+                                  approach: str | None = None):
         deform_list = []
 
         for bar in self.bars:
@@ -1017,7 +1011,7 @@ class System:
         return deform_list
 
     def create_bar_deform_list(self, order: str = 'first',
-                               approach: Optional[str] = None):
+                               approach: str | None = None):
         hinge_modifications = self._apply_hinge_modification(order, approach)
         bar_deforms = self.bar_deform(order, approach)
         combined_results = []
@@ -1026,7 +1020,7 @@ class System:
             combined_results.append(result)
         return combined_results
 
-    def solvable(self, order: str = 'first', approach: Optional[str] = None,
+    def solvable(self, order: str = 'first', approach: str | None = None,
                  tolerance: float = 1e-10):
         k, p = self.apply_boundary_conditions(order, approach)
         u, s, vt = np.linalg.svd(k)
@@ -1048,7 +1042,7 @@ class Model:
 
     system: System
     order: Literal['first', 'second'] = 'first'
-    approach: Optional[Literal['analytic', 'taylor', 'p_delta']] = None
+    approach: Literal['analytic', 'taylor', 'p_delta'] | None = None
     tolerance = 1e-10
 
     def calc_deform(self):
