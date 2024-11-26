@@ -227,8 +227,8 @@ class Bar:
     hinge_u_j: bool = False
     hinge_w_j: bool = False
     hinge_phi_j: bool = False
-    deform: tuple[Literal['moment', 'normal', 'shear']] = field(
-        default_factory=lambda: ('moment', 'normal')
+    deformations: tuple[Literal['moment', 'normal', 'shear']] = (
+        'moment', 'normal'
     )
     line_loads: list[BarLineLoad] = field(default_factory=lambda: [])
     temp: BarTemp = field(default_factory=lambda: BarTemp(0, 0))
@@ -268,14 +268,14 @@ class Bar:
     @cached_property
     def flexural_stiffness(self):
         EI = self.material.young_mod * self.cross_section.mom_of_int
-        return EI if 'moment' in self.deform else 1_000 * EI
+        return EI if 'moment' in self.deformations else 1_000 * EI
 
     EI = property(lambda self: self.flexural_stiffness)
 
     @cached_property
     def extensional_stiffness(self):
         EA = self.material.young_mod * self.cross_section.area
-        return EA if 'normal' in self.deform else 1_000 * EA
+        return EA if 'normal' in self.deformations else 1_000 * EA
 
     EA = property(lambda self: self.extensional_stiffness)
 
@@ -283,7 +283,7 @@ class Bar:
     def shear_stiffness(self):
         GA_s = self.material.shear_mod * self.cross_section.area
         GA_s *= self.cross_section.shear_cor
-        return GA_s if 'shear' in self.deform else 1_000 * GA_s
+        return GA_s if 'shear' in self.deformations else 1_000 * GA_s
 
     GA_s = property(lambda self: self.shear_stiffness)
 
@@ -741,7 +741,7 @@ class Bar:
         ]) / self.length
 
         if order == 'first':
-            if 'shear' in self.deform:
+            if 'shear' in self.deformations:
                 return k @ self.shear_force
             else:
                 return k
@@ -751,7 +751,7 @@ class Bar:
             elif approach == 'taylor':
                 return k @ self._apply_second_order_approximate_by_taylor
             else:
-                if 'shear' in self.deform:
+                if 'shear' in self.deformations:
                     return (
                         k @ self.shear_force +
                         self._apply_second_order_approximate_by_p_delta
