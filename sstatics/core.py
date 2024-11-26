@@ -229,15 +229,16 @@ class Bar:
     hinge_u_j: Optional[bool] = False
     hinge_w_j: Optional[bool] = False
     hinge_phi_j: Optional[bool] = False
-    # was gibt es für optionen?
-    deform: List[str] = field(default_factory=lambda: ['moment', 'normal'])
+    deform: tuple[Literal['moment', 'normal', 'shear']] = field(
+        default_factory=lambda: ('moment', 'normal')
+    )
     line_loads: Optional[List[BarLineLoad]] = field(
-        default_factory=lambda: [BarLineLoad(0, 0, 'z', 'bar', 'exact')])
+        default_factory=lambda: []
+    )
     temp: Optional[BarTemp] = field(default_factory=lambda: BarTemp(0, 0))
     point_loads: Optional[List[BarPointLoad]] = field(
-        default_factory=lambda: [BarPointLoad(0, 0, 0, 0, 0)])
-    # segments?
-    segments: Optional[int] = 0
+        default_factory=lambda: []
+    )
 
     # TODO: Parameter sinnvoll? Wird es noch andere Rotationsmatrizen geben?
     def transformation_matrix(self, to_node_coord=True):
@@ -298,12 +299,16 @@ class Bar:
 
     @cached_property
     def line_load(self):
+        if len(self.line_loads) == 0:
+            return np.array([[0], [0], [0], [0], [0], [0]])
         return np.sum(
             [load.rotate(self.inclination) for load in self.line_loads], axis=0
         )
 
     @cached_property
     def point_load(self):
+        if len(self.point_loads) == 0:
+            return np.array([[0], [0], [0], [0], [0], [0]])
         return np.sum(
             [load.rotate_load() for load in self.point_loads], axis=0
         )
