@@ -382,17 +382,15 @@ class Bar:
         return self.stiffness_matrix() @ trans_m @ f0_displacement
 
     @cached_property
-    def _get_matrix_to_apply_shear_force(self):
-        f_1 = 1 / (1 + self.phi)
-        f_2 = (f_1 + self.phi / (4 * (1 + self.phi)))
-        f_3 = (f_1 + self.phi / (2 * (1 + self.phi)))
-
-        return np.array([[1, 0, 0, 0, 0, 0],
-                         [0, f_1, f_1, 0, f_1, f_1],
-                         [0, f_1, f_2, 0, f_1, f_3],
-                         [0, 0, 0, 1, 0, 0],
-                         [0, f_1, f_1, 0, f_1, f_1],
-                         [0, f_1, f_3, 0, f_1, f_2]])
+    def shear_force(self):
+        return np.array([
+            [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
+            [0, 1, 1, 0, 1, 1],
+            [0, 1, 4 + self.phi, 0, 1, 2 - self.phi],
+            [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
+            [0, 1, 1, 0, 1, 1],
+            [0, 1, 2 - self.phi, 0, 1, 4 + self.phi],
+        ]) / (1 + self.phi)
 
     # separate properties?
     @cached_property
@@ -745,7 +743,7 @@ class Bar:
 
         if order == 'first':
             if 'shear' in self.deform:
-                return k @ self._get_matrix_to_apply_shear_force
+                return k @ self.shear_force
             else:
                 return k
         else:
@@ -756,7 +754,7 @@ class Bar:
             else:
                 if 'shear' in self.deform:
                     return (
-                        k @ self._get_matrix_to_apply_shear_force +
+                        k @ self.shear_force +
                         self._apply_second_order_approximate_by_p_delta
                     )
                 else:
