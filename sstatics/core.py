@@ -760,19 +760,18 @@ class Bar:
 
         if order == 'first':
             if 'shear' in self.deformations:
-                return k @ self.shear_force
-            else:
-                return k
+                k @= self.shear_force
         else:
             if approach == 'analytic':
-                return k @ self._apply_second_order_analytic_solution
+                k @= self._apply_second_order_analytic_solution
             elif approach == 'taylor':
-                return k @ self._apply_second_order_approximate_by_taylor
+                k @= self._apply_second_order_approximate_by_taylor
             else:
                 if 'shear' in self.deformations:
-                    return k @ self.shear_force + self.second_order_p_delta
+                    k = k @ self.shear_force + self.second_order_p_delta
                 else:
-                    return k + self.second_order_p_delta
+                    k += self.second_order_p_delta
+        return k
 
     def element_relation(
         self, order: str = 'first', approach: str | None = None
