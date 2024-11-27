@@ -685,37 +685,6 @@ class Bar:
             [0, 0, 0, 0, 0, 0],
         ])
 
-    def _apply_hinge_modification(self, f0, stiffness_matrix):
-        k = stiffness_matrix
-        for i, value in enumerate(self.hinge):
-            if value:
-                idx = i
-                f0 = f0 - 1 / k[i, i] * k[:, i:i + 1] * f0[i, :]
-                k = k - 1 / k[idx, i] * k[:, i:i + 1] @ np.transpose(
-                    k[:, i:i + 1])
-        return f0, k
-
-    def _transform_from_bar_in_node_coord(self, f0, stiffness_matrix):
-        trans_m = self.transformation_matrix()
-        return (
-            trans_m @ f0,
-            trans_m @ stiffness_matrix @ np.transpose(trans_m)
-        )
-
-    def _get_element_relation(self, f0, stiffness_matrix):
-        # modification hinge
-        if True in self.hinge:
-            f0, stiffness_matrix = (
-                self._apply_hinge_modification(f0, stiffness_matrix))
-
-        # transformation
-        if (self.node_i.rotation or self.node_j.rotation or
-                self.inclination != 0):
-            f0, stiffness_matrix = (
-                self._transform_from_bar_in_node_coord(f0, stiffness_matrix))
-
-        return f0, stiffness_matrix
-
     @staticmethod
     def _validate_order_approach(order, approach):
         if order not in ('first', 'second'):
@@ -728,8 +697,12 @@ class Bar:
         if approach == 'first' and approach is not None:
             raise ValueError('In first order the approach has to be None.')
 
-    def f0(self, order: str = 'first', approach: str | None = None):
+    def f0(
+        self, order: str = 'first', approach: str | None = None,
+        hinge_modification: bool = True, to_node_coord: bool = True
+    ):
         self._validate_order_approach(order, approach)
+
         if order == 'first':
             f0 = self.f0_load_first_order
         else:
@@ -739,11 +712,25 @@ class Bar:
                 f0 = self._f0_load_second_order_taylor
             else:
                 f0 = self.f0_load_first_order
-        return f0 + self.f0_temp + self.f0_displacement + self.f0_point_load
+        f0 += self.f0_temp + self.f0_displacement + self.f0_point_load
+
+        if hinge_modification:
+            k = self.stiffness_matrix(
+                order, approach, hinge_modification=False, to_node_coord=False
+            )
+            for i, value in enumerate(self.hinge):
+                if value:
+                    f0 = f0 - 1 / k[i, i] * k[:, i:i + 1] * f0[i, :]
+
+        if to_node_coord:
+            f0 = self.transformation_matrix() @ f0
+
+        return f0
 
     # analytic + taylor und shear not in deform => Error?
     def stiffness_matrix(
-        self, order: str = 'first', approach: str | None = None
+        self, order: str = 'first', approach: str | None = None,
+        hinge_modification: bool = True, to_node_coord: bool = True
     ):
         self._validate_order_approach(order, approach)
 
@@ -771,14 +758,19 @@ class Bar:
                     k = k @ self.shear_force + self.second_order_p_delta
                 else:
                     k += self.second_order_p_delta
-        return k
 
-    def element_relation(
-        self, order: str = 'first', approach: str | None = None
-    ):
-        return self._get_element_relation(
-            self.f0(order, approach), self.stiffness_matrix(order, approach)
-        )
+        if hinge_modification:
+            for i, value in enumerate(self.hinge):
+                if value:
+                    k = k - 1 / k[i, i] * k[:, i:i + 1] @ np.transpose(
+                        k[:, i:i + 1]
+                    )
+
+        if to_node_coord:
+            trans_m = self.transformation_matrix()
+            k = trans_m @ k @ np.transpose(trans_m)
+
+        return k
 
     def w(self, x, deform: np.array, force: np.array, length: float):
         # x: [float, numpy.ndarray]
