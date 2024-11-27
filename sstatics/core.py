@@ -393,7 +393,10 @@ class Bar:
             (self.node_i.displacement, self.node_j.displacement)
         )
         trans_m = self.transformation_matrix(to_node_coord=False)
-        return self.stiffness_matrix() @ trans_m @ f0_displacement
+        k = self.stiffness_matrix(
+            hinge_modification=False, to_node_coord=False
+        )
+        return k @ trans_m @ f0_displacement
 
     @cached_property
     def shear_force(self):
