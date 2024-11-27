@@ -288,6 +288,12 @@ class Bar:
     EI = property(lambda self: self.flexural_stiffness)
 
     @cached_property
+    def modified_flexural_stiffness(self):
+        return self.EI * (1 + self.f0_load_first_order[0][0] / self.GA_s)
+
+    B_s = property(lambda self: self.modified_flexural_stiffness)
+
+    @cached_property
     def extensional_stiffness(self):
         EA = self.material.young_mod * self.cross_section.area
         return EA if 'normal' in self.deformations else 1_000 * EA
@@ -305,6 +311,12 @@ class Bar:
     @cached_property
     def phi(self):
         return 12 * self.EI / (self.GA_s * self.length ** 2)
+
+    # TODO: name?
+    @cached_property
+    def characteristic_number(self):
+        f0_x_i = self.f0_load_first_order[0][0]
+        return np.sqrt(abs(f0_x_i) / self.B_s) * self.length
 
     @cached_property
     def line_load(self):
@@ -409,27 +421,14 @@ class Bar:
             [0, 1, 2 - self.phi, 0, 1, 4 + self.phi],
         ]) / (1 + self.phi)
 
-    # separate properties?
-    @cached_property
-    def _prepare_factors_sec_order(self):
-        p_vec = self.line_load
-        f0_x_i = (-(7 * p_vec[0][0] + 3 * p_vec[3][0]) * self.length / 20)
-        B_s = self.EI * (1 + f0_x_i / self.GA_s)
-        return p_vec, f0_x_i, B_s
-
-    @cached_property
-    def _prepare_factors_sec_order_f0(self):
-        p_vec, f0_x_i, B_s = self._prepare_factors_sec_order
-        mu = np.sqrt(abs(f0_x_i) / B_s) * self.length
-
-        return (f0_x_i, B_s, mu, (p_vec[1][0] + p_vec[4][0]),
-                (p_vec[1][0] - p_vec[4][0]), p_vec[1][0], p_vec[4][0], p_vec)
-
     @cached_property
     def _f0_load_second_order_analytic(self):
-        f0_x_i, B_s, mu, p_sum, p_diff, p_i, p_j, p_vec = (
-            self._prepare_factors_sec_order_f0
-        )
+        p_vec = self.line_load
+        f0_x_i = self.f0_load_first_order[0][0]
+        mu = self.characteristic_number
+        B_s = self.B_s
+        p_i, p_j = p_vec[1][0], p_vec[4][0]
+        p_sum, p_diff = p_vec[1][0] + p_vec[4][0], p_vec[1][0] - p_vec[4][0]
 
         if f0_x_i < 0:
             sin_mu = np.sin(mu)
@@ -540,9 +539,9 @@ class Bar:
 
     @cached_property
     def _f0_load_second_order_taylor(self):
-        f0_x_i, B_s, mu, p_sum, p_diff, p_i, p_j, p_vec = (
-            self._prepare_factors_sec_order_f0
-        )
+        p_vec = self.line_load
+        B_s = self.B_s
+        p_i, p_j = p_vec[1][0], p_vec[4][0]
 
         f0_z_i = (self.length / 20) * (720 * B_s ** 2 * (p_j + p_i) - (
                 4 * self.EI * self.GA_s * self.length ** 2) * (p_j - p_i) + (
@@ -597,19 +596,14 @@ class Bar:
                  [f0_m_j]])
         )
 
-    @cached_property
-    def _prepare_factors_sec_order_stiffness_matrix(self):
-        p_vec, f0_x_i, B_s = self._prepare_factors_sec_order
-        factor = B_s / (self.GA_s * self.length ** 2)
-        return f0_x_i, B_s, factor
-
     # TODO: Ludwigs Kriterium verwenden, wann man die analytische Lösung
     # TODO: verwenden kann?
     @cached_property
     def _apply_second_order_analytic_solution(self):
-        f0_x_i, B_s, factor = (
-            self._prepare_factors_sec_order_stiffness_matrix)
-        mu = np.sqrt(abs(f0_x_i) / B_s) * self.length
+        f0_x_i = self.f0_load_first_order[0][0]
+        mu = self.characteristic_number
+        B_s = self.B_s
+        factor = B_s / (self.GA_s * self.length ** 2)
 
         if f0_x_i < 0:
             sin_mu = np.sin(mu)
@@ -645,8 +639,9 @@ class Bar:
 
     @cached_property
     def _apply_second_order_approximate_by_taylor(self):
-        f0_x_i, B_s, factor = (
-            self._prepare_factors_sec_order_stiffness_matrix)
+        f0_x_i = self.f0_load_first_order[0][0]
+        B_s = self.B_s
+        factor = B_s / (self.GA_s * self.length ** 2)
         denominator_common = factor + 1 / 12
         denominator_squared = denominator_common ** 2
         inv_denominator_common = 1 / denominator_common
