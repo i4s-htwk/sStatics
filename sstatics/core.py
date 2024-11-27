@@ -250,7 +250,7 @@ class Bar:
             raise ValueError('There has to be at least one deformation.')
 
     # TODO: Parameter sinnvoll? Wird es noch andere Rotationsmatrizen geben?
-    def transformation_matrix(self, to_node_coord=True):
+    def transformation_matrix(self, to_node_coord: bool = True):
         alpha_i = alpha_j = self.inclination
         if to_node_coord:
             alpha_i -= self.node_i.rotation
@@ -698,7 +698,8 @@ class Bar:
             raise ValueError('In first order the approach has to be None.')
 
     def f0(
-        self, order: str = 'first', approach: str | None = None,
+        self, order: Literal['first', 'second'] = 'first',
+        approach: Literal['analytic', 'taylor', 'p_delta'] | None = None,
         hinge_modification: bool = True, to_node_coord: bool = True
     ):
         self._validate_order_approach(order, approach)
@@ -729,7 +730,8 @@ class Bar:
 
     # analytic + taylor und shear not in deform => Error?
     def stiffness_matrix(
-        self, order: str = 'first', approach: str | None = None,
+        self, order: Literal['first', 'second'] = 'first',
+        approach: Literal['analytic', 'taylor', 'p_delta'] | None = None,
         hinge_modification: bool = True, to_node_coord: bool = True
     ):
         self._validate_order_approach(order, approach)
