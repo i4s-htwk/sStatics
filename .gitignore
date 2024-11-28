@@ -5,5 +5,8 @@ __pycache__/
 # PyCharm
 .idea/
 
+# Sphinx
+doc/build
+
 # test script
 sstatics_test.py
