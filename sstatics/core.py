@@ -28,9 +28,8 @@ class DegreesOfFreedom:
 NodeDisplacement = DegreesOfFreedom
 
 
-# TODO: name PointLoad, ...?
 @dataclass(eq=False)
-class NodeLoad(DegreesOfFreedom):
+class PointLoad(DegreesOfFreedom):
 
     rotation: float = 0.0
 
@@ -38,8 +37,10 @@ class NodeLoad(DegreesOfFreedom):
         return transformation_matrix(self.rotation - rotation) @ self.vector
 
 
+NodePointLoad = PointLoad
+
+
 # TODO: load -> loads
-# TODO: validation for load and displacements?
 @dataclass(eq=False)
 class Node:
 
@@ -49,7 +50,7 @@ class Node:
     u: Literal['free', 'fixed'] | float = 'free'
     w: Literal['free', 'fixed'] | float = 'free'
     phi: Literal['free', 'fixed'] | float = 'free'
-    load: NodeLoad = field(default_factory=lambda: NodeLoad(0, 0, 0))
+    load: NodePointLoad = field(default_factory=lambda: NodePointLoad(0, 0, 0))
     displacements: list[NodeDisplacement] = field(default_factory=lambda: [])
 
     def __post_init__(self):
@@ -59,7 +60,6 @@ class Node:
                     f'"{param}" is an invalid argument. Has to be either '
                     f'"fixed" or "free" or a real number.'
                 )
-            # TODO: is this correct?
             elif param == 0:
                 raise ValueError(
                     'Please set u, w or phi to "free" instead of zero.'
@@ -71,10 +71,9 @@ class Node:
             return np.array([[0], [0], [0]])
         return np.sum([d.vector for d in self.displacements], axis=0)
 
-    # TODO: name
     # TODO: test
     @cached_property
-    def el_node(self):
+    def elastic_support(self):
         u = 0 if isinstance(self.u, str) else self.u
         w = 0 if isinstance(self.w, str) else self.w
         phi = 0 if isinstance(self.phi, str) else self.phi
@@ -87,7 +86,7 @@ class Node:
         return self.load.rotate(self.rotation)
 
 
-# Warum area validierung nicht notwendig?
+# TODO: test
 @dataclass(eq=False)
 class CrossSection:
 
@@ -104,6 +103,8 @@ class CrossSection:
             raise ValueError('height has to be greater than zero.')
         if self.width <= 0:
             raise ValueError('width has to be greater than zero.')
+        if not 0 <= self.area <= self.height * self.width:
+            raise ValueError('area has to be greater than zero.')
         if self.shear_cor <= 0:
             raise ValueError('shear_cor has to be greater than zero.')
 
@@ -192,7 +193,7 @@ class BarTemp:
 
 
 @dataclass(eq=False)
-class BarPointLoad(NodeLoad):
+class BarPointLoad(PointLoad):
     # TODO: Documentation for variable position
     position: float = 0.0
 
@@ -200,7 +201,7 @@ class BarPointLoad(NodeLoad):
         if not (0 <= self.position <= 1):
             raise ValueError("position must be between 0 and 1")
 
-    # warum nur 0 und 1 wichtig? weil stab geteilt wird?
+    # TODO: test
     def rotate_load(self):
         vec = transformation_matrix(self.rotation) @ self.vector
         if self.position == 0:
@@ -212,7 +213,7 @@ class BarPointLoad(NodeLoad):
 
 
 # muss dringend zusammengefasst werden :$
-# TODO: find solution for factor in EI, EA, GA_s
+# TODO: find solution for factor in EI, EA, GA_s, B_s
 @dataclass(eq=False)
 class Bar:
 
@@ -233,7 +234,7 @@ class Bar:
     temp: BarTemp = field(default_factory=lambda: BarTemp(0, 0))
     point_loads: list[BarPointLoad] = field(default_factory=lambda: [])
 
-    # TODO: other validations?
+    # TODO: other validations? validate hinges
     def __post_init__(self):
         if self.node_i.same_location(self.node_j):
             raise ValueError(
@@ -249,7 +250,6 @@ class Bar:
         if len(self.deformations) == 0:
             raise ValueError('There has to be at least one deformation.')
 
-    # TODO: Parameter sinnvoll? Wird es noch andere Rotationsmatrizen geben?
     def transformation_matrix(self, to_node_coord: bool = True):
         alpha_i = alpha_j = self.inclination
         if to_node_coord:
@@ -289,7 +289,10 @@ class Bar:
 
     @cached_property
     def modified_flexural_stiffness(self):
-        return self.EI * (1 + self.f0_load_first_order[0][0] / self.GA_s)
+        if 'shear' in self.deformations:
+            return self.EI * (1 + self.f0_load_first_order[0][0] / self.GA_s)
+        else:
+            return self.EI
 
     B_s = property(lambda self: self.modified_flexural_stiffness)
 
@@ -312,7 +315,6 @@ class Bar:
     def phi(self):
         return 12 * self.EI / (self.GA_s * self.length ** 2)
 
-    # TODO: name?
     @cached_property
     def characteristic_number(self):
         f0_x_i = self.f0_load_first_order[0][0]
@@ -336,55 +338,20 @@ class Bar:
 
     @cached_property
     def f0_load_first_order(self):
-        p_vec = self.line_load
-
-        f0_m_i = -(
-                self.length ** 2 * (
-                    30 * self.EI * p_vec[4][0] + 30 * self.EI * p_vec[1][0] +
-                    2 * self.GA_s * self.length ** 2 * p_vec[4][0] +
-                    3 * self.GA_s * self.length ** 2 * p_vec[1][0]
-                )
-        ) / (
-                720 * self.EI + 60 * self.GA_s * self.length ** 2
-        )
-
-        f0_m_j = -(
-                self.length ** 2 * (
-                    30 * self.EI * p_vec[4][0] + 30 * self.EI * p_vec[1][0] +
-                    3 * self.GA_s * self.length ** 2 * p_vec[4][0] +
-                    2 * self.GA_s * self.length ** 2 * p_vec[1][0]
-                )
-        ) / (
-                720 * self.EI + 60 * self.GA_s * self.length ** 2
-        )
-
-        f0_z_i = (
-                self.length * (
-                      40 * self.EI * p_vec[4][0] + 80 * self.EI * p_vec[1][0] +
-                      3 * self.GA_s * self.length ** 2 * p_vec[4][0] +
-                      7 * self.GA_s * self.length ** 2 * p_vec[1][0]
-                )
-        ) / (
-                240 * self.EI + 20 * self.GA_s * self.length ** 2
-        )
-        f0_z_j = -(
-                self.length * (
-                    80 * self.EI * p_vec[4][0] + 40 * self.EI * p_vec[1][0] +
-                    7 * self.GA_s * self.length ** 2 * p_vec[4][0] +
-                    3 * self.GA_s * self.length ** 2 * p_vec[1][0]
-                )
-        ) / (
-                240 * self.EI + 20 * self.GA_s * self.length ** 2
-        )
-
-        return np.array([
-                [-(7 * p_vec[0][0] + 3 * p_vec[3][0]) * self.length / 20],
-                [-f0_z_i],
-                [-f0_m_i],
-                [-(3 * p_vec[0][0] + 7 * p_vec[3][0]) * self.length / 20],
-                [f0_z_j],
-                [f0_m_j]
-        ])
+        p, const = self.line_load, self.GA_s * self.length ** 2
+        factors = np.array([
+            [7, 3, 0, 0],
+            [0, 0, 40 * self.EI + 3 * const, 80 * self.EI + 7 * const],
+            [0, 0, 30 * self.EI + 2 * const, 30 * self.EI + 3 * const],
+        ]) * np.array([
+            [1], [1 / (12 * self.EI + const)],
+            [self.length / (36 * self.EI + 3 * const)]
+        ]) * self.length / 20
+        f0 = np.vstack((
+            factors @ np.array([[p[0][0]], [p[3][0]], [p[4][0]], [p[1][0]]]),
+            factors @ np.array([[p[3][0]], [p[0][0]], [p[1][0]], [p[4][0]]]),
+        ))
+        return f0 * np.array([[-1], [-1], [1], [-1], [1], [-1]])
 
     @cached_property
     def f0_point_load(self):
@@ -596,8 +563,6 @@ class Bar:
                  [f0_m_j]])
         )
 
-    # TODO: Ludwigs Kriterium verwenden, wann man die analytische Lösung
-    # TODO: verwenden kann?
     @cached_property
     def _apply_second_order_analytic_solution(self):
         f0_x_i = self.f0_load_first_order[0][0]
@@ -695,6 +660,8 @@ class Bar:
         if approach == 'first' and approach is not None:
             raise ValueError('In first order the approach has to be None.')
 
+    # TODO: Ludwigs Kriterium verwenden, wann man die analytische Lösung
+    # TODO: verwenden kann?
     def f0(
         self, order: Literal['first', 'second'] = 'first',
         approach: Literal['analytic', 'taylor', 'p_delta'] | None = None,
@@ -720,13 +687,16 @@ class Bar:
             for i, value in enumerate(self.hinge):
                 if value:
                     f0 = f0 - 1 / k[i, i] * k[:, i:i + 1] * f0[i, :]
+                    k = k - 1 / k[i, i] * k[:, i:i + 1] @ np.transpose(
+                        k[:, i:i + 1]
+                    )
 
         if to_node_coord:
             f0 = self.transformation_matrix() @ f0
 
         return f0
 
-    # analytic + taylor und shear not in deform => Error?
+    # TODO: analytic + taylor und shear not in deform => Error?
     def stiffness_matrix(
         self, order: Literal['first', 'second'] = 'first',
         approach: Literal['analytic', 'taylor', 'p_delta'] | None = None,
@@ -905,9 +875,10 @@ class System:
                              * bar.length)
 
                     if point_load:
-                        new_node_load = NodeLoad(point_load.x, point_load.z,
-                                                 point_load.phi,
-                                                 point_load.rotation)
+                        new_node_load = NodePointLoad(
+                            point_load.x, point_load.z, point_load.phi,
+                            point_load.rotation
+                        )
                         new_node_j = Node(new_x, new_z, load=new_node_load)
                     else:
                         new_node_j = Node(new_x, new_z)

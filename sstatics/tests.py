@@ -6,7 +6,7 @@ import numpy as np
 from numpy.testing import assert_allclose as numpy_allclose
 
 from sstatics.core import (
-    BarLineLoad, BarTemp, Node, NodeDisplacement, NodeLoad
+    BarLineLoad, BarTemp, Node, NodeDisplacement, NodePointLoad
 )
 
 
@@ -20,28 +20,28 @@ class TestNodeDisplacement(TestCase):
         d = NodeDisplacement(1, 2, 0.5)
         assert_allclose(
             d.vector, np.array([[1], [2], [0.5]]),
-            err_msg='The vectorized from of a node displacement must equal '
+            err_msg='The vectorized form of a node displacement must equal '
             'the 3x1 vector [[x], [z], [phi]].'
         )
 
 
-class TestNodeLoad(TestCase):
+class TestNodePointLoad(TestCase):
 
     def test_rotate(self):
-        load = NodeLoad(1, 2, 0.5)
+        load = NodePointLoad(1, 2, 0.5)
         for rotation in (0, 2 * np.pi, 4 * np.pi):
             assert_allclose(
                 load.rotate(rotation), load.vector,
                 err_msg='Rotations by multiples of 2 * pi must equal the '
                 'original vector.'
             )
-        load = NodeLoad(1, 2, 0.5, rotation=0.3)
+        load = NodePointLoad(1, 2, 0.5, rotation=0.3)
         assert_allclose(
             load.rotate(0.3), load.vector,
             err_msg='Rotations by the same angle a load was instantiated with '
                     'must cancel out.'
         )
-        load = NodeLoad(1, 2, 0.5, rotation=2 * np.pi)
+        load = NodePointLoad(1, 2, 0.5, rotation=2 * np.pi)
         assert_allclose(
             load.rotate(np.pi), np.array([[-1], [-2], [0.5]])
         )
@@ -83,11 +83,11 @@ class TestNode(TestCase):
         )
 
     def test_rotate_load(self):
-        n = Node(0, 0, rotation=np.pi / 2, load=NodeLoad(1, 2, 0.5))
+        n = Node(0, 0, rotation=np.pi / 2, load=NodePointLoad(1, 2, 0.5))
         assert_allclose(
             n.rotate_load(), np.array([[-2], [1], [0.5]])
         )
-        n = Node(0, 0, rotation=0.5, load=NodeLoad(1, 2, 0.5, rotation=1))
+        n = Node(0, 0, rotation=0.5, load=NodePointLoad(1, 2, 0.5, rotation=1))
         assert_allclose(
             n.rotate_load(), np.array([[1.83643364], [1.27573959], [0.5]])
         )
