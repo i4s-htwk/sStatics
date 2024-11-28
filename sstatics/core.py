@@ -297,7 +297,7 @@ class Bar:
     @cached_property
     def modified_flexural_stiffness(self):
         if 'shear' in self.deformations:
-            return self.EI * (1 + self.f0_load_first_order[0][0] / self.GA_s)
+            return self.EI * (1 + self.f0_first_order[0][0] / self.GA_s)
         else:
             return self.EI
 
@@ -324,7 +324,7 @@ class Bar:
 
     @cached_property
     def characteristic_number(self):
-        f0_x_i = self.f0_load_first_order[0][0]
+        f0_x_i = self.f0_first_order[0][0]
         return np.sqrt(abs(f0_x_i) / self.B_s) * self.length
 
     @cached_property
@@ -342,23 +342,6 @@ class Bar:
         return np.sum(
             [load.rotate_load() for load in self.point_loads], axis=0
         )
-
-    @cached_property
-    def f0_load_first_order(self):
-        p, const = self.line_load, self.GA_s * self.length ** 2
-        factors = np.array([
-            [7, 3, 0, 0],
-            [0, 0, 40 * self.EI + 3 * const, 80 * self.EI + 7 * const],
-            [0, 0, 30 * self.EI + 2 * const, 30 * self.EI + 3 * const],
-        ]) * np.array([
-            [1], [1 / (12 * self.EI + const)],
-            [self.length / (36 * self.EI + 3 * const)]
-        ]) * self.length / 20
-        f0 = np.vstack((
-            factors @ np.array([[p[0][0]], [p[3][0]], [p[4][0]], [p[1][0]]]),
-            factors @ np.array([[p[3][0]], [p[0][0]], [p[1][0]], [p[4][0]]]),
-        ))
-        return f0 * np.array([[-1], [-1], [1], [-1], [1], [-1]])
 
     @cached_property
     def f0_point_load(self):
@@ -385,20 +368,26 @@ class Bar:
         return k @ trans_m @ f0_displacement
 
     @cached_property
-    def shear_force(self):
-        return np.array([
-            [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
-            [0, 1, 1, 0, 1, 1],
-            [0, 1, 4 + self.phi, 0, 1, 2 - self.phi],
-            [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
-            [0, 1, 1, 0, 1, 1],
-            [0, 1, 2 - self.phi, 0, 1, 4 + self.phi],
-        ]) / (1 + self.phi)
+    def f0_first_order(self):
+        p, const = self.line_load, self.GA_s * self.length ** 2
+        factors = np.array([
+            [7, 3, 0, 0],
+            [0, 0, 40 * self.EI + 3 * const, 80 * self.EI + 7 * const],
+            [0, 0, 30 * self.EI + 2 * const, 30 * self.EI + 3 * const],
+        ]) * np.array([
+            [1], [1 / (12 * self.EI + const)],
+            [self.length / (36 * self.EI + 3 * const)]
+        ]) * self.length / 20
+        f0 = np.vstack((
+            factors @ np.array([[p[0][0]], [p[3][0]], [p[4][0]], [p[1][0]]]),
+            factors @ np.array([[p[3][0]], [p[0][0]], [p[1][0]], [p[4][0]]]),
+        ))
+        return f0 * np.array([[-1], [-1], [1], [-1], [1], [-1]])
 
     @cached_property
-    def _f0_load_second_order_analytic(self):
+    def f0_second_order_analytic(self):
         p_vec = self.line_load
-        f0_x_i = self.f0_load_first_order[0][0]
+        f0_x_i = self.f0_first_order[0][0]
         mu = self.characteristic_number
         B_s = self.B_s
         p_i, p_j = p_vec[1][0], p_vec[4][0]
@@ -512,7 +501,7 @@ class Bar:
         )
 
     @cached_property
-    def _f0_load_second_order_taylor(self):
+    def f0_second_order_taylor(self):
         p_vec = self.line_load
         B_s = self.B_s
         p_i, p_j = p_vec[1][0], p_vec[4][0]
@@ -571,8 +560,19 @@ class Bar:
         )
 
     @cached_property
-    def _apply_second_order_analytic_solution(self):
-        f0_x_i = self.f0_load_first_order[0][0]
+    def stiffness_shear_force(self):
+        return np.array([
+            [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
+            [0, 1, 1, 0, 1, 1],
+            [0, 1, 4 + self.phi, 0, 1, 2 - self.phi],
+            [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
+            [0, 1, 1, 0, 1, 1],
+            [0, 1, 2 - self.phi, 0, 1, 4 + self.phi],
+        ]) / (1 + self.phi)
+
+    @cached_property
+    def stiffness_second_order_analytic(self):
+        f0_x_i = self.f0_first_order[0][0]
         mu = self.characteristic_number
         B_s = self.B_s
         factor = B_s / (self.GA_s * self.length ** 2)
@@ -610,8 +610,8 @@ class Bar:
                          [0, f_2, f_4, 0, f_2, f_3]])
 
     @cached_property
-    def _apply_second_order_approximate_by_taylor(self):
-        f0_x_i = self.f0_load_first_order[0][0]
+    def stiffness_second_order_taylor(self):
+        f0_x_i = self.f0_first_order[0][0]
         B_s = self.B_s
         factor = B_s / (self.GA_s * self.length ** 2)
         denominator_common = factor + 1 / 12
@@ -644,8 +644,8 @@ class Bar:
                          [0, f_2, f_4, 0, f_2, f_3]])
 
     @cached_property
-    def second_order_p_delta(self):
-        c = self.f0_load_first_order[0][0] / self.length
+    def stiffness_second_order_p_delta(self):
+        c = self.f0_first_order[0][0] / self.length
         return np.array([
             [0, 0, 0, 0, 0, 0],
             [0, c, 0, 0, -c, 0],
@@ -677,14 +677,14 @@ class Bar:
         self._validate_order_approach(order, approach)
 
         if order == 'first':
-            f0 = self.f0_load_first_order
+            f0 = self.f0_first_order
         else:
             if approach == 'analytic':
-                f0 = self._f0_load_second_order_analytic
+                f0 = self.f0_second_order_analytic
             elif approach == 'taylor':
-                f0 = self._f0_load_second_order_taylor
+                f0 = self.f0_second_order_taylor
             else:
-                f0 = self.f0_load_first_order
+                f0 = self.f0_first_order
         f0 += self.f0_temp + self.f0_displacement + self.f0_point_load
 
         if hinge_modification:
@@ -724,17 +724,18 @@ class Bar:
 
         if order == 'first':
             if 'shear' in self.deformations:
-                k @= self.shear_force
+                k @= self.stiffness_shear_force
         else:
             if approach == 'analytic':
-                k @= self._apply_second_order_analytic_solution
+                k @= self.stiffness_second_order_analytic
             elif approach == 'taylor':
-                k @= self._apply_second_order_approximate_by_taylor
+                k @= self.stiffness_second_order_taylor
             else:
                 if 'shear' in self.deformations:
-                    k = k @ self.shear_force + self.second_order_p_delta
+                    k @= self.stiffness_shear_force
+                    k += self.stiffness_second_order_p_delta
                 else:
-                    k += self.second_order_p_delta
+                    k += self.stiffness_second_order_p_delta
 
         if hinge_modification:
             for i, value in enumerate(self.hinge):
