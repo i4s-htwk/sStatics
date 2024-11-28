@@ -40,7 +40,6 @@ class PointLoad(DegreesOfFreedom):
 NodePointLoad = PointLoad
 
 
-# TODO: load -> loads
 @dataclass(eq=False)
 class Node:
 
@@ -50,8 +49,8 @@ class Node:
     u: Literal['free', 'fixed'] | float = 'free'
     w: Literal['free', 'fixed'] | float = 'free'
     phi: Literal['free', 'fixed'] | float = 'free'
-    load: NodePointLoad = field(default_factory=lambda: NodePointLoad(0, 0, 0))
     displacements: list[NodeDisplacement] = field(default_factory=lambda: [])
+    loads: list[NodePointLoad] = field(default_factory=lambda: [])
 
     def __post_init__(self):
         for param in (self.u, self.w, self.phi):
@@ -71,6 +70,12 @@ class Node:
             return np.array([[0], [0], [0]])
         return np.sum([d.vector for d in self.displacements], axis=0)
 
+    @cached_property
+    def load(self):
+        if len(self.loads) == 0:
+            return np.array([[0], [0], [0]])
+        return np.sum([load.vector for load in self.loads], axis=0)
+
     # TODO: test
     @cached_property
     def elastic_support(self):
@@ -83,7 +88,9 @@ class Node:
         return self.x == other.x and self.z == other.z
 
     def rotate_load(self):
-        return self.load.rotate(self.rotation)
+        return np.sum(
+            [load.rotate(self.rotation) for load in self.loads], axis=0
+        )
 
 
 # TODO: test
@@ -202,6 +209,7 @@ class BarPointLoad(PointLoad):
             raise ValueError("position must be between 0 and 1")
 
     # TODO: test
+    # TODO: this should overwrite rotate method from PointLoad
     def rotate_load(self):
         vec = transformation_matrix(self.rotation) @ self.vector
         if self.position == 0:
@@ -879,7 +887,7 @@ class System:
                             point_load.x, point_load.z, point_load.phi,
                             point_load.rotation
                         )
-                        new_node_j = Node(new_x, new_z, load=new_node_load)
+                        new_node_j = Node(new_x, new_z, loads=[new_node_load])
                     else:
                         new_node_j = Node(new_x, new_z)
 

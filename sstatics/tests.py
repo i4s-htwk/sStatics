@@ -70,6 +70,23 @@ class TestNode(TestCase):
             'displacements.'
         )
 
+    def test_load(self):
+        n = Node(0, 0)
+        assert_allclose(
+            n.load, np.array([[0], [0], [0]]),
+            err_msg='If a node is initialized with no node point loads, then '
+            'the node load must be a 3x1 zero vector.'
+        )
+        loads = [
+            NodePointLoad(1, 1, 1), NodePointLoad(-3.5, 8, -0.2),
+            NodePointLoad(3, 11, 0.65),
+        ]
+        n = Node(0, 0, loads=loads)
+        assert_allclose(
+            n.load, np.array([[0.5], [20], [1.45]]),
+            err_msg='The node load must equal the sum of all node point loads.'
+        )
+
     def test_same_location(self):
         n1, n2 = Node(1, 2), Node(2, 2)
         self.assertFalse(
@@ -83,13 +100,21 @@ class TestNode(TestCase):
         )
 
     def test_rotate_load(self):
-        n = Node(0, 0, rotation=np.pi / 2, load=NodePointLoad(1, 2, 0.5))
+        loads = [
+            NodePointLoad(1, 1, 1), NodePointLoad(-3.5, 8, -0.2),
+            NodePointLoad(3, 11, 0.65),
+        ]
+        n = Node(0, 0, rotation=np.pi / 2, loads=loads)
         assert_allclose(
-            n.rotate_load(), np.array([[-2], [1], [0.5]])
+            n.rotate_load(), np.array([[-20], [0.5], [1.45]])
         )
-        n = Node(0, 0, rotation=0.5, load=NodePointLoad(1, 2, 0.5, rotation=1))
+        loads = [
+            NodePointLoad(1, 1, 1, rotation=0.3), NodePointLoad(-3.5, 8, -0.2),
+            NodePointLoad(3, 11, 0.65, rotation=np.pi),
+        ]
+        n = Node(0, 0, rotation=0.5, loads=loads)
         assert_allclose(
-            n.rotate_load(), np.array([[1.83643364], [1.27573959], [0.5]])
+            n.rotate_load(), np.array([[-3.48461279], [-4.57027778], [1.45]])
         )
 
 
