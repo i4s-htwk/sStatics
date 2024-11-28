@@ -87,6 +87,18 @@ class TestNode(TestCase):
             err_msg='The node load must equal the sum of all node point loads.'
         )
 
+    def test_elastic_support(self):
+        n = Node(0, 0)
+        assert_allclose(
+            n.elastic_support, np.diag([0, 0, 0]),
+            err_msg='If u, w and phi of a node are initialized with keywords, '
+            'then the elastic support must equal a 3x3 zero matrix.'
+        )
+        n = Node(0, 0, u='free', w=2.3, phi='fixed')
+        assert_allclose(n.elastic_support, np.diag([0, 2.3, 0]))
+        n = Node(0, 0, u=2.4, w=-0.5, phi=4)
+        assert_allclose(n.elastic_support, np.diag([2.4, -0.5, 4]))
+
     def test_same_location(self):
         n1, n2 = Node(1, 2), Node(2, 2)
         self.assertFalse(

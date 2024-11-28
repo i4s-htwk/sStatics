@@ -16,6 +16,7 @@ def transformation_matrix(alpha: float):
 
 @dataclass(eq=False)
 class DegreesOfFreedom:
+
     x: float
     z: float
     phi: float
@@ -76,7 +77,6 @@ class Node:
             return np.array([[0], [0], [0]])
         return np.sum([load.vector for load in self.loads], axis=0)
 
-    # TODO: test
     @cached_property
     def elastic_support(self):
         u = 0 if isinstance(self.u, str) else self.u
