@@ -6,7 +6,7 @@ import numpy as np
 from numpy.testing import assert_allclose as numpy_allclose
 
 from sstatics.core import (
-    BarLineLoad, BarTemp, Node, NodeDisplacement, NodePointLoad
+    BarLineLoad, BarTemp, CrossSection, Node, NodeDisplacement, NodePointLoad
 )
 
 
@@ -116,6 +116,16 @@ class TestNode(TestCase):
         assert_allclose(
             n.rotate_load(), np.array([[-3.48461279], [-4.57027778], [1.45]])
         )
+
+
+class TestCrossSection(TestCase):
+
+    def test_area_validation(self):
+        with self.assertRaises(
+            ValueError, msg='Cross sections with an area greater than '
+            'width*height must raise a ValueError.'
+        ):
+            CrossSection(1, 30, 5, 5, 3)
 
 
 class TestBarLineLoad(TestCase):

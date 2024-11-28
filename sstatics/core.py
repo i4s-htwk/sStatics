@@ -93,7 +93,6 @@ class Node:
         )
 
 
-# TODO: test
 @dataclass(eq=False)
 class CrossSection:
 
