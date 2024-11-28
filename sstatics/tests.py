@@ -42,9 +42,7 @@ class TestNodePointLoad(TestCase):
                     'must cancel out.'
         )
         load = NodePointLoad(1, 2, 0.5, rotation=2 * np.pi)
-        assert_allclose(
-            load.rotate(np.pi), np.array([[-1], [-2], [0.5]])
-        )
+        assert_allclose(load.rotate(np.pi), np.array([[-1], [-2], [0.5]]))
         assert_allclose(
             load.rotate(0.3), np.array([[0.36429608], [2.20619318], [0.5]])
         )
@@ -117,9 +115,7 @@ class TestNode(TestCase):
             NodePointLoad(3, 11, 0.65),
         ]
         n = Node(0, 0, rotation=np.pi / 2, loads=loads)
-        assert_allclose(
-            n.rotate_load(), np.array([[-20], [0.5], [1.45]])
-        )
+        assert_allclose(n.rotate_load(), np.array([[-20], [0.5], [1.45]]))
         loads = [
             NodePointLoad(1, 1, 1, rotation=0.3), NodePointLoad(-3.5, 8, -0.2),
             NodePointLoad(3, 11, 0.65, rotation=np.pi),
