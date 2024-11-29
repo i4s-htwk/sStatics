@@ -57,10 +57,10 @@ class TestNode(TestCase):
             err_msg='If a node is initialized with no displacements, then the '
             'node displacement must be a 3x1 zero vector.'
         )
-        displacements = [
+        displacements = (
             NodeDisplacement(1, 1, 1), NodeDisplacement(2, 10, 0.74),
             NodeDisplacement(-4, 5, -0.3)
-        ]
+        )
         n = Node(0, 0, displacements=displacements)
         assert_allclose(
             n.displacement, np.array([[-1], [16], [1.44]]),
@@ -75,10 +75,10 @@ class TestNode(TestCase):
             err_msg='If a node is initialized with no node point loads, then '
             'the node load must be a 3x1 zero vector.'
         )
-        loads = [
+        loads = (
             NodePointLoad(1, 1, 1), NodePointLoad(-3.5, 8, -0.2),
             NodePointLoad(3, 11, 0.65),
-        ]
+        )
         n = Node(0, 0, loads=loads)
         assert_allclose(
             n.load, np.array([[0.5], [20], [1.45]]),
@@ -110,16 +110,16 @@ class TestNode(TestCase):
         )
 
     def test_rotate_load(self):
-        loads = [
+        loads = (
             NodePointLoad(1, 1, 1), NodePointLoad(-3.5, 8, -0.2),
             NodePointLoad(3, 11, 0.65),
-        ]
+        )
         n = Node(0, 0, rotation=np.pi / 2, loads=loads)
         assert_allclose(n.rotate_load(), np.array([[-20], [0.5], [1.45]]))
-        loads = [
+        loads = (
             NodePointLoad(1, 1, 1, rotation=0.3), NodePointLoad(-3.5, 8, -0.2),
             NodePointLoad(3, 11, 0.65, rotation=np.pi),
-        ]
+        )
         n = Node(0, 0, rotation=0.5, loads=loads)
         assert_allclose(
             n.rotate_load(), np.array([[-3.48461279], [-4.57027778], [1.45]])
