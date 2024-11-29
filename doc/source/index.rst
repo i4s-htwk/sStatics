@@ -1,17 +1,14 @@
-.. sStatics documentation master file, created by
-   sphinx-quickstart on Thu Nov 28 16:00:09 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
 
-sStatics documentation
-======================
+========
+sStatics
+========
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
+TODO
 
+Contents
+========
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+    :maxdepth: 1
 
+    api

@@ -15,8 +15,18 @@ html_logo = 'sStatics_Logo.png'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = []
+extensions = [
+    'numpydoc',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.intersphinx',
+]
 exclude_patterns = []
+
+autodoc_typehints = 'none'
+numpydoc_show_class_members = False
+intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
+
 
 
 # -- Options for HTML output -------------------------------------------------
