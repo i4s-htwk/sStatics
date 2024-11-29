@@ -1,7 +1,8 @@
 
 from sstatics.core import (
-    Bar, BarLineLoad, BarPointLoad, BarTemp, CrossSection, Material, Model,
-    Node, NodeDisplacement, NodePointLoad, System
+    Bar, BarLineLoad, BarPointLoad, BarTemp, CrossSection, DegreesOfFreedom,
+    Material, Model, Node, NodeDisplacement, NodePointLoad, PointLoad, System,
+    transformation_matrix
 )
 
 __all__ = [
@@ -10,10 +11,13 @@ __all__ = [
     'BarPointLoad',
     'BarTemp',
     'CrossSection',
+    'DegreesOfFreedom',
     'Material',
     'Model',
     'Node',
     'NodeDisplacement',
     'NodePointLoad',
+    'PointLoad',
     'System',
+    'transformation_matrix',
 ]
