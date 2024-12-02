@@ -3,4 +3,4 @@
 API Reference
 =============
 
-.. autoclass:: sstatics.Node
+.. automodule:: sstatics.core

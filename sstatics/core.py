@@ -7,6 +7,41 @@ import numpy as np
 
 
 def transformation_matrix(alpha: float):
+    r"""Create a 3x3 rotation matrix.
+
+    Parameters
+    ----------
+    alpha : :any:`float`
+        Rotation angle.
+
+    Returns
+    -------
+    :any:`numpy.array`
+        A 3x3 matrix for rotating 3x1 vectors.
+
+    Notes
+    -----
+    The resulting matrix has the form
+
+    .. math::
+        \left(\begin{array}{c}
+        \cos(\alpha) & \sin(\alpha) & 0 \\
+        -\sin(\alpha) & \cos(\alpha) & 0 \\
+        0 & 0 & 1
+        \end{array}\right).
+
+    Examples
+    --------
+    >>> import numpy
+    >>> import sstatics
+    >>> m = sstatics.transformation_matrix(numpy.pi)
+    >>> m
+    array([[-1, 0, 0],
+           [0, -1, 0],
+           [0, 0, 1]])
+    >>> m @ numpy.array([[1], [2], [3]])
+    array([[-1], [-2], [3]])
+    """
     return np.array([
         [np.cos(alpha), np.sin(alpha), 0],
         [-np.sin(alpha), np.cos(alpha), 0],
@@ -16,6 +51,7 @@ def transformation_matrix(alpha: float):
 
 @dataclass(eq=False)
 class DegreesOfFreedom:
+    """ TODO """
 
     x: float
     z: float
@@ -23,26 +59,58 @@ class DegreesOfFreedom:
 
     @cached_property
     def vector(self):
+        """ TODO """
         return np.array([[self.x], [self.z], [self.phi]])
 
 
 NodeDisplacement = DegreesOfFreedom
+""" Alias of :py:class:`DegreesOfFreedom` to make clear that this class has
+the purpose to shift nodes. """
 
 
 @dataclass(eq=False)
 class PointLoad(DegreesOfFreedom):
+    """ TODO """
 
     rotation: float = 0.0
 
     def rotate(self, rotation: float):
+        """ TODO """
         return transformation_matrix(self.rotation - rotation) @ self.vector
 
 
 NodePointLoad = PointLoad
+""" Alias of :py:class:`PointLoad` to make the use case of this class more
+clear. """
 
 
 @dataclass(eq=False)
 class Node:
+    """Create a node for a statical system.
+
+    Parameters
+    ----------
+    x, z : :any:`float`
+        description
+    rotation : :any:`float`, default=0.0
+        description
+    u, w, phi : {'free', 'fixed'} or :any:`float`, default='free'
+        Specify the fixtures of a node. Real numbers refer to nib widths.
+    displacements : :any:`tuple`, default=()
+        description
+    loads : :any:`tuple`, default=()
+        description
+
+    Raises
+    ------
+    ValueError
+        :py:attr:`u`, :py:attr:`w` and :py:attr:`phi` have to be either
+        :python:`'free'`, :python:`'fixed'` or a real number.
+    ValueError
+        :py:attr:`u`, :py:attr:`w` or :py:attr:`phi` are set to zero. A spring
+        with a nib width of zero behaves like a free fixture and therefore the
+        value need to be set to :python:`'free'`.
+    """
 
     x: float
     z: float
@@ -67,27 +135,130 @@ class Node:
 
     @cached_property
     def displacement(self):
+        """The overall node displacement as a 3x1 vector.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            Sum of all displacements specified in :py:attr:`displacements`.
+
+        See Also
+        --------
+        :py:class:`NodeDisplacement`
+
+        Notes
+        -----
+            If no displacements were specified, then a 3x1 zero vector is
+            returned.
+
+        Examples
+        --------
+            >>> from sstatics import Node
+            >>> Node(1, 2).displacement
+            array([[0], [0], [0]])
+
+            >>> from sstatics import NodeDisplacement
+            >>> displacements = (NodeDisplacement(1.5, 2, 0.5),
+            >>>                  NodeDisplacement(-2, 3, -0.3))
+            >>> Node(-1, 3, displacements=displacements).displacement
+            array([[-0.5], [5], [0.2]])
+        """
         if len(self.displacements) == 0:
             return np.array([[0], [0], [0]])
         return np.sum([d.vector for d in self.displacements], axis=0)
 
     @cached_property
     def load(self):
+        """The overall node load as a 3x1 vector.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            Sum of all loads specified in :py:attr:`loads`.
+
+        See Also
+        --------
+        :py:class:`NodePointLoad`
+
+        Notes
+        -----
+            If no loads were specified, then a 3x1 zero vector is returned.
+
+        Examples
+        --------
+            >>> from sstatics import Node
+            >>> Node(1, 2).load
+            array([[0], [0], [0]])
+
+            >>> from sstatics import NodePointLoad
+            >>> loads = (NodePointLoad(2.5, 3, 1.5), NodePointLoad(3, -5, 0.3))
+            >>> Node(-1, 3, loads=loads).load
+            array([[5.5], [-2], [1.8]])
+        """
         if len(self.loads) == 0:
             return np.array([[0], [0], [0]])
         return np.sum([load.vector for load in self.loads], axis=0)
 
     @cached_property
     def elastic_support(self):
+        """ TODO """
         u = 0 if isinstance(self.u, str) else self.u
         w = 0 if isinstance(self.w, str) else self.w
         phi = 0 if isinstance(self.phi, str) else self.phi
         return np.diag([u, w, phi])
 
     def same_location(self, other):
+        """Determine if two nodes have exactly the same :py:attr:`x`- and
+        :py:attr:`z`-coordinates.
+
+        Parameters
+        ----------
+        other : :any:`Node`
+            Second node to compare coordinates to.
+
+        Returns
+        -------
+        :any:`bool`
+            :python:`True` if the nodes have exactly the same coordinates,
+            :python:`False` otherwise.
+
+        Examples
+        --------
+            >>> from sstatics import Node
+            >>> node = Node(1, 2)
+            >>> node.same_location(Node(1, 2))
+            True
+            >>> node.same_location(Node(1, -2))
+            False
+        """
         return self.x == other.x and self.z == other.z
 
     def rotate_load(self):
+        r"""Rotate the node loads.
+
+        Every load from :py:attr:`loads` is rotated by the node's rotation by
+        calling :any:`PointLoad.rotate`. So the resulting rotation angle is
+        calculated by :python:`alpha = load.rotation - node.rotation`. Thus
+        each rotated load is computed by
+
+        .. math::
+            \left(\begin{array}{c}
+            \cos(\alpha) & \sin(\alpha) & 0 \\
+            -\sin(\alpha) & \cos(\alpha) & 0 \\
+            0 & 0 & 1
+            \end{array}\right) \cdot
+            \left(\begin{array}{c} x \\ z \\ \varphi \end{array}\right)
+
+        and summed up afterward.
+
+        Examples
+        --------
+            >>> from sstatics import Node, NodePointLoad
+            >>> import numpy
+            >>> load = NodePointLoad(1, 2, 0.5, rotation=2 * numpy.pi)
+            >>> Node(6, 5, rotation=numpy.pi, loads=(load,)).rotate_load()
+            array([[-1], [-2], [0.5]])
+        """
         return np.sum(
             [load.rotate(self.rotation) for load in self.loads], axis=0
         )
@@ -95,6 +266,7 @@ class Node:
 
 @dataclass(eq=False)
 class CrossSection:
+    """ TODO """
 
     mom_of_int: float
     area: float
@@ -117,6 +289,7 @@ class CrossSection:
 
 @dataclass(eq=False)
 class Material:
+    """ TODO """
 
     young_mod: float
     poisson: float
@@ -136,6 +309,7 @@ class Material:
 
 @dataclass(eq=False)
 class BarLineLoad:
+    """ TODO """
 
     pi: float
     pj: float
@@ -153,12 +327,14 @@ class BarLineLoad:
 
     @cached_property
     def vector(self):
+        """ TODO """
         vec = np.zeros((6, 1))
         vec[0 if self.direction == 'x' else 1] = self.pi
         vec[3 if self.direction == 'x' else 4] = self.pj
         return vec
 
     def rotate(self, rotation: float):
+        """ TODO """
         if self.coord == 'bar':
             return self.vector
         sin, cos = np.sin(rotation), np.cos(rotation)
@@ -173,6 +349,7 @@ class BarLineLoad:
 
 @dataclass(eq=False)
 class BarTemp:
+    """ TODO """
 
     temp_o: float
     temp_u: float
@@ -191,15 +368,19 @@ class BarTemp:
 
     @cached_property
     def temp_s(self):
+        """ TODO """
         return (self.temp_o + self.temp_u) / 2
 
     @cached_property
     def temp_delta(self):
+        """ TODO """
         return self.temp_u - self.temp_o
 
 
 @dataclass(eq=False)
 class BarPointLoad(PointLoad):
+    """ TODO """
+
     # TODO: Documentation for variable position
     position: float = 0.0
 
@@ -210,6 +391,7 @@ class BarPointLoad(PointLoad):
     # TODO: test
     # TODO: this should overwrite rotate method from PointLoad
     def rotate_load(self):
+        """ TODO """
         vec = transformation_matrix(self.rotation) @ self.vector
         if self.position == 0:
             return np.vstack((vec, np.zeros((3, 1))))
@@ -223,6 +405,7 @@ class BarPointLoad(PointLoad):
 # TODO: find solution for factor in EI, EA, GA_s, B_s
 @dataclass(eq=False)
 class Bar:
+    """ TODO """
 
     node_i: Node
     node_j: Node
@@ -258,6 +441,7 @@ class Bar:
             raise ValueError('There has to be at least one deformation.')
 
     def transformation_matrix(self, to_node_coord: bool = True):
+        """ TODO """
         alpha_i = alpha_j = self.inclination
         if to_node_coord:
             alpha_i -= self.node_i.rotation
@@ -269,12 +453,14 @@ class Bar:
 
     @cached_property
     def inclination(self):
+        """ TODO """
         return np.arctan2(
             -self.node_j.z + self.node_i.z, self.node_j.x - self.node_i.x
         )
 
     @cached_property
     def length(self):
+        """ TODO """
         return np.sqrt(
             (self.node_j.x - self.node_i.x) ** 2 +
             (self.node_j.z - self.node_i.z) ** 2
@@ -282,6 +468,7 @@ class Bar:
 
     @cached_property
     def hinge(self):
+        """ TODO """
         return (
             self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
             self.hinge_u_j, self.hinge_w_j, self.hinge_phi_j,
@@ -289,46 +476,57 @@ class Bar:
 
     @cached_property
     def flexural_stiffness(self):
+        """ TODO """
         EI = self.material.young_mod * self.cross_section.mom_of_int
         return EI if 'moment' in self.deformations else 1_000 * EI
 
     EI = property(lambda self: self.flexural_stiffness)
+    """ Alias of :py:attr:`flexural_stiffness`. """
 
     @cached_property
     def modified_flexural_stiffness(self):
+        """ TODO """
         if 'shear' in self.deformations:
             return self.EI * (1 + self.f0_first_order[0][0] / self.GA_s)
         else:
             return self.EI
 
     B_s = property(lambda self: self.modified_flexural_stiffness)
+    """ Alias of :py:attr:`modified_flexural_stiffness`. """
 
     @cached_property
     def extensional_stiffness(self):
+        """ TODO """
         EA = self.material.young_mod * self.cross_section.area
         return EA if 'normal' in self.deformations else 1_000 * EA
 
     EA = property(lambda self: self.extensional_stiffness)
+    """ Alias of :py:attr:`extensional_stiffness`. """
 
     @cached_property
     def shear_stiffness(self):
+        """ TODO """
         GA_s = self.material.shear_mod * self.cross_section.area
         GA_s *= self.cross_section.shear_cor
         return GA_s if 'shear' in self.deformations else 1_000 * GA_s
 
     GA_s = property(lambda self: self.shear_stiffness)
+    """ Alias of :py:attr:`shear_stiffness`. """
 
     @cached_property
     def phi(self):
+        """ TODO """
         return 12 * self.EI / (self.GA_s * self.length ** 2)
 
     @cached_property
     def characteristic_number(self):
+        """ TODO """
         f0_x_i = self.f0_first_order[0][0]
         return np.sqrt(abs(f0_x_i) / self.B_s) * self.length
 
     @cached_property
     def line_load(self):
+        """ TODO """
         if len(self.line_loads) == 0:
             return np.array([[0], [0], [0], [0], [0], [0]])
         return np.sum(
@@ -337,6 +535,7 @@ class Bar:
 
     @cached_property
     def point_load(self):
+        """ TODO """
         if len(self.point_loads) == 0:
             return np.array([[0], [0], [0], [0], [0], [0]])
         return np.sum(
@@ -345,11 +544,13 @@ class Bar:
 
     @cached_property
     def f0_point_load(self):
+        """ TODO """
         m = np.transpose(self.transformation_matrix(to_node_coord=True))
         return m @ self.point_load
 
     @cached_property
     def f0_temp(self):
+        """ TODO """
         factor = self.material.therm_exp_coeff * self.material.young_mod
         f0_x = factor * self.temp.temp_s * self.cross_section.area
         f0_m = factor * self.temp.temp_delta * self.cross_section.mom_of_int
@@ -358,6 +559,7 @@ class Bar:
 
     @cached_property
     def f0_displacement(self):
+        """ TODO """
         f0_displacement = np.vstack(
             (self.node_i.displacement, self.node_j.displacement)
         )
@@ -369,6 +571,7 @@ class Bar:
 
     @cached_property
     def f0_first_order(self):
+        """ TODO """
         p, const = self.line_load, self.GA_s * self.length ** 2
         factors = np.array([
             [7, 3, 0, 0],
@@ -386,6 +589,7 @@ class Bar:
 
     @cached_property
     def f0_second_order_analytic(self):
+        """ TODO """
         p_vec = self.line_load
         f0_x_i = self.f0_first_order[0][0]
         mu = self.characteristic_number
@@ -502,6 +706,7 @@ class Bar:
 
     @cached_property
     def f0_second_order_taylor(self):
+        """ TODO """
         p_vec = self.line_load
         B_s = self.B_s
         p_i, p_j = p_vec[1][0], p_vec[4][0]
@@ -561,6 +766,7 @@ class Bar:
 
     @cached_property
     def stiffness_shear_force(self):
+        """ TODO """
         return np.array([
             [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
             [0, 1, 1, 0, 1, 1],
@@ -572,6 +778,7 @@ class Bar:
 
     @cached_property
     def stiffness_second_order_analytic(self):
+        """ TODO """
         f0_x_i = self.f0_first_order[0][0]
         mu = self.characteristic_number
         B_s = self.B_s
@@ -611,6 +818,7 @@ class Bar:
 
     @cached_property
     def stiffness_second_order_taylor(self):
+        """ TODO """
         f0_x_i = self.f0_first_order[0][0]
         B_s = self.B_s
         factor = B_s / (self.GA_s * self.length ** 2)
@@ -645,6 +853,7 @@ class Bar:
 
     @cached_property
     def stiffness_second_order_p_delta(self):
+        """ TODO """
         c = self.f0_first_order[0][0] / self.length
         return np.array([
             [0, 0, 0, 0, 0, 0],
@@ -674,6 +883,7 @@ class Bar:
         approach: Literal['analytic', 'taylor', 'p_delta'] | None = None,
         hinge_modification: bool = True, to_node_coord: bool = True
     ):
+        """ TODO """
         self._validate_order_approach(order, approach)
 
         if order == 'first':
@@ -709,6 +919,7 @@ class Bar:
         approach: Literal['analytic', 'taylor', 'p_delta'] | None = None,
         hinge_modification: bool = True, to_node_coord: bool = True
     ):
+        """ TODO """
         self._validate_order_approach(order, approach)
 
         EI_l = self.EI / self.length
@@ -751,6 +962,7 @@ class Bar:
         return k
 
     def w(self, x, deform: np.array, force: np.array, length: float):
+        """ TODO """
         # x: [float, numpy.ndarray]
         line_load = self.line_load
         temp = (- self.material.therm_exp_coeff * self.temp.temp_delta /
@@ -809,6 +1021,7 @@ class Bar:
 
     def deform_line(self, deform: np.array, force: np.array,
                     scale: float, num_points: int):
+        """ TODO """
         x, z = self._get_points_deform_line(deform, force, scale, num_points)
 
         if self.inclination != 0:
@@ -816,6 +1029,7 @@ class Bar:
         return [x, z]
 
     def max_deform(self, deform: np.array, force: np.array, num_points: int):
+        """ TODO """
         x, z = self._get_points_deform_line(deform, force, 1, num_points)
 
         x_ = np.linspace(0, self.length, 100)

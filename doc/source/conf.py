@@ -10,7 +10,7 @@ project = 'sStatics'
 copyright = '2024'
 author = 'Paul Brassel'
 release = '0.0.0'
-html_logo = 'sStatics_Logo.png'
+html_logo = 'sStatics_Logo_transparent.png'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -18,15 +18,30 @@ html_logo = 'sStatics_Logo.png'
 extensions = [
     'numpydoc',
     'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
+    'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
 ]
 exclude_patterns = []
+html_static_path = ['.']
+html_css_files = ['custom.css']
 
+# Define the global role :python:``.
+rst_prolog = """
+.. role:: python(code)
+    :language: python
+"""
+
+pygments_style = 'stata-light'
 autodoc_typehints = 'none'
+autodoc_default_options = {
+    'inherited-members': None,
+    'show-inheritance': None,
+}
 numpydoc_show_class_members = False
-intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
-
+intersphinx_mapping = {
+    'numpy': ('https://numpy.org/doc/2.1', None),
+    'python': ('https://docs.python.org/3', None),
+}
 
 
 # -- Options for HTML output -------------------------------------------------
