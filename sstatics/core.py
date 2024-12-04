@@ -282,7 +282,9 @@ class CrossSection:
         if self.width <= 0:
             raise ValueError('width has to be greater than zero.')
         if not 0 <= self.area <= self.height * self.width:
-            raise ValueError('area has to be greater than zero.')
+            raise ValueError(
+                f'area has to be greater than or equal to zero or less than '
+                f'or equal to {self.width * self.height}.')
         if self.shear_cor <= 0:
             raise ValueError('shear_cor has to be greater than zero.')
 
