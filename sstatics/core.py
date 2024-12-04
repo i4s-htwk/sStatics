@@ -1152,7 +1152,7 @@ class System:
             i = self.nodes.index(bar.node_i) * self.dof
             j = self.nodes.index(bar.node_j) * self.dof
 
-            k = bar.element_relation(order=order, approach=approach)[1]
+            k = bar.stiffness_matrix()
 
             k_system[i:i + self.dof, i:i + self.dof] += k[:self.dof, :self.dof]
             k_system[i:i + self.dof, j:j + self.dof] += (
@@ -1170,8 +1170,8 @@ class System:
             j = self.nodes.index(bar.node_j) * self.dof
 
             el_bar = np.vstack((
-                np.hstack((bar.node_i.el_node, np.zeros((3, 3)))),
-                np.hstack((np.zeros((3, 3)), bar.node_j.el_node))
+                np.hstack((bar.node_i.elastic_support, np.zeros((3, 3)))),
+                np.hstack((np.zeros((3, 3)), bar.node_j.elastic_support))
             ))
 
             elastic[i:i + self.dof, i:i + self.dof] = (
@@ -1194,7 +1194,7 @@ class System:
             i = self.nodes.index(bar.node_i) * self.dof
             j = self.nodes.index(bar.node_j) * self.dof
 
-            f0 = bar.element_relation(order=order, approach=approach)[0]
+            f0 = bar.f0()
 
             f0_system[i:i + self.dof, :] += f0[:self.dof, :]
             f0_system[j:j + self.dof, :] += f0[self.dof:2 * self.dof, :]
@@ -1251,8 +1251,8 @@ class System:
                                   approach: str | None = None):
         bar_deform = self.bar_deform(order, approach)
         f_node = [
-            bar.element_relation(order, approach)[1] @ deform +
-            bar.element_relation(order, approach)[0]
+            bar.stiffness_matrix() @ deform +
+            bar.f0()
             for bar, deform in zip(self.bars, bar_deform)
         ]
         return [
