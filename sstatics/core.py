@@ -118,8 +118,13 @@ class Node:
     u: Literal['free', 'fixed'] | float = 'free'
     w: Literal['free', 'fixed'] | float = 'free'
     phi: Literal['free', 'fixed'] | float = 'free'
-    displacements: tuple[NodeDisplacement, ...] = ()
-    loads: tuple[NodePointLoad, ...] = ()
+    displacements: (
+        tuple[NodeDisplacement, ...] | list[NodeDisplacement, ...] |
+        NodeDisplacement
+    ) = ()
+    loads: (
+        tuple[NodePointLoad, ...] | list[NodePointLoad, ...] | NodePointLoad
+    ) = ()
 
     def __post_init__(self):
         for param in (self.u, self.w, self.phi):
@@ -132,6 +137,12 @@ class Node:
                 raise ValueError(
                     'Please set u, w or phi to "free" instead of zero.'
                 )
+        if isinstance(self.displacements, NodeDisplacement):
+            self.displacements = self.displacements,
+        self.displacements = tuple(self.displacements)
+        if isinstance(self.loads, NodePointLoad):
+            self.loads = self.loads,
+        self.loads = tuple(self.loads)
 
     @cached_property
     def displacement(self):
@@ -419,12 +430,18 @@ class Bar:
     hinge_u_j: bool = False
     hinge_w_j: bool = False
     hinge_phi_j: bool = False
-    deformations: tuple[Literal['moment', 'normal', 'shear'], ...] = (
-        'moment', 'normal'
-    )
-    line_loads: tuple[BarLineLoad, ...] = ()
+    deformations: (
+        tuple[Literal['moment', 'normal', 'shear'], ...] |
+        list[Literal['moment', 'normal', 'shear'], ...] |
+        Literal['moment', 'normal', 'shear']
+    ) = ('moment', 'normal')
+    line_loads: (
+        tuple[BarLineLoad, ...] | list[BarLineLoad, ...] | BarLineLoad
+    ) = ()
     temp: BarTemp = field(default_factory=lambda: BarTemp(0, 0))
-    point_loads: tuple[BarPointLoad, ...] = ()
+    point_loads: (
+        tuple[BarPointLoad, ...] | list[BarPointLoad, ...] | BarPointLoad
+    ) = ()
 
     # TODO: other validations? validate hinges
     def __post_init__(self):
@@ -432,15 +449,24 @@ class Bar:
             raise ValueError(
                 'node_i and node_j need to have different locations.'
             )
+        # TODO: find a solution for this edge case
+        if len(self.deformations) == 0:
+            raise ValueError('There has to be at least one deformation.')
+        if isinstance(self.line_loads, BarLineLoad):
+            self.line_loads = self.line_loads,
+        self.line_loads = tuple(self.line_loads)
+        if isinstance(self.point_loads, BarPointLoad):
+            self.point_loads = self.point_loads,
+        self.point_loads = tuple(self.point_loads)
+        if isinstance(self.deformations, str):
+            self.deformations = self.deformations,
+        self.deformations = tuple(self.deformations)
         for d in self.deformations:
             if d not in ('moment', 'normal', 'shear'):
                 raise ValueError(
                     'Valid deformation key words are "moment", "normal" and '
                     '"shear".'
                 )
-        # TODO: find a solution for this edge case
-        if len(self.deformations) == 0:
-            raise ValueError('There has to be at least one deformation.')
 
     def transformation_matrix(self, to_node_coord: bool = True):
         """ TODO """
