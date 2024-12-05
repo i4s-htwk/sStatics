@@ -1280,9 +1280,10 @@ class System:
         for i, bar in enumerate(self.bars):
             delta_rel = np.zeros((6, 1))
             if True in bar.hinge:
-                k = bar.stiffness_matrix(order, approach)
+                k = bar.stiffness_matrix(order, approach,
+                                         hinge_modification=False)
                 bar_deform = bar_deform_list[i]
-                f0 = bar.f0(order, approach)
+                f0 = bar.f0(order, approach, hinge_modification=False)
 
                 idx = [i for i, value in enumerate(bar.hinge) if value]
                 if idx:
@@ -1315,21 +1316,12 @@ class System:
             combined_results.append(result)
         return combined_results
 
-    def solvable(self, order: str = 'first', approach: str | None = None,
-                 tolerance: float = 1e-10):
+    def solvable(self, order: str = 'first', approach: str | None = None):
         k, p = self.apply_boundary_conditions(order, approach)
-        u, s, vt = np.linalg.svd(k)
-
-        if np.any(s < tolerance):
+        if np.linalg.matrix_rank(k) < k.shape[0]:
             print("Stiffness matrix is singular.")
-            if np.allclose(
-                    k @ np.dot(np.linalg.pinv(k), p), p, atol=tolerance):
-                print("The system has infinitely many solutions.")
-            else:
-                print("The system is inconsistent and has no solution.")
             return False
-        else:
-            return True
+        return True
 
 
 @dataclass(eq=False)
@@ -1338,11 +1330,10 @@ class Model:
     system: System
     order: Literal['first', 'second'] = 'first'
     approach: Literal['analytic', 'taylor', 'p_delta'] = None
-    tolerance: float = 1e-12
 
     def calc(self):
         if self.order == 'first':
-            if self.system.solvable(self.order, self.approach, self.tolerance):
+            if self.system.solvable(self.order, self.approach):
                 deform = self.system.create_bar_deform_list(
                     self.order, self.approach)
                 force = self.system.create_list_of_bar_forces(
