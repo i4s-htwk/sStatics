@@ -178,9 +178,25 @@ class Node:
             return np.array([[0], [0], [0]])
         return np.sum([d.vector for d in self.displacements], axis=0)
 
+    # TODO: docu
     @cached_property
     def load(self):
-        """The overall node load as a 3x1 vector.
+        r"""Rotate the node loads.
+
+        Every load from :py:attr:`loads` is rotated by the node's rotation by
+        calling :any:`PointLoad.rotate`. So the resulting rotation angle is
+        calculated by :python:`alpha = load.rotation - node.rotation`. Thus
+        each rotated load is computed by
+
+        .. math::
+            \left(\begin{array}{c}
+            \cos(\alpha) & \sin(\alpha) & 0 \\
+            -\sin(\alpha) & \cos(\alpha) & 0 \\
+            0 & 0 & 1
+            \end{array}\right) \cdot
+            \left(\begin{array}{c} x \\ z \\ \varphi \end{array}\right)
+
+        and summed up afterward.
 
         Returns
         -------
@@ -197,18 +213,17 @@ class Node:
 
         Examples
         --------
-            >>> from sstatics import Node
-            >>> Node(1, 2).load
-            array([[0], [0], [0]])
-
-            >>> from sstatics import NodePointLoad
-            >>> loads = (NodePointLoad(2.5, 3, 1.5), NodePointLoad(3, -5, 0.3))
-            >>> Node(-1, 3, loads=loads).load
-            array([[5.5], [-2], [1.8]])
+            >>> from sstatics import Node, NodePointLoad
+            >>> import numpy
+            >>> load = NodePointLoad(1, 2, 0.5, rotation=2 * numpy.pi)
+            >>> Node(6, 5, rotation=numpy.pi, loads=(load,)).rotate_load()
+            array([[-1], [-2], [0.5]])
         """
         if len(self.loads) == 0:
             return np.array([[0], [0], [0]])
-        return np.sum([load.vector for load in self.loads], axis=0)
+        return np.sum(
+            [load.rotate(self.rotation) for load in self.loads], axis=0
+        )
 
     @cached_property
     def elastic_support(self):
@@ -243,36 +258,6 @@ class Node:
             False
         """
         return self.x == other.x and self.z == other.z
-
-    def rotate_load(self):
-        r"""Rotate the node loads.
-
-        Every load from :py:attr:`loads` is rotated by the node's rotation by
-        calling :any:`PointLoad.rotate`. So the resulting rotation angle is
-        calculated by :python:`alpha = load.rotation - node.rotation`. Thus
-        each rotated load is computed by
-
-        .. math::
-            \left(\begin{array}{c}
-            \cos(\alpha) & \sin(\alpha) & 0 \\
-            -\sin(\alpha) & \cos(\alpha) & 0 \\
-            0 & 0 & 1
-            \end{array}\right) \cdot
-            \left(\begin{array}{c} x \\ z \\ \varphi \end{array}\right)
-
-        and summed up afterward.
-
-        Examples
-        --------
-            >>> from sstatics import Node, NodePointLoad
-            >>> import numpy
-            >>> load = NodePointLoad(1, 2, 0.5, rotation=2 * numpy.pi)
-            >>> Node(6, 5, rotation=numpy.pi, loads=(load,)).rotate_load()
-            array([[-1], [-2], [0.5]])
-        """
-        return np.sum(
-            [load.rotate(self.rotation) for load in self.loads], axis=0
-        )
 
 
 @dataclass(eq=False)
@@ -401,11 +386,10 @@ class BarPointLoad(PointLoad):
         if not (0 <= self.position <= 1):
             raise ValueError("position must be between 0 and 1")
 
-    # TODO: test
-    # TODO: this should overwrite rotate method from PointLoad
-    def rotate_load(self):
+    # TODO: test, docu
+    def rotate(self):
         """ TODO """
-        vec = transformation_matrix(self.rotation) @ self.vector
+        vec = super().rotate(rotation=0.0)
         if self.position == 0:
             return np.vstack((vec, np.zeros((3, 1))))
         elif self.position == 1:
@@ -567,7 +551,7 @@ class Bar:
         if len(self.point_loads) == 0:
             return np.array([[0], [0], [0], [0], [0], [0]])
         return np.sum(
-            [load.rotate_load() for load in self.point_loads], axis=0
+            [load.rotate() for load in self.point_loads], axis=0
         )
 
     @cached_property
@@ -1232,7 +1216,7 @@ class System:
         p0 = self._get_zero_vec()
         for i, node in enumerate(self.nodes):
             p0[i * self.dof:i * self.dof + self.dof, :] = (
-                node.rotate_load())
+                node.load)
         return p0
 
     def p(self):
