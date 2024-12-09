@@ -121,11 +121,11 @@ class Node:
     w: Literal['free', 'fixed'] | float = 'free'
     phi: Literal['free', 'fixed'] | float = 'free'
     displacements: (
-        tuple[NodeDisplacement, ...] | list[NodeDisplacement, ...] |
+        tuple[NodeDisplacement, ...] | list[NodeDisplacement] |
         NodeDisplacement
     ) = ()
     loads: (
-        tuple[NodePointLoad, ...] | list[NodePointLoad, ...] | NodePointLoad
+        tuple[NodePointLoad, ...] | list[NodePointLoad] | NodePointLoad
     ) = ()
 
     def __post_init__(self):
@@ -418,15 +418,13 @@ class Bar:
     hinge_phi_j: bool = False
     deformations: (
         tuple[Literal['moment', 'normal', 'shear'], ...] |
-        list[Literal['moment', 'normal', 'shear'], ...] |
+        list[Literal['moment', 'normal', 'shear']] |
         Literal['moment', 'normal', 'shear']
     ) = ('moment', 'normal')
-    line_loads: (
-        tuple[BarLineLoad, ...] | list[BarLineLoad, ...] | BarLineLoad
-    ) = ()
+    line_loads: tuple[BarLineLoad, ...] | list[BarLineLoad] | BarLineLoad = ()
     temp: BarTemp = field(default_factory=lambda: BarTemp(0, 0))
     point_loads: (
-        tuple[BarPointLoad, ...] | list[BarPointLoad, ...] | BarPointLoad
+        tuple[BarPointLoad, ...] | list[BarPointLoad] | BarPointLoad
     ) = ()
 
     # TODO: other validations? validate hinges
