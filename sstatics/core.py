@@ -1,5 +1,6 @@
 
-from dataclasses import dataclass, field
+from collections import defaultdict
+from dataclasses import dataclass, field, replace
 from functools import cached_property
 from typing import Literal
 
@@ -973,6 +974,59 @@ class Bar:
 
         return k
 
+    def segment(self):
+        """ TODO """
+        positions, segmentation = defaultdict(list), False
+        for load in self.point_loads:
+            positions[load.position].append(load)
+            if load.position not in (0.0, 1.0):
+                segmentation = True
+        if not segmentation:
+            return [self]
+
+        bars = []
+        for position in sorted(positions.keys()):
+
+            if position == 0.0:
+                continue
+
+            # calculate nodes
+            node_i = bars[-1].node_j if bars else self.node_i
+            c, s = np.cos(self.inclination), np.sin(self.inclination)
+            x = self.node_i.x + c * position * self.length
+            z = self.node_i.z - s * position * self.length
+            node_loads = [
+                NodePointLoad(load.x, load.z, load.phi, load.rotation)
+                for load in positions[position]
+            ]
+            node_j = self.node_j if position == 1.0 else Node(
+                x, z, loads=node_loads
+            )
+
+            # calculate bar line loads
+            line_loads = []
+            for i, line_load in enumerate(self.line_loads):
+                pi = (
+                    bars[-1].line_loads[i].pj if bars
+                    else self.line_loads[i].pi
+                )
+                pj = line_load.pi + (line_load.pj - line_load.pi) * position
+                line_loads.append(replace(line_load, pi=pi, pj=pj))
+
+            # set point loads
+            point_loads = []
+            if not bars:
+                point_loads = positions[0.0]
+            elif position == 1.0:
+                point_loads = positions[1.0]
+
+            bars.append(replace(
+                self, node_i=node_i, node_j=node_j, line_loads=line_loads,
+                point_loads=point_loads
+            ))
+
+        return bars
+
     def deform_line(
         self, deform: ArrayLike, force: ArrayLike, scale: float = 1.0,
         lambdify: bool = True, n_points: int | None = None
@@ -1045,11 +1099,12 @@ class Bar:
 @dataclass(eq=False)
 class System:
 
-    _bars: list[Bar]
-    bars: list[Bar] = field(default_factory=lambda: [])
+    bars: tuple[Bar, ...] | list[Bar]
 
     def __post_init__(self):
-        self.bars = self.bar_segmentation()
+        self.segmented_bars = []
+        for bar in self.bars:
+            self.segmented_bars += bar.segment()
         self.nodes = self._get_nodes()
         self.dof = 3
 
@@ -1062,95 +1117,19 @@ class System:
         return np.zeros((x, 1))
 
     def _get_nodes(self):
-        all_nodes = [n for bar in self.bars for n in (bar.node_i, bar.node_j)]
+        all_nodes = [
+            n for bar in self.segmented_bars for n in (bar.node_i, bar.node_j)
+        ]
         unique_nodes = []
         for node in all_nodes:
             if any([node.same_location(n) for n in unique_nodes]) is False:
                 unique_nodes.append(node)
         return unique_nodes
 
-    def bar_segmentation(self):
-        bars = []
-        for bar in self._bars:
-            positions = []
-            bar_point_load = [[BarPointLoad(0, 0, 0, 0, 0)],
-                              [BarPointLoad(0, 0, 0, 0, 0)]]
-
-            for i in bar.point_loads:
-                if i.position == 0:
-                    bar_point_load[0].append(i)
-                elif i.position == 1:
-                    bar_point_load[1].append(i)
-                else:
-                    positions.append((i.position, i))
-
-            for i in range(bar.segments):
-                position = (i + 1) / (bar.segments + 1)
-                if position not in [pos[0] for pos in positions]:
-                    positions.append((position, None))
-
-            positions.sort(key=lambda x: x[0])
-
-            if positions:
-                for i, (position, point_load) in enumerate(positions):
-                    new_x = (bar.node_i.x + np.cos(bar.inclination) * position
-                             * bar.length)
-                    new_z = (bar.node_i.z - np.sin(bar.inclination) * position
-                             * bar.length)
-
-                    if point_load:
-                        new_node_load = NodePointLoad(
-                            point_load.x, point_load.z, point_load.phi,
-                            point_load.rotation
-                        )
-                        new_node_j = Node(new_x, new_z, loads=[new_node_load])
-                    else:
-                        new_node_j = Node(new_x, new_z)
-
-                    new_bar_line_load = []
-                    for j, line_load in enumerate(bar.line_loads):
-                        line_load_i = bars[-1].line_loads[j].pj if i \
-                            else bar.line_loads[j].pi
-                        new_line_load_j = (
-                                (line_load.pj - line_load.pi) * position +
-                                line_load.pi
-                        )
-                        new_bar_line_load.append(
-                            BarLineLoad(line_load_i, new_line_load_j,
-                                        line_load.direction, line_load.coord,
-                                        line_load.length))
-
-                    if i:
-                        bars.append(Bar(bars[-1].node_j, new_node_j,
-                                        bar.cross_section, bar.material,
-                                        line_loads=new_bar_line_load,
-                                        temp=bar.temp))
-                    else:
-                        bars.append(Bar(bar.node_i, new_node_j,
-                                        bar.cross_section, bar.material,
-                                        line_loads=new_bar_line_load,
-                                        temp=bar.temp,
-                                        point_loads=bar_point_load[0]))
-
-                new_bar_line_load = []
-                for i, line_load in enumerate(bar.line_loads):
-                    new_bar_line_load.append(
-                        BarLineLoad(bars[-1].line_loads[i].pj, line_load.pj,
-                                    line_load.direction, line_load.coord,
-                                    line_load.length))
-                bars.append(Bar(bars[-1].node_j, bar.node_j, bar.cross_section,
-                                bar.material, line_loads=new_bar_line_load,
-                                temp=bar.temp, point_loads=bar_point_load[1]))
-
-            else:
-                bars.append(bar)
-
-        return bars
-
     def stiffness_matrix(self, order: str = 'first',
                          approach: str | None = None):
         k_system = self._get_zero_matrix()
-        for bar in self.bars:
+        for bar in self.segmented_bars:
             i = self.nodes.index(bar.node_i) * self.dof
             j = self.nodes.index(bar.node_j) * self.dof
 
@@ -1167,7 +1146,7 @@ class System:
 
     def elastic_matrix(self):
         elastic = self._get_zero_matrix()
-        for bar in self.bars:
+        for bar in self.segmented_bars:
             i = self.nodes.index(bar.node_i) * self.dof
             j = self.nodes.index(bar.node_j) * self.dof
 
@@ -1192,7 +1171,7 @@ class System:
 
     def f0(self, order: str = 'first', approach: str | None = None):
         f0_system = self._get_zero_vec()
-        for bar in self.bars:
+        for bar in self.segmented_bars:
             i = self.nodes.index(bar.node_i) * self.dof
             j = self.nodes.index(bar.node_j) * self.dof
 
@@ -1246,7 +1225,7 @@ class System:
                             self.dof: self.nodes.index(bar.node_j) * self.dof +
                             self.dof, :]
             ])
-            for bar in self.bars
+            for bar in self.segmented_bars
         ]
 
     def create_list_of_bar_forces(self, order: str = 'first',
@@ -1255,19 +1234,19 @@ class System:
         f_node = [
             bar.stiffness_matrix() @ deform +
             bar.f0()
-            for bar, deform in zip(self.bars, bar_deform)
+            for bar, deform in zip(self.segmented_bars, bar_deform)
         ]
         return [
             np.transpose(
                 bar.transformation_matrix()) @ forces - bar.f0_point_load
-            for bar, forces in zip(self.bars, f_node)
+            for bar, forces in zip(self.segmented_bars, f_node)
         ]
 
     def _apply_hinge_modification(self, order: str = 'first',
                                   approach: str | None = None):
         deform_list = []
         bar_deform_list = self.bar_deform(order, approach)
-        for i, bar in enumerate(self.bars):
+        for i, bar in enumerate(self.segmented_bars):
             delta_rel = np.zeros((6, 1))
             if True in bar.hinge:
                 k = bar.stiffness_matrix(order, approach,
@@ -1291,7 +1270,7 @@ class System:
             np.transpose(bar.transformation_matrix())
             @ np.vstack(
                 (bar.node_i.displacement, bar.node_j.displacement))
-            for bar in self.bars
+            for bar in self.segmented_bars
         ]
 
     def create_bar_deform_list(self, order: str = 'first',
