@@ -987,18 +987,27 @@ class Bar:
 
         return k
 
-    def segment(self):
+    def segment(self, positions: list[float] | None = None):
         """ TODO """
-        positions, segmentation = defaultdict(list), False
+        if positions is None:
+            positions = []
+        for position in positions:
+            if not 0 <= position <= 1.0:
+                raise ValueError(
+                    'All positions have to be in the interval [0, 1].'
+                )
+
+        pos, segmentation = defaultdict(list), False
         for load in self.point_loads:
-            positions[load.position].append(load)
+            pos[load.position].append(load)
             if load.position not in (0.0, 1.0):
                 segmentation = True
         if not segmentation:
             return [self]
 
         bars = []
-        for position in sorted(positions.keys()):
+        positions = list(set(positions) | set(pos.keys()))
+        for position in sorted(positions):
 
             if position == 0.0:
                 continue
@@ -1010,7 +1019,7 @@ class Bar:
             z = self.node_i.z - s * position * self.length
             node_loads = [
                 NodePointLoad(load.x, load.z, load.phi, load.rotation)
-                for load in positions[position]
+                for load in pos[position]
             ]
             node_j = self.node_j if position == 1.0 else Node(
                 x, z, loads=node_loads
@@ -1029,9 +1038,9 @@ class Bar:
             # set point loads
             point_loads = []
             if not bars:
-                point_loads = positions[0.0]
+                point_loads = pos[0.0]
             elif position == 1.0:
-                point_loads = positions[1.0]
+                point_loads = pos[1.0]
 
             bars.append(replace(
                 self, node_i=node_i, node_j=node_j, line_loads=line_loads,
@@ -1040,6 +1049,7 @@ class Bar:
 
         return bars
 
+    # TODO: refactor
     def deform_line(
         self, deform: ArrayLike, force: ArrayLike, scale: float = 1.0,
         lambdify: bool = True, n_points: int | None = None
