@@ -1,7 +1,7 @@
 
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
-from functools import cached_property
+from functools import cache, cached_property
 from typing import Literal
 
 import numpy as np
@@ -463,6 +463,19 @@ class Bar:
             np.hstack((transformation_matrix(alpha_i), np.zeros((3, 3)))),
             np.hstack((np.zeros((3, 3)), transformation_matrix(alpha_j))),
         ))
+
+    # is this correct?
+    def same_location(self, other):
+        """ TODO """
+        a = (
+            self.node_i.same_location(other.node_i) and
+            self.node_j.same_location(other.node_j)
+        )
+        b = (
+            self.node_i.same_location(other.node_j) and
+            self.node_j.same_location(other.node_i)
+        )
+        return a or b
 
     @cached_property
     def inclination(self):
@@ -1101,37 +1114,77 @@ class System:
 
     bars: tuple[Bar, ...] | list[Bar]
 
+    # weitere Validierungen? sich schneidende Stäbe?
     def __post_init__(self):
+        self.bars = tuple(self.bars)
+        if len(self.bars) == 0:
+            raise ValueError('There need to be at least one bar.')
+        for i, bar in enumerate(self.bars[0:-1]):
+            if any([
+                bar.same_location(other_bar) for other_bar in self.bars[i + 1:]
+            ]):
+                raise ValueError(
+                    'Cannot instantiate a system with bars that share the '
+                    'same location.'
+                )
+        nodes = self.nodes(segmented=False)
+        for i, node in enumerate(nodes[0:-1]):
+            for other_node in nodes[i + 1:]:
+                if node.same_location(other_node) and node != other_node:
+                    raise ValueError(
+                        'Inconsistent system. Nodes with the same location '
+                        'need to be the same instance.'
+                    )
+        to_visit, visited = [nodes[0]], []
+        while to_visit:
+            current_node = to_visit.pop(0)
+            if current_node not in visited:
+                visited.append(current_node)
+                to_visit += self.connected_nodes(segmented=False)[current_node]
+        if set(visited) != set(nodes):
+            raise ValueError("The system's graph needs to be connected.")
+
         self.segmented_bars = []
         for bar in self.bars:
             self.segmented_bars += bar.segment()
-        self.nodes = self._get_nodes()
+        self.segmented_bars = tuple(self.segmented_bars)
+
         self.dof = 3
 
+    @cache
+    def connected_nodes(self, segmented: bool = True):
+        bars = self.segmented_bars if segmented else self.bars
+        connections = {}
+        for bar in bars:
+            for node in (bar.node_i, bar.node_j):
+                if node not in connections:
+                    connections[node] = set()
+            connections[bar.node_i].add(bar.node_j)
+            connections[bar.node_j].add(bar.node_i)
+        return {
+            node: list(connected_nodes)
+            for node, connected_nodes in connections.items()
+        }
+
+    @cache
+    def nodes(self, segmented: bool = True):
+        return list(self.connected_nodes(segmented=segmented).keys())
+
     def _get_zero_matrix(self):
-        x = len(self.nodes) * self.dof
+        x = len(self.nodes()) * self.dof
         return np.zeros((x, x))
 
     def _get_zero_vec(self):
-        x = len(self.nodes) * self.dof
+        x = len(self.nodes()) * self.dof
         return np.zeros((x, 1))
-
-    def _get_nodes(self):
-        all_nodes = [
-            n for bar in self.segmented_bars for n in (bar.node_i, bar.node_j)
-        ]
-        unique_nodes = []
-        for node in all_nodes:
-            if any([node.same_location(n) for n in unique_nodes]) is False:
-                unique_nodes.append(node)
-        return unique_nodes
 
     def stiffness_matrix(self, order: str = 'first',
                          approach: str | None = None):
         k_system = self._get_zero_matrix()
+        nodes = self.nodes()
         for bar in self.segmented_bars:
-            i = self.nodes.index(bar.node_i) * self.dof
-            j = self.nodes.index(bar.node_j) * self.dof
+            i = nodes.index(bar.node_i) * self.dof
+            j = nodes.index(bar.node_j) * self.dof
 
             k = bar.stiffness_matrix()
 
@@ -1146,9 +1199,10 @@ class System:
 
     def elastic_matrix(self):
         elastic = self._get_zero_matrix()
+        nodes = self.nodes()
         for bar in self.segmented_bars:
-            i = self.nodes.index(bar.node_i) * self.dof
-            j = self.nodes.index(bar.node_j) * self.dof
+            i = nodes.index(bar.node_i) * self.dof
+            j = nodes.index(bar.node_j) * self.dof
 
             el_bar = np.vstack((
                 np.hstack((bar.node_i.elastic_support, np.zeros((3, 3)))),
@@ -1171,9 +1225,10 @@ class System:
 
     def f0(self, order: str = 'first', approach: str | None = None):
         f0_system = self._get_zero_vec()
+        nodes = self.nodes()
         for bar in self.segmented_bars:
-            i = self.nodes.index(bar.node_i) * self.dof
-            j = self.nodes.index(bar.node_j) * self.dof
+            i = nodes.index(bar.node_i) * self.dof
+            j = nodes.index(bar.node_j) * self.dof
 
             f0 = bar.f0()
 
@@ -1183,7 +1238,7 @@ class System:
 
     def p0(self):
         p0 = self._get_zero_vec()
-        for i, node in enumerate(self.nodes):
+        for i, node in enumerate(self.nodes()):
             p0[i * self.dof:i * self.dof + self.dof, :] = (
                 node.load)
         return p0
@@ -1195,7 +1250,7 @@ class System:
                                   approach: str | None = None):
         k = self.system_matrix(order, approach)
         p = self.p()
-        for idx, node in enumerate(self.nodes):
+        for idx, node in enumerate(self.nodes()):
             node_offset = idx * self.dof
             for dof_nr, attribute in enumerate(['u', 'w', 'phi']):
                 condition = getattr(node, attribute, 'free')
@@ -1214,15 +1269,16 @@ class System:
 
     def bar_deform(self, order: str = 'first', approach: str | None = None):
         node_deform = self.node_deformation(order, approach)
+        nodes = self.nodes()
 
         return [
             np.transpose(bar.transformation_matrix())
             @ np.vstack([
-                node_deform[self.nodes.index(bar.node_i) *
-                            self.dof: self.nodes.index(bar.node_i) * self.dof +
+                node_deform[nodes.index(bar.node_i) *
+                            self.dof: nodes.index(bar.node_i) * self.dof +
                             self.dof, :],
-                node_deform[self.nodes.index(bar.node_j) *
-                            self.dof: self.nodes.index(bar.node_j) * self.dof +
+                node_deform[nodes.index(bar.node_j) *
+                            self.dof: nodes.index(bar.node_j) * self.dof +
                             self.dof, :]
             ])
             for bar in self.segmented_bars
