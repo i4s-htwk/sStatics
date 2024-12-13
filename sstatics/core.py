@@ -1180,23 +1180,32 @@ class System:
     def nodes(self, segmented: bool = True):
         return list(self.connected_nodes(segmented=segmented).keys())
 
+
+@dataclass(eq=False)
+class FirstOrder:
+
+    system: System
+
+    def __post_init__(self):
+        self.dof = 3
+
     def _get_zero_matrix(self):
-        x = len(self.nodes()) * self.dof
+        x = len(self.system.nodes()) * self.dof
         return np.zeros((x, x))
 
     def _get_zero_vec(self):
-        x = len(self.nodes()) * self.dof
+        x = len(self.system.nodes()) * self.dof
         return np.zeros((x, 1))
 
     def stiffness_matrix(self, order: str = 'first',
                          approach: str | None = None):
         k_system = self._get_zero_matrix()
-        nodes = self.nodes()
-        for bar in self.segmented_bars:
+        nodes = self.system.nodes()
+        for bar in self.system.segmented_bars:
             i = nodes.index(bar.node_i) * self.dof
             j = nodes.index(bar.node_j) * self.dof
 
-            k = bar.stiffness_matrix()
+            k = bar.stiffness_matrix(order, approach)
 
             k_system[i:i + self.dof, i:i + self.dof] += k[:self.dof, :self.dof]
             k_system[i:i + self.dof, j:j + self.dof] += (
@@ -1209,8 +1218,8 @@ class System:
 
     def elastic_matrix(self):
         elastic = self._get_zero_matrix()
-        nodes = self.nodes()
-        for bar in self.segmented_bars:
+        nodes = self.system.nodes()
+        for bar in self.system.segmented_bars:
             i = nodes.index(bar.node_i) * self.dof
             j = nodes.index(bar.node_j) * self.dof
 
@@ -1235,12 +1244,12 @@ class System:
 
     def f0(self, order: str = 'first', approach: str | None = None):
         f0_system = self._get_zero_vec()
-        nodes = self.nodes()
-        for bar in self.segmented_bars:
+        nodes = self.system.nodes()
+        for bar in self.system.segmented_bars:
             i = nodes.index(bar.node_i) * self.dof
             j = nodes.index(bar.node_j) * self.dof
 
-            f0 = bar.f0()
+            f0 = bar.f0(order, approach)
 
             f0_system[i:i + self.dof, :] += f0[:self.dof, :]
             f0_system[j:j + self.dof, :] += f0[self.dof:2 * self.dof, :]
@@ -1248,19 +1257,19 @@ class System:
 
     def p0(self):
         p0 = self._get_zero_vec()
-        for i, node in enumerate(self.nodes()):
+        for i, node in enumerate(self.system.nodes()):
             p0[i * self.dof:i * self.dof + self.dof, :] = (
                 node.load)
         return p0
 
-    def p(self):
-        return self.p0() - self.f0()
+    def p(self, order: str = 'first', approach: str | None = None):
+        return self.p0() - self.f0(order, approach)
 
     def apply_boundary_conditions(self, order: str = 'first',
                                   approach: str | None = None):
         k = self.system_matrix(order, approach)
-        p = self.p()
-        for idx, node in enumerate(self.nodes()):
+        p = self.p(order, approach)
+        for idx, node in enumerate(self.system.nodes()):
             node_offset = idx * self.dof
             for dof_nr, attribute in enumerate(['u', 'w', 'phi']):
                 condition = getattr(node, attribute, 'free')
@@ -1279,7 +1288,7 @@ class System:
 
     def bar_deform(self, order: str = 'first', approach: str | None = None):
         node_deform = self.node_deformation(order, approach)
-        nodes = self.nodes()
+        nodes = self.system.nodes()
 
         return [
             np.transpose(bar.transformation_matrix())
@@ -1291,7 +1300,7 @@ class System:
                             self.dof: nodes.index(bar.node_j) * self.dof +
                             self.dof, :]
             ])
-            for bar in self.segmented_bars
+            for bar in self.system.segmented_bars
         ]
 
     def create_list_of_bar_forces(self, order: str = 'first',
@@ -1300,19 +1309,19 @@ class System:
         f_node = [
             bar.stiffness_matrix() @ deform +
             bar.f0()
-            for bar, deform in zip(self.segmented_bars, bar_deform)
+            for bar, deform in zip(self.system.segmented_bars, bar_deform)
         ]
         return [
             np.transpose(
                 bar.transformation_matrix()) @ forces - bar.f0_point_load
-            for bar, forces in zip(self.segmented_bars, f_node)
+            for bar, forces in zip(self.system.segmented_bars, f_node)
         ]
 
     def _apply_hinge_modification(self, order: str = 'first',
                                   approach: str | None = None):
         deform_list = []
         bar_deform_list = self.bar_deform(order, approach)
-        for i, bar in enumerate(self.segmented_bars):
+        for i, bar in enumerate(self.system.segmented_bars):
             delta_rel = np.zeros((6, 1))
             if True in bar.hinge:
                 k = bar.stiffness_matrix(order, approach,
@@ -1336,7 +1345,7 @@ class System:
             np.transpose(bar.transformation_matrix())
             @ np.vstack(
                 (bar.node_i.displacement, bar.node_j.displacement))
-            for bar in self.segmented_bars
+            for bar in self.system.segmented_bars
         ]
 
     def create_bar_deform_list(self, order: str = 'first',
@@ -1358,22 +1367,8 @@ class System:
             return False
         return True
 
-
-@dataclass(eq=False)
-class Model:
-
-    system: System
-    order: Literal['first', 'second'] = 'first'
-    approach: Literal['analytic', 'taylor', 'p_delta'] = None
-
-    def calc(self):
-        if self.order == 'first':
-            if self.system.solvable(self.order, self.approach):
-                deform = self.system.create_bar_deform_list(
-                    self.order, self.approach)
-                force = self.system.create_list_of_bar_forces(
-                    self.order, self.approach)
-                return deform, force
-        elif self.order == 'second':
-            # TODO: integrate MA Ludwig
-            return None
+    def calc(self, order: str = 'first', approach: str | None = None):
+        if self.solvable(order, approach):
+            return (
+                self.create_bar_deform_list(order, approach),
+                self.create_list_of_bar_forces(order, approach))
