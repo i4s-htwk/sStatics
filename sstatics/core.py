@@ -1372,3 +1372,13 @@ class FirstOrder:
             return (
                 self.create_bar_deform_list(order, approach),
                 self.create_list_of_bar_forces(order, approach))
+
+
+# TODO: Idee besprechen
+@dataclass(eq=False)
+class SecondOrder(FirstOrder):
+
+    approach: Literal['analytic', 'taylor', 'p_delta'] | None = None
+
+    def calc(self, order: str = 'first', approach: str | None = None):
+        return super().calc(order='second', approach=self.approach)
