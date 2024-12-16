@@ -987,29 +987,23 @@ class Bar:
 
         return k
 
-    def segment(self, positions: list[float] | None = None):
+    def segment(self, dividing_positions: list[float] = []):
         """ TODO """
-        if positions is None:
-            positions = []
-        for position in positions:
-            if not 0 <= position <= 1.0:
-                raise ValueError(
-                    'All positions have to be in the interval [0, 1].'
-                )
-
-        pos, segmentation = defaultdict(list), False
+        positions, segmentation = defaultdict(list), False
         for load in self.point_loads:
-            pos[load.position].append(load)
+            positions[load.position].append(load)
             if load.position not in (0.0, 1.0):
                 segmentation = True
+        for pos in dividing_positions:
+            positions.setdefault(pos)
+            segmentation = True
         if not segmentation:
             return [self]
 
         bars = []
-        positions = list(set(positions) | set(pos.keys()))
-        for position in sorted(positions):
+        for position in sorted(positions.keys()):
 
-            if position == 0.0:
+            if position == 0.0 or position == 1.0:
                 continue
 
             # calculate nodes
@@ -1019,7 +1013,7 @@ class Bar:
             z = self.node_i.z - s * position * self.length
             node_loads = [
                 NodePointLoad(load.x, load.z, load.phi, load.rotation)
-                for load in pos[position]
+                for load in positions[position] or []
             ]
             node_j = self.node_j if position == 1.0 else Node(
                 x, z, loads=node_loads
@@ -1038,14 +1032,27 @@ class Bar:
             # set point loads
             point_loads = []
             if not bars:
-                point_loads = pos[0.0]
-            elif position == 1.0:
-                point_loads = pos[1.0]
+                point_loads = positions[0.0]
 
             bars.append(replace(
                 self, node_i=node_i, node_j=node_j, line_loads=line_loads,
                 point_loads=point_loads
             ))
+
+        # calculate bar line loads
+        line_loads = []
+        for i, line_load in enumerate(self.line_loads):
+            pi = (bars[-1].line_loads[i].pj)
+            line_loads.append(replace(line_load, pi=pi))
+
+        point_loads = []
+        if 1.0 in positions:
+            point_loads = positions[1.0]
+
+        bars.append(replace(
+            self, node_i=node_j, node_j=self.node_j, line_loads=line_loads,
+            point_loads=point_loads
+        ))
 
         return bars
 
@@ -1382,3 +1389,118 @@ class SecondOrder(FirstOrder):
 
     def calc(self, order: str = 'first', approach: str | None = None):
         return super().calc(order='second', approach=self.approach)
+
+
+@dataclass(eq=False)
+class InfluenceLine(FirstOrder):
+
+    def __post_init__(self):
+        self.dof = 3
+
+    def modify_bar(self, obj: Bar, position: float,
+                   force: Literal['fx', 'fz', 'fm']):
+        if isinstance(obj, Bar):
+            if not (0 <= position <= 1):
+                raise ValueError("position must be between 0 and 1")
+
+            for bar in self.system.bars:
+                if bar == obj:
+                    idx = self.system.bars.index(bar)
+
+                    bar_1, bar_2 = bar.segment([position])
+
+                    if force == 'fx':
+                        bar_1 = replace(
+                            bar_1, point_loads=BarPointLoad(1, 0, 0, 0, 1),
+                            hinge_u_j=True)
+                        bar_2 = replace(
+                            bar_2, point_loads=BarPointLoad(1, 0, 0, 0, 0))
+                    elif force == 'fz':
+                        bar_1 = replace(
+                            bar_1, point_loads=BarPointLoad(0, 1, 0, 0, 1),
+                            hinge_w_j=True)
+                        bar_2 = replace(
+                            bar_2, point_loads=BarPointLoad(0, -1, 0, 0, 0))
+                    elif force == 'fm':
+                        bar_1 = replace(
+                            bar_1, point_loads=BarPointLoad(0, 0, 1, 0, 1),
+                            hinge_phi_j=True)
+                        bar_2 = replace(
+                            bar_2, point_loads=BarPointLoad(0, 0, -1, 0, 0))
+
+                    # TODO: Das kann nicht die beste Lösung sein!
+                    # TODO: Wie händelt man mehrere Systeme
+                    bars_list = list(self.system.bars)
+                    bars_list[idx:(idx + 1)] = [bar_1, bar_2]
+
+                    self.mod_system = FirstOrder(System(bars_list))
+
+                    return idx
+        else:
+            raise ValueError("obj must be an instance of Bar")
+
+    def force(self, force: Literal['fx', 'fz', 'fm'],
+              obj, position: float = 0):
+        if isinstance(obj, Bar):
+            idx = self.modify_bar(obj, position, force)
+        # elif isinstance(obj, Node):
+        #     idx = self.modify_node(obj, force)
+
+        if self.mod_system.solvable():
+            print('EFL = BIEGELINIE')
+
+            deform = self.mod_system.create_bar_deform_list()
+            forces = self.mod_system.create_list_of_bar_forces()
+
+            print(deform)
+
+            print(self.create_bar_deform_list())
+
+            # Normierung der Biegelinie
+            if isinstance(obj, Bar):
+
+                # TODO: Klappt das in 12-influence-line auch nicht ?!
+                deform_bar_i, deform_bar_j = deform[idx], deform[idx + 1]
+
+                print(deform_bar_i)
+                print(deform_bar_j)
+
+                # Zuordnen der Deformationen basierend auf der Kraftart
+                force_indices = {'fx': (3, 0), 'fz': (4, 1), 'fm': (5, 2)}
+                idx_i, idx_j = force_indices[force]
+
+                # Berechnung des virtuellen Kraftfaktors
+                delta = deform_bar_j[idx_j][0] - deform_bar_i[idx_i][0]
+
+                print(delta)
+                virt_force = float(np.abs(1 / delta))
+
+                print(virt_force)
+
+                # Dynamisches Setzen der Punktlasten, je nach Kraftart
+                point_loads = {
+                    'fx': [BarPointLoad(virt_force, 0, 0, 0, 1),
+                           BarPointLoad(-virt_force, 0, 0, 0, 0)],
+                    'fz': [BarPointLoad(0, virt_force, 0, 0, 1),
+                           BarPointLoad(0, -virt_force, 0, 0, 0)],
+                    'fm': [BarPointLoad(0, 0, virt_force, 0, 1),
+                           BarPointLoad(0, 0, -virt_force, 0, 0)]
+                }
+
+                self.mod_system.system.bars[idx].point_loads = (
+                    point_loads)[force][:1]
+                self.mod_system.system.bars[idx + 1].point_loads = (
+                    point_loads)[force][1:]
+
+                print(self.mod_system.system.bars)
+
+                # Berechnung der normierten Biegelinie und Kräfte
+                deform = self.mod_system.create_bar_deform_list()
+                forces = self.mod_system.create_list_of_bar_forces()
+
+                print(deform)
+
+            return deform, forces
+        else:
+            print('EFL = VERSCHIEBUNGSFIGUR')
+            # geometrische Verschiebungsfigur ermitteln
