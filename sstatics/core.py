@@ -508,15 +508,15 @@ class Bar:
     EI = property(lambda self: self.flexural_stiffness)
     """ Alias of :py:attr:`flexural_stiffness`. """
 
-    @cached_property
-    def modified_flexural_stiffness(self):
+    def modified_flexural_stiffness(self, f_axial):
         """ TODO """
         if 'shear' in self.deformations:
-            return self.EI * (1 + self.f0_first_order[0][0] / self.GA_s)
+            return self.EI * (1 + f_axial / self.GA_s)
         else:
             return self.EI
 
-    B_s = property(lambda self: self.modified_flexural_stiffness)
+    def B_s(self, f_axial):
+        return self.modified_flexural_stiffness(f_axial)
     """ Alias of :py:attr:`modified_flexural_stiffness`. """
 
     @cached_property
@@ -546,8 +546,7 @@ class Bar:
 
     def characteristic_number(self, f_axial):
         """ TODO """
-        f0_x_i = f_axial
-        return np.sqrt(abs(f0_x_i) / self.B_s) * self.length
+        return np.sqrt(abs(f_axial) / self.B_s(f_axial)) * self.length
 
     @cached_property
     def line_load(self):
@@ -616,7 +615,7 @@ class Bar:
         """ TODO """
         p_vec = self.line_load
         mu = self.characteristic_number(f_axial)
-        B_s = self.B_s
+        B_s = self.B_s(f_axial)
         p_i, p_j = p_vec[1][0], p_vec[4][0]
         p_sum, p_diff = p_vec[1][0] + p_vec[4][0], p_vec[1][0] - p_vec[4][0]
 
@@ -727,11 +726,10 @@ class Bar:
                  [f0_m_j]])
         )
 
-    @cached_property
-    def f0_second_order_taylor(self):
+    def f0_second_order_taylor(self, f_axial):
         """ TODO """
         p_vec = self.line_load
-        B_s = self.B_s
+        B_s = self.B_s(f_axial)
         p_i, p_j = p_vec[1][0], p_vec[4][0]
 
         f0_z_i = (self.length / 20) * (720 * B_s ** 2 * (p_j + p_i) - (
@@ -802,7 +800,7 @@ class Bar:
     def stiffness_second_order_analytic(self, f_axial):
         """ TODO """
         mu = self.characteristic_number(f_axial)
-        B_s = self.B_s
+        B_s = self.B_s(f_axial)
         factor = B_s / (self.GA_s * self.length ** 2)
 
         if f_axial < 0:
@@ -840,7 +838,7 @@ class Bar:
 
     def stiffness_second_order_taylor(self, f_axial):
         """ TODO """
-        B_s = self.B_s
+        B_s = self.B_s(f_axial)
         factor = B_s / (self.GA_s * self.length ** 2)
         denominator_common = factor + 1 / 12
         denominator_squared = denominator_common ** 2
@@ -914,7 +912,7 @@ class Bar:
             if approach == 'analytic':
                 f0 = self.f0_second_order_analytic(f_axial)
             elif approach == 'taylor':
-                f0 = self.f0_second_order_taylor
+                f0 = self.f0_second_order_taylor(f_axial)
             else:
                 f0 = self.f0_first_order
         f0 += self.f0_temp + self.f0_displacement - self.f0_point_load
@@ -1454,9 +1452,9 @@ class FirstOrder:
         for deform, force in zip(
                 self.create_bar_deform_list(),
                 self.create_list_of_bar_forces()):
-            phi_i, phi_j = force[2, 0], force[5, 0]
+            phi_i, phi_j = deform[2, 0], deform[5, 0]
             n_i, n_j = -force[0, 0], force[3, 0]
-            v_i, v_j = -deform[1, 0], deform[4, 0]
+            v_i, v_j = -force[1, 0], force[4, 0]
 
             l_i = n_i * np.cos(phi_i) + v_i * np.sin(phi_i)
             l_j = n_j * np.cos(phi_j) + v_j * np.sin(phi_j)
