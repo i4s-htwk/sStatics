@@ -265,7 +265,32 @@ class Node:
 
 @dataclass(eq=False)
 class CrossSection:
-    """ TODO """
+    r"""Create a cross-section for a statical system.
+
+    Parameters
+    ----------
+    mom_of_int : :any:`float`
+        Moment of inertia (:math:`I`), a measure of an object's resistance to
+        rotational acceleration.
+    area : :any:`float`
+        Area (:math:`A`), the cross-sectional area of the system.
+    height : :any:`float`
+        Height (:math:`h`) of the cross-section.
+    width : :any:`float`
+        Width of the cross-section.
+    shear_cor : :any:`float`
+        Shear correction factor (:math:`\kappa`), a dimensionless parameter.
+
+    Raises
+    ------
+    ValueError
+        :py:attr:`mom_of_int`, :py:attr:`area`, :py:attr:`height`,
+        :py:attr:`width` and :py:attr:`shear_cor` have to be greater than
+        zero.
+    ValueError
+        :py:attr:`area` has to be less than :py:attr:`width` times
+        :py:attr:`height` are set to zero.
+    """
 
     mom_of_int: float
     area: float
@@ -290,7 +315,29 @@ class CrossSection:
 
 @dataclass(eq=False)
 class Material:
-    """ TODO """
+    r"""Create a material for a statical system.
+
+    Parameters
+    ----------
+    young_mod : :any:`float`
+        Young's modulus (:math:`E`), a measure of the material's stiffness.
+    poisson : :any:`float`
+        Poisson's ratio (:math:`\nu`), the negative ratio of transverse to
+        axial strain.
+    shear_mod : :any:`float`
+        Shear modulus (:math:`G`), a measure of the material's response
+        to shear stress.
+    therm_exp_coeff : :any:`float`
+        Thermal expansion coefficient (:math:`\alpha_T`), describing how the
+        material's dimensions change with temperature (in 1/K).
+
+    Raises
+    ------
+    ValueError
+        :py:attr:`young_mod`, :py:attr:`poisson`, :py:attr:`shear_mod`,
+        and :py:attr:`therm_exp_coeff` have to be greater than
+        zero.
+    """
 
     young_mod: float
     poisson: float
@@ -350,7 +397,21 @@ class BarLineLoad:
 
 @dataclass(eq=False)
 class BarTemp:
-    """ TODO """
+    """Create a temperatur load case for a statical system.
+
+    Parameters
+    ----------
+    temp_o : :any:`float`
+        Temperature change above the neutral axis [K].
+    temp_u : :any:`float`
+        Temperature change below the neutral axis [K].
+
+    Raises
+    ------
+    ValueError
+        :py:attr:`temp_o`, :py:attr:`temp_u` have to be greater than or
+        equal to zero since its unit is Kelvin.
+    """
 
     temp_o: float
     temp_u: float
@@ -369,20 +430,80 @@ class BarTemp:
 
     @cached_property
     def temp_s(self):
-        """ TODO """
+        """Calculates the uniform temperature change in the unit Kelvin.
+
+        Returns
+        -------
+        :any:`float`
+            Averaged value of temperature changes above and below the neutral
+            axis in Kelvin.
+
+        Example
+        --------
+        >>> from sstatics import BarTemp
+        >>> temp = BarTemp(15, 30).temp_s
+        22.5
+        """
         return (self.temp_o + self.temp_u) / 2
 
     @cached_property
     def temp_delta(self):
-        """ TODO """
+        """Calculates the non-uniform temperature change in the unit Kelvin.
+
+        Returns
+        -------
+        :any:`float`
+            The temperature difference between the upper and lower side of the
+            neutral axis, indicating the non-uniform temperature change in
+            Kelvin.
+
+        Example
+        --------
+        >>> from sstatics import BarTemp
+        >>> temp_diff = BarTemp(10, 20).temp_delta
+        10.0
+        """
         return self.temp_u - self.temp_o
 
 
 @dataclass(eq=False)
 class BarPointLoad(PointLoad):
-    """ TODO """
+    """Creates a point load applied at a specific position along a bar.
 
-    # TODO: Documentation for variable position
+    Parameters
+    ----------
+    x : :any:`float`
+        The force component in the x-direction.
+    z : :any:`float`
+        The force component in the z-direction.
+    phi : :any:`float`
+        The moment applied along the beam.
+    rotation : :any:`float`, default=0.0
+        The rotation of the load components.
+    position : :any:`float`, default=0.0
+        Describes the relative position of the load along the bar. A value of
+        `0` indicates the start of the bar, and `1` indicates the end of the
+        bar.
+
+    Notes
+    -----
+    This class models a point load applied to a bar (or beam) at a specific
+    position. The load is applied in the x and z directions and includes a
+    moment (phi) along the beam. The position is a normalized value between 0
+    and 1, where 0 corresponds to the start of the bar and 1 corresponds to the
+    end of the bar.
+
+    Raises
+    ------
+    ValueError
+        :py:attr:`position` has to be a value between 0 and 1.
+
+    See Also
+    -----
+    :py:class:`NodePointLoad` and :py:class:`DegreesOfFreedom`
+
+    """
+
     position: float = 0.0
 
     def __post_init__(self):
