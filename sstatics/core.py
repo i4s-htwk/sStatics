@@ -167,15 +167,15 @@ class Node:
 
         Examples
         --------
-            >>> from sstatics import Node
-            >>> Node(1, 2).displacement
-            array([[0], [0], [0]])
+        >>> from sstatics import Node
+        >>> Node(1, 2).displacement
+        array([[0], [0], [0]])
 
-            >>> from sstatics import NodeDisplacement
-            >>> displacements = (NodeDisplacement(1.5, 2, 0.5),
-            >>>                  NodeDisplacement(-2, 3, -0.3))
-            >>> Node(-1, 3, displacements=displacements).displacement
-            array([[-0.5], [5], [0.2]])
+        >>> from sstatics import NodeDisplacement
+        >>> displacements = (NodeDisplacement(1.5, 2, 0.5),
+        >>>                  NodeDisplacement(-2, 3, -0.3))
+        >>> Node(-1, 3, displacements=displacements).displacement
+        array([[-0.5], [5], [0.2]])
         """
         if len(self.displacements) == 0:
             return np.array([[0], [0], [0]])
@@ -216,11 +216,11 @@ class Node:
 
         Examples
         --------
-            >>> from sstatics import Node, NodePointLoad
+        >>> from sstatics import Node, NodePointLoad
             >>> import numpy
-            >>> load = NodePointLoad(1, 2, 0.5, rotation=2 * numpy.pi)
-            >>> Node(6, 5, rotation=numpy.pi, loads=(load,)).rotate_load()
-            array([[-1], [-2], [0.5]])
+        >>> load = NodePointLoad(1, 2, 0.5, rotation=2 * numpy.pi)
+        >>> Node(6, 5, rotation=numpy.pi, loads=(load,)).rotate_load()
+        array([[-1], [-2], [0.5]])
         """
         if len(self.loads) == 0:
             return np.array([[0], [0], [0]])
@@ -253,12 +253,12 @@ class Node:
 
         Examples
         --------
-            >>> from sstatics import Node
-            >>> node = Node(1, 2)
-            >>> node.same_location(Node(1, 2))
-            True
-            >>> node.same_location(Node(1, -2))
-            False
+        >>> from sstatics import Node
+        >>> node = Node(1, 2)
+        >>> node.same_location(Node(1, 2))
+        True
+        >>> node.same_location(Node(1, -2))
+        False
         """
         return self.x == other.x and self.z == other.z
 
@@ -397,7 +397,7 @@ class BarLineLoad:
 
 @dataclass(eq=False)
 class BarTemp:
-    """Create a temperatur load case for a statical system.
+    """Create a temperature load case for a statical system.
 
     Parameters
     ----------
@@ -438,7 +438,7 @@ class BarTemp:
             Averaged value of temperature changes above and below the neutral
             axis in Kelvin.
 
-        Example
+        Examples
         --------
         >>> from sstatics import BarTemp
         >>> temp = BarTemp(15, 30).temp_s
@@ -457,7 +457,7 @@ class BarTemp:
             neutral axis, indicating the non-uniform temperature change in
             Kelvin.
 
-        Example
+        Examples
         --------
         >>> from sstatics import BarTemp
         >>> temp_diff = BarTemp(10, 20).temp_delta
@@ -499,9 +499,8 @@ class BarPointLoad(PointLoad):
         :py:attr:`position` has to be a value between 0 and 1.
 
     See Also
-    -----
+    --------
     :py:class:`NodePointLoad` and :py:class:`DegreesOfFreedom`
-
     """
 
     position: float = 0.0
