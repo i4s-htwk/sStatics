@@ -2,7 +2,7 @@
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from functools import cache, cached_property
-from typing import Literal
+from typing import Literal, Dict, Callable
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -559,7 +559,7 @@ class Bar:
             [load.rotate(self.inclination) for load in self.line_loads], axis=0
         )
 
-    @cached_property
+    @property
     def point_load(self):
         """ TODO """
         if len(self.point_loads) == 0:
@@ -568,7 +568,7 @@ class Bar:
             [load.rotate() for load in self.point_loads], axis=0
         )
 
-    @cached_property
+    @property
     def f0_point_load(self):
         """ TODO """
         m = np.transpose(self.transformation_matrix(to_node_coord=True))
@@ -921,7 +921,7 @@ class Bar:
                 f0 = self.f0_second_order_taylor
             else:
                 f0 = self.f0_first_order
-        f0 += self.f0_temp + self.f0_displacement + self.f0_point_load
+        f0 = f0 + self.f0_temp + self.f0_displacement - self.f0_point_load
 
         if hinge_modification:
             k = self.stiffness_matrix(
@@ -1184,6 +1184,17 @@ class System:
         }
 
     @cache
+    def node_to_bar_map(self, segmented: bool = True):
+        bars = self.segmented_bars if segmented else self.bars
+        node_connection = {}
+        for bar in bars:
+            for node in (bar.node_i, bar.node_j):
+                if node not in node_connection:
+                    node_connection[node] = []
+                node_connection[node].append(bar)
+        return node_connection
+
+    @cache
     def nodes(self, segmented: bool = True):
         return list(self.connected_nodes(segmented=segmented).keys())
 
@@ -1313,15 +1324,10 @@ class FirstOrder:
     def create_list_of_bar_forces(self, order: str = 'first',
                                   approach: str | None = None):
         bar_deform = self.bar_deform(order, approach)
-        f_node = [
-            bar.stiffness_matrix() @ deform +
-            bar.f0()
-            for bar, deform in zip(self.system.segmented_bars, bar_deform)
-        ]
         return [
-            np.transpose(
-                bar.transformation_matrix()) @ forces - bar.f0_point_load
-            for bar, forces in zip(self.system.segmented_bars, f_node)
+            bar.stiffness_matrix(to_node_coord=False) @ deform +
+            bar.f0(to_node_coord=False)
+            for bar, deform in zip(self.system.segmented_bars, bar_deform)
         ]
 
     def _apply_hinge_modification(self, order: str = 'first',
@@ -1392,115 +1398,227 @@ class SecondOrder(FirstOrder):
 
 
 @dataclass(eq=False)
-class InfluenceLine(FirstOrder):
+class SystemModifier:
+
+    system: System
+
+    def delete_load(self):
+        bars = []
+        for bar in self.system.bars:
+            updated_bar = replace(
+                bar,
+                node_i=replace(bar.node_i, displacements=(), loads=()),
+                node_j=replace(bar.node_j, displacements=(), loads=()),
+                line_loads=(),
+                point_loads=(),
+                temp=BarTemp(temp_o=0, temp_u=0),
+            )
+            bars.append(updated_bar)
+            return System(bars)
+
+    def modify_bar_force(self, obj: Bar, force: Literal['fx', 'fz', 'fm'],
+                         position: float, virt_force: float = 1) -> System:
+        for bar in self.system.bars:
+            if bar == obj:
+                # find list index of the bar
+                bars = list(self.system.bars)
+                idx = bars.index(bar)
+
+                # set point_loads and hinge
+                force_mapping = self.get_force_mapping()
+                loads = force_mapping[force]['loads'](virt_force)
+                hinge = force_mapping[force]['hinge']
+
+                if 0 < position < 1:
+                    # divide bar at position and get 2 Bar-Instances
+                    bar_1, bar_2 = bar.segment([position])
+
+                    # replace point_loads and hinge
+                    modified_bar_1 = replace(bar_1, point_loads=loads[1],
+                                             **{hinge[1]: True})
+                    modified_bar_2 = replace(bar_2, point_loads=loads[0])
+
+                    # replace the 2 modified bars in list
+                    bars[idx:idx + 1] = [modified_bar_1, modified_bar_2]
+                else:
+                    # replace point_loads and hinge
+                    modified_bar = replace(bar, point_loads=loads[position],
+                                           **{hinge[position]: True})
+                    # replace the modified bar in list
+                    bars[idx] = modified_bar
+
+                return System(bars)
+        raise ValueError("Bar not found in system")
+
+    def modify_bar_deform(self, obj: Bar, deform: Literal['u', 'w', 'phi'],
+                          position: float = 0) -> System:
+        for bar in self.system.bars:
+            if bar == obj:
+                # set point_loads
+                if deform == 'u':
+                    point_loads = [BarPointLoad(1, 0, 0, 0, position)]
+                elif deform == 'w':
+                    point_loads = [BarPointLoad(0, 1, 0, 0, position)]
+                elif deform == 'phi':
+                    point_loads = [BarPointLoad(0, 0, -1, 0, position)]
+                else:
+                    raise ValueError(f"Invalid deform type: {deform}")
+
+                # replace point_loads
+                modified_bar = replace(bar, point_loads=point_loads)
+
+                # replace the modified bar in bars
+                # find list index of the bar
+                bars = list(self.system.bars)
+                idx = bars.index(bar)
+                bars[idx] = modified_bar
+
+                return System(bars)
+        raise ValueError("Bar not found in system")
+
+    def modify_node_force(self, obj: Node, force: Literal['fx', 'fz', 'fm']):
+        nodes = self.system.nodes()
+        for node in nodes:
+            if node == obj:
+                if force == 'fx':
+                    modified_node = replace(node, u='free',
+                                            loads=[NodePointLoad(1, 0, 0)])
+                elif force == 'fz':
+                    modified_node = replace(node, w='free',
+                                            loads=[NodePointLoad(0, 1, 0)])
+                elif force == 'fm':
+                    modified_node = replace(node, phi='free',
+                                            loads=[NodePointLoad(0, 0, 1)])
+                else:
+                    raise ValueError(f"Invalid force type: {force}")
+
+                connected_bars = self.system.node_to_bar_map()[node]
+                bars = list(self.system.bars)
+
+                for bar in connected_bars:
+                    if node == bar.node_i:
+                        modified_bar = replace(bar, node_i=modified_node)
+                    else:
+                        modified_bar = replace(bar, node_j=modified_node)
+
+                    idx = bars.index(bar)
+                    bars[idx] = modified_bar
+                return System(bars)
+        raise ValueError("Node not found in system")
+
+    def get_force_mapping(self) -> Dict[str, Dict[str, Callable]]:
+        return {
+            'fx': {
+                'loads': lambda virt_force: [
+                    BarPointLoad(-virt_force, 0, 0, 0, 0),
+                    BarPointLoad(virt_force, 0, 0, 0, 1)
+                ],
+                'hinge': ['hinge_u_i', 'hinge_u_j']
+            },
+            'fz': {
+                'loads': lambda virt_force: [
+                    BarPointLoad(0, -virt_force, 0, 0, 0),
+                    BarPointLoad(0, virt_force, 0, 0, 1)
+                ],
+                'hinge': ['hinge_w_i', 'hinge_w_j']
+            },
+            'fm': {
+                'loads': lambda virt_force: [
+                    BarPointLoad(0, 0, -virt_force, 0, 0),
+                    BarPointLoad(0, 0, virt_force, 0, 1)
+                ],
+                'hinge': ['hinge_phi_i', 'hinge_phi_j']
+            }
+        }
+
+
+@dataclass(eq=False)
+class InfluenceLine:
+
+    system: System
 
     def __post_init__(self):
         self.dof = 3
+        self.modifier = SystemModifier(self.system)
 
-    def modify_bar(self, obj: Bar, position: float,
-                   force: Literal['fx', 'fz', 'fm']):
+    def force(self, force: Literal['fx', 'fz', 'fm'], obj,
+              position: float = 0):
+        if force not in ['fx', 'fz', 'fm']:
+            raise ValueError(f"Invalid force type: {force}")
+
+        if isinstance(obj, Bar):
+            self.modified_system = self.modifier.modify_bar_force(
+                obj, force, position, virt_force=1)
+
+        elif isinstance(obj, Node):
+            if position:
+                raise ValueError(
+                    "If obj is an instance of Node, position must be None.")
+            self.modified_system = self.modifier.modify_node_force(obj, force)
+        else:
+            raise ValueError("obj must be an instance of Bar or Node")
+
+        calc_system = FirstOrder(self.modified_system)
+
+        if calc_system.solvable():
+            if 0 < position < 1:
+                # calc norm force
+                norm_force = self.calc_norm_force(force, obj)
+
+                # modify system and set the value of the virtual force to
+                # norm force
+                self.modified_system = self.modifier.modify_bar_force(
+                    obj, force, position, virt_force=norm_force)
+
+                calc_system = FirstOrder(self.modified_system)
+            return calc_system.calc()
+        else:
+            # TODO: Hier wird die Verschiebungsfigur zurückgegeben und
+            #       nicht deform, force wie bei calc_system.calc()
+            return None
+
+    def calc_norm_force(self, force: Literal['fx', 'fz', 'fm'],
+                        obj: Bar):
+        """
+        Normalize the deformation of the bar system based on the given force.
+        This method calculates a virtual force to balance the deformation
+        difference between two connected bars, based on their deformation.
+        """
+        # calc bar deformations
+        calc_system = FirstOrder(self.modified_system)
+        deform = calc_system.create_bar_deform_list()
+
+        # Get the index of the bar in the system
+        bars = list(self.system.bars)
+        idx = bars.index(obj)
+
+        deform_bar_i, deform_bar_j = deform[idx], deform[idx + 1]
+
+        # Map the force type to corresponding indices for the deformation
+        # values
+        force_indices = {'fx': (3, 0), 'fz': (4, 1), 'fm': (5, 2)}
+        idx_i, idx_j = force_indices[force]
+
+        # Calculate the difference in deformation between the two bars
+        delta = deform_bar_j[idx_j][0] - deform_bar_i[idx_i][0]
+
+        # Calculate the virtual force based on the deformation difference
+        return -1 * float(np.abs(1 / delta))
+
+    def deform(self, deform: Literal['u', 'w', 'phi'], obj: Bar,
+               position: float = 0):
+        if deform not in ['u', 'w', 'phi']:
+            raise ValueError(f"Invalid deform type: {deform}")
+
         if isinstance(obj, Bar):
             if not (0 <= position <= 1):
-                raise ValueError("position must be between 0 and 1")
+                raise ValueError(
+                    f"Position {position} must be between 0 and 1.")
 
-            for bar in self.system.bars:
-                if bar == obj:
-                    idx = self.system.bars.index(bar)
+            self.modified_system = (
+                self.modifier.modify_bar_deform(obj, deform, position))
 
-                    bar_1, bar_2 = bar.segment([position])
+            calc_system = FirstOrder(self.modified_system)
 
-                    if force == 'fx':
-                        bar_1 = replace(
-                            bar_1, point_loads=BarPointLoad(1, 0, 0, 0, 1),
-                            hinge_u_j=True)
-                        bar_2 = replace(
-                            bar_2, point_loads=BarPointLoad(1, 0, 0, 0, 0))
-                    elif force == 'fz':
-                        bar_1 = replace(
-                            bar_1, point_loads=BarPointLoad(0, 1, 0, 0, 1),
-                            hinge_w_j=True)
-                        bar_2 = replace(
-                            bar_2, point_loads=BarPointLoad(0, -1, 0, 0, 0))
-                    elif force == 'fm':
-                        bar_1 = replace(
-                            bar_1, point_loads=BarPointLoad(0, 0, 1, 0, 1),
-                            hinge_phi_j=True)
-                        bar_2 = replace(
-                            bar_2, point_loads=BarPointLoad(0, 0, -1, 0, 0))
-
-                    # TODO: Das kann nicht die beste Lösung sein!
-                    # TODO: Wie händelt man mehrere Systeme
-                    bars_list = list(self.system.bars)
-                    bars_list[idx:(idx + 1)] = [bar_1, bar_2]
-
-                    self.mod_system = FirstOrder(System(bars_list))
-
-                    return idx
-        else:
-            raise ValueError("obj must be an instance of Bar")
-
-    def force(self, force: Literal['fx', 'fz', 'fm'],
-              obj, position: float = 0):
-        if isinstance(obj, Bar):
-            idx = self.modify_bar(obj, position, force)
-        # elif isinstance(obj, Node):
-        #     idx = self.modify_node(obj, force)
-
-        if self.mod_system.solvable():
-            print('EFL = BIEGELINIE')
-
-            deform = self.mod_system.create_bar_deform_list()
-            forces = self.mod_system.create_list_of_bar_forces()
-
-            print(deform)
-
-            print(self.create_bar_deform_list())
-
-            # Normierung der Biegelinie
-            if isinstance(obj, Bar):
-
-                # TODO: Klappt das in 12-influence-line auch nicht ?!
-                deform_bar_i, deform_bar_j = deform[idx], deform[idx + 1]
-
-                print(deform_bar_i)
-                print(deform_bar_j)
-
-                # Zuordnen der Deformationen basierend auf der Kraftart
-                force_indices = {'fx': (3, 0), 'fz': (4, 1), 'fm': (5, 2)}
-                idx_i, idx_j = force_indices[force]
-
-                # Berechnung des virtuellen Kraftfaktors
-                delta = deform_bar_j[idx_j][0] - deform_bar_i[idx_i][0]
-
-                print(delta)
-                virt_force = float(np.abs(1 / delta))
-
-                print(virt_force)
-
-                # Dynamisches Setzen der Punktlasten, je nach Kraftart
-                point_loads = {
-                    'fx': [BarPointLoad(virt_force, 0, 0, 0, 1),
-                           BarPointLoad(-virt_force, 0, 0, 0, 0)],
-                    'fz': [BarPointLoad(0, virt_force, 0, 0, 1),
-                           BarPointLoad(0, -virt_force, 0, 0, 0)],
-                    'fm': [BarPointLoad(0, 0, virt_force, 0, 1),
-                           BarPointLoad(0, 0, -virt_force, 0, 0)]
-                }
-
-                self.mod_system.system.bars[idx].point_loads = (
-                    point_loads)[force][:1]
-                self.mod_system.system.bars[idx + 1].point_loads = (
-                    point_loads)[force][1:]
-
-                print(self.mod_system.system.bars)
-
-                # Berechnung der normierten Biegelinie und Kräfte
-                deform = self.mod_system.create_bar_deform_list()
-                forces = self.mod_system.create_list_of_bar_forces()
-
-                print(deform)
-
-            return deform, forces
-        else:
-            print('EFL = VERSCHIEBUNGSFIGUR')
-            # geometrische Verschiebungsfigur ermitteln
+            return calc_system.calc()
+        raise ValueError("obj must be an instance of Bar")
