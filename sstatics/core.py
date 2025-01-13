@@ -1476,19 +1476,29 @@ class SystemModifier:
                 return System(bars)
         raise ValueError("Bar not found in system")
 
-    def modify_node_force(self, obj: Node, force: Literal['fx', 'fz', 'fm']):
+    def modify_node_force(self, obj: Node, force: Literal['fx', 'fz', 'fm'],
+                          virt_force: float = 1):
         nodes = self.system.nodes()
         for node in nodes:
             if node == obj:
                 if force == 'fx':
-                    modified_node = replace(node, u='free',
-                                            loads=[NodePointLoad(1, 0, 0)])
+                    modified_node = (
+                        replace(node,
+                                u='free',
+                                loads=[NodePointLoad(-virt_force, 0, 0)])
+                    )
                 elif force == 'fz':
-                    modified_node = replace(node, w='free',
-                                            loads=[NodePointLoad(0, 1, 0)])
+                    modified_node = (
+                        replace(node,
+                                w='free',
+                                loads=[NodePointLoad(0, -virt_force, 0)])
+                    )
                 elif force == 'fm':
-                    modified_node = replace(node, phi='free',
-                                            loads=[NodePointLoad(0, 0, 1)])
+                    modified_node = (
+                        replace(node,
+                                phi='free',
+                                loads=[NodePointLoad(0, 0, -virt_force)])
+                    )
                 else:
                     raise ValueError(f"Invalid force type: {force}")
 
@@ -1554,23 +1564,22 @@ class InfluenceLine:
             if position:
                 raise ValueError(
                     "If obj is an instance of Node, position must be None.")
-            self.modified_system = self.modifier.modify_node_force(obj, force)
+            self.modified_system = self.modifier.modify_node_force(
+                obj, force, virt_force=1)
         else:
             raise ValueError("obj must be an instance of Bar or Node")
 
         calc_system = FirstOrder(self.modified_system)
 
         if calc_system.solvable():
-            if 0 < position < 1:
-                # calc norm force
-                norm_force = self.calc_norm_force(force, obj)
-
-                # modify system and set the value of the virtual force to
-                # norm force
+            norm_force = self.calc_norm_force(force, obj)
+            if isinstance(obj, Bar):
                 self.modified_system = self.modifier.modify_bar_force(
                     obj, force, position, virt_force=norm_force)
-
-                calc_system = FirstOrder(self.modified_system)
+            elif isinstance(obj, Node):
+                self.modified_system = self.modifier.modify_node_force(
+                    obj, force, virt_force=norm_force)
+            calc_system = FirstOrder(self.modified_system)
             return calc_system.calc()
         else:
             # TODO: Hier wird die Verschiebungsfigur zurückgegeben und
@@ -1578,31 +1587,47 @@ class InfluenceLine:
             return None
 
     def calc_norm_force(self, force: Literal['fx', 'fz', 'fm'],
-                        obj: Bar):
+                        obj):
         """
         Normalize the deformation of the bar system based on the given force.
         This method calculates a virtual force to balance the deformation
         difference between two connected bars, based on their deformation.
         """
-        # calc bar deformations
         calc_system = FirstOrder(self.modified_system)
-        deform = calc_system.create_bar_deform_list()
+        if isinstance(obj, Bar):
+            # calc bar deformations
+            deform = calc_system.create_bar_deform_list()
 
-        # Get the index of the bar in the system
-        bars = list(self.system.bars)
-        idx = bars.index(obj)
+            # Get the index of the bar in the system
+            bars = list(self.system.bars)
+            idx = bars.index(obj)
 
-        deform_bar_i, deform_bar_j = deform[idx], deform[idx + 1]
+            deform_bar_i, deform_bar_j = deform[idx], deform[idx + 1]
 
-        # Map the force type to corresponding indices for the deformation
-        # values
-        force_indices = {'fx': (3, 0), 'fz': (4, 1), 'fm': (5, 2)}
-        idx_i, idx_j = force_indices[force]
+            # Map the force type to corresponding indices for the deformation
+            # values
+            force_indices = {'fx': (3, 0), 'fz': (4, 1), 'fm': (5, 2)}
+            idx_i, idx_j = force_indices[force]
 
-        # Calculate the difference in deformation between the two bars
-        delta = deform_bar_j[idx_j][0] - deform_bar_i[idx_i][0]
+            # Calculate the difference in deformation between the two bars
+            delta = deform_bar_j[idx_j][0] - deform_bar_i[idx_i][0]
+        elif isinstance(obj, Node):
+            node_deformation = calc_system.node_deformation()
+            for i, node in enumerate(self.system.nodes()):
+                if node == obj:
+                    node_deform = node_deformation[
+                               i * self.dof:i * self.dof + self.dof, :]
+                    force_indices = {'fx': 0, 'fz': 1, 'fm': 2}
+                    delta = node_deform[force_indices[force]][0]
+                    break
+                else:
+                    raise ValueError("Node not found in the system.")
+        else:
+            raise ValueError("obj must be an instance of Bar or Node")
 
-        # Calculate the virtual force based on the deformation difference
+        if delta == 0:
+            raise ZeroDivisionError("Deformation difference (delta) is zero, "
+                                    "cannot calculate norm force.")
         return -1 * float(np.abs(1 / delta))
 
     def deform(self, deform: Literal['u', 'w', 'phi'], obj: Bar,
