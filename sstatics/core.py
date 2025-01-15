@@ -1620,8 +1620,6 @@ class InfluenceLine:
                     force_indices = {'fx': 0, 'fz': 1, 'fm': 2}
                     delta = node_deform[force_indices[force]][0]
                     break
-                else:
-                    raise ValueError("Node not found in the system.")
         else:
             raise ValueError("obj must be an instance of Bar or Node")
 
