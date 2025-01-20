@@ -459,6 +459,10 @@ class Bar:
         if to_node_coord:
             alpha_i -= self.node_i.rotation
             alpha_j -= self.node_j.rotation
+
+        # Paula?
+        alpha_i = np.deg2rad(alpha_i)
+        alpha_j = np.deg2rad(alpha_j)
         return np.vstack((
             np.hstack((transformation_matrix(alpha_i), np.zeros((3, 3)))),
             np.hstack((np.zeros((3, 3)), transformation_matrix(alpha_j))),
@@ -1307,9 +1311,9 @@ class FirstOrder:
     def bar_deform(self, order: str = 'first', approach: str | None = None):
         node_deform = self.node_deformation(order, approach)
         nodes = self.system.nodes()
-
+        # Paula?
         return [
-            np.transpose(bar.transformation_matrix())
+            (bar.transformation_matrix())
             @ np.vstack([
                 node_deform[nodes.index(bar.node_i) *
                             self.dof: nodes.index(bar.node_i) * self.dof +
@@ -1324,9 +1328,10 @@ class FirstOrder:
     def create_list_of_bar_forces(self, order: str = 'first',
                                   approach: str | None = None):
         bar_deform = self.bar_deform(order, approach)
+        # Paula?
         return [
             bar.stiffness_matrix(to_node_coord=False) @ deform +
-            bar.f0(to_node_coord=False)
+            bar.f0(to_node_coord=False) + bar.f0_point_load
             for bar, deform in zip(self.system.segmented_bars, bar_deform)
         ]
 
