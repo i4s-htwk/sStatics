@@ -1,13 +1,13 @@
 
 import abc
 
-import numpy
+import numpy as np
 import plotly.graph_objs as go
 
 
 def rotate(ox, oz, x, z, rotation=0):
-    x_rot = ox + numpy.cos(rotation) * (x - ox) - numpy.sin(rotation) * (z - oz)
-    z_rot = oz + numpy.sin(rotation) * (x - ox) + numpy.cos(rotation) * (z - oz)
+    x_rot = ox + np.cos(rotation) * (x - ox) - np.sin(rotation) * (z - oz)
+    z_rot = oz + np.sin(rotation) * (x - ox) + np.cos(rotation) * (z - oz)
     return x_rot, z_rot
 
 
@@ -53,7 +53,7 @@ class GraphicObject(abc.ABC):
         traces = []
         for trace in self.traces:
             x, z = rotate(
-                ox, oz, numpy.array(trace.x), numpy.array(trace.y), rotation
+                ox, oz, np.array(trace.x), np.array(trace.y), rotation
             )
             traces.append(trace.update(x=x, y=z))
         return tuple(traces)
@@ -67,8 +67,8 @@ class GraphicObject(abc.ABC):
 
 class IsoscelesTriangle(GraphicObject):
 
-    def __init__(self, x, z, angle=numpy.pi / 4, **kwargs):
-        if not 0 < angle < numpy.pi:
+    def __init__(self, x, z, angle=np.pi / 4, **kwargs):
+        if not 0 < angle < np.pi:
             raise ValueError(
                 '"angle" has to be a number from the interval (0, pi).'
             )
@@ -77,11 +77,11 @@ class IsoscelesTriangle(GraphicObject):
 
     @property
     def traces(self):
-        x_offset = numpy.sin(self.angle / 2) * self.scale
-        x = numpy.array([
+        x_offset = np.sin(self.angle / 2) * self.scale
+        x = np.array([
             self.x - x_offset, self.x, self.x + x_offset, self.x - x_offset
         ])
-        z = numpy.array([
+        z = np.array([
             self.z - self.scale, self.z, self.z - self.scale,
             self.z - self.scale
         ])
@@ -107,8 +107,8 @@ class Arrow(IsoscelesTriangle):
 
     @property
     def traces(self):
-        x = numpy.array([self.x, self.x])
-        z = numpy.array([
+        x = np.array([self.x, self.x])
+        z = np.array([
             self.z - self.scale, self.z - (1 + self.tail_length) * self.scale
         ])
         x, z = rotate(self.x, self.z, x, z, self.rotation)
@@ -132,7 +132,7 @@ class CoordinateSystem(GraphicObject):
             )
             annotations.append(go.layout.Annotation(
                 x=x, y=z, text=self.x_text, showarrow=False, font_size=12,
-                textangle=numpy.rad2deg(self.rotation)
+                textangle=np.rad2deg(self.rotation)
             ))
         return tuple(annotations)
 
@@ -140,7 +140,7 @@ class CoordinateSystem(GraphicObject):
     def traces(self):
         x_axis = Arrow(
             self.x + self.scale, self.z, tail_length=6, scale=self.scale,
-            rotation=-numpy.pi / 2
+            rotation=-np.pi / 2
         )
         z_axis = Arrow(
             self.x, self.z + self.scale, tail_length=6, scale=self.scale
@@ -153,7 +153,7 @@ class CoordinateSystem(GraphicObject):
 class Ellipse(GraphicObject):
 
     def __init__(
-        self, x, z, a, b=None, angle_range=(0, 2 * numpy.pi), n_points=100,
+        self, x, z, a, b=None, angle_range=(0, 2 * np.pi), n_points=100,
         **kwargs
     ):
         super().__init__(x, z, **kwargs)
@@ -168,7 +168,7 @@ class Ellipse(GraphicObject):
                 '"n_points" has to be an integer greater or equal to 4.'
             )
         for angle in angle_range:
-            if not 0 <= angle <= 2 * numpy.pi:
+            if not 0 <= angle <= 2 * np.pi:
                 raise ValueError(
                     'Both angles in "angle_range" have to be in the interval '
                     '[0, 2 * pi].'
@@ -185,11 +185,11 @@ class Ellipse(GraphicObject):
 
     @property
     def traces(self):
-        angles = numpy.linspace(
+        angles = np.linspace(
             self.angle_range[0], self.angle_range[1], self.n_points
         )
-        x = self.x + self.a * numpy.cos(angles) * self.scale
-        z = self.z + self.b * numpy.sin(angles) * self.scale
+        x = self.x + self.a * np.cos(angles) * self.scale
+        z = self.z + self.b * np.sin(angles) * self.scale
         x, z = rotate(self.x, self.z, x, z, rotation=self.rotation)
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
@@ -212,15 +212,15 @@ class ShearForceHinge(Hinge):
     def traces(self):
         x, z = rotate(
             self.x, self.z,
-            numpy.array([self.x - self.width / 2, self.x - self.width / 2]),
-            numpy.array([self.z - self.scale / 2, self.z + self.scale / 2]),
+            np.array([self.x - self.width / 2, self.x - self.width / 2]),
+            np.array([self.z - self.scale / 2, self.z + self.scale / 2]),
             rotation=self.rotation
         )
         left_line = go.Scatter(x=x, y=z, **self.scatter_kwargs)
         x, z = rotate(
             self.x, self.z,
-            numpy.array([self.x + self.width / 2, self.x + self.width / 2]),
-            numpy.array([self.z - self.scale / 2, self.z + self.scale / 2]),
+            np.array([self.x + self.width / 2, self.x + self.width / 2]),
+            np.array([self.z - self.scale / 2, self.z + self.scale / 2]),
             rotation=self.rotation
         )
         right_line = go.Scatter(x=x, y=z, **self.scatter_kwargs)
@@ -234,11 +234,11 @@ class NormalForceHinge(Hinge):
 
     @property
     def traces(self):
-        x = numpy.array([
+        x = np.array([
             self.x - self.width / 2, self.x - self.width / 2,
             self.x + self.width / 2, self.x + self.width / 2
         ])
-        z = numpy.array([
+        z = np.array([
             self.z + self.scale, self.z, self.z, self.z + self.scale
         ])
         x, z = rotate(self.x, self.z, x, z, rotation=self.rotation)
