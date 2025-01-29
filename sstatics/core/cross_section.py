@@ -4,7 +4,32 @@ from dataclasses import dataclass
 
 @dataclass(eq=False)
 class CrossSection:
-    """ TODO """
+    r"""Create a cross-section for a statical system.
+
+    Parameters
+    ----------
+    mom_of_int : :any:`float`
+        Moment of inertia (:math:`I`), a measure of an object's resistance to
+        rotational acceleration.
+    area : :any:`float`
+        Area (:math:`A`), the cross-sectional area of the system.
+    height : :any:`float`
+        Height (:math:`h`) of the cross-section.
+    width : :any:`float`
+        Width of the cross-section.
+    shear_cor : :any:`float`
+        Shear correction factor (:math:`\kappa`), a dimensionless parameter.
+
+    Raises
+    ------
+    ValueError
+        :py:attr:`mom_of_int`, :py:attr:`area`, :py:attr:`height`,
+        :py:attr:`width` and :py:attr:`shear_cor` have to be greater than
+        zero.
+    ValueError
+        :py:attr:`area` has to be less than :py:attr:`width` times
+        :py:attr:`height` are set to zero.
+    """
 
     mom_of_int: float
     area: float

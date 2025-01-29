@@ -1,23 +1,5 @@
 
-from sstatics.core import (
-    Bar, BarLineLoad, BarPointLoad, BarTemp, CrossSection, DegreesOfFreedom,
-    Material, FirstOrder, Node, NodeDisplacement, NodePointLoad, PointLoad,
-    System, transformation_matrix
-)
+from sstatics import core
+from sstatics.core import *  # noqa: F401, F403
 
-__all__ = [
-    'Bar',
-    'BarLineLoad',
-    'BarPointLoad',
-    'BarTemp',
-    'CrossSection',
-    'DegreesOfFreedom',
-    'Material',
-    'FirstOrder',
-    'Node',
-    'NodeDisplacement',
-    'NodePointLoad',
-    'PointLoad',
-    'System',
-    'transformation_matrix',
-]
+__all__ = core.__all__
