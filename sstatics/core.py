@@ -557,7 +557,7 @@ class Bar:
             [load.rotate(self.inclination) for load in self.line_loads], axis=0
         )
 
-    @cached_property
+    @property
     def point_load(self):
         """ TODO """
         if len(self.point_loads) == 0:
@@ -566,10 +566,10 @@ class Bar:
             [load.rotate() for load in self.point_loads], axis=0
         )
 
-    @cached_property
-    def f0_point_load(self):
+    @property
+    def f0_point(self):
         """ TODO """
-        m = np.transpose(self.transformation_matrix(to_node_coord=True))
+        m = np.transpose(self.transformation_matrix())
         return m @ self.point_load
 
     @cached_property
@@ -587,14 +587,14 @@ class Bar:
         f0_displacement = np.vstack(
             (self.node_i.displacement, self.node_j.displacement)
         )
-        trans_m = self.transformation_matrix(to_node_coord=False)
+        trans_m = self.transformation_matrix()
         k = self.stiffness_matrix(
-            hinge_modification=False, to_node_coord=False
+            hinge_modification=False
         )
         return k @ trans_m @ f0_displacement
 
     @cached_property
-    def f0_first_order(self):
+    def f0_line(self):
         """ TODO """
         p, const = self.line_load, self.GA_s * self.length ** 2
         factors = np.array([
@@ -609,9 +609,9 @@ class Bar:
             factors @ np.array([[p[0][0]], [p[3][0]], [p[4][0]], [p[1][0]]]),
             factors @ np.array([[p[3][0]], [p[0][0]], [p[1][0]], [p[4][0]]]),
         ))
-        return f0 * np.array([[-1], [-1], [1], [1], [-1], [-1]])
+        return f0 * np.array([[-1], [-1], [1], [-1], [-1], [-1]])
 
-    def f0_second_order_analytic(self, f_axial):
+    def f0_line_analytic(self, f_axial):
         """ TODO """
         p_vec = self.line_load
         mu = self.characteristic_number(f_axial)
@@ -726,7 +726,7 @@ class Bar:
                  [f0_m_j]])
         )
 
-    def f0_second_order_taylor(self, f_axial):
+    def f0_line_taylor(self, f_axial):
         """ TODO """
         p_vec = self.line_load
         B_s = self.B_s(f_axial)
@@ -753,16 +753,7 @@ class Bar:
                 self.EI - B_s) * (p_j - p_i) / (
                 12 * B_s + self.GA_s * self.length ** 2)
 
-        f0_z_j = (self.length / 20) * (720 * B_s ** 2 * (p_j + p_i) - (
-                4 * self.EI * self.GA_s * self.length ** 2) * (p_j - p_i) + (
-                20 * B_s * self.GA_s * self.length ** 2) * (
-                5 * p_j + 7 * p_i) + self.GA_s ** 2 * self.length ** 4 * (
-                3 * p_j + 7 * p_i)) / (
-                12 * B_s + self.GA_s * self.length ** 2) ** 2 - (
-                self.EI * (p_j - p_i)) / (self.GA_s * self.length) - (
-                self.length * (p_j + p_i)) / 2 - (12 * B_s / self.length) * (
-                self.EI - B_s) * (p_j - p_i) / (
-                12 * B_s + self.GA_s * self.length ** 2)
+        f0_z_j = f0_z_i - (p_j + p_i) * self.length / 2
 
         f0_m_j = (4320 * B_s ** 3 * (p_j + p_i) - (
                 6 * self.EI * self.GA_s ** 2 * self.length ** 4) * (
@@ -907,15 +898,15 @@ class Bar:
         self._validate_order_approach(order, approach)
 
         if order == 'first':
-            f0 = self.f0_first_order
+            f0_line = self.f0_line
         else:
             if approach == 'analytic':
-                f0 = self.f0_second_order_analytic(f_axial)
+                f0_line = self.f0_line_analytic(f_axial)
             elif approach == 'taylor':
-                f0 = self.f0_second_order_taylor(f_axial)
+                f0_line = self.f0_line_taylor(f_axial)
             else:
-                f0 = self.f0_first_order
-        f0 += self.f0_temp + self.f0_displacement - self.f0_point_load
+                f0_line = self.f0_line
+        f0 = f0_line + self.f0_temp + self.f0_displacement - self.f0_point
 
         if hinge_modification:
             k = self.stiffness_matrix(
@@ -958,7 +949,7 @@ class Bar:
 
         if order == 'first':
             if 'shear' in self.deformations:
-                k @= self.stiffness_shear_force
+                k = k @ self.stiffness_shear_force
         else:
             if approach == 'analytic':
                 k @= self.stiffness_second_order_analytic(f_axial)
@@ -966,10 +957,10 @@ class Bar:
                 k @= self.stiffness_second_order_taylor(f_axial)
             elif approach == 'p_delta':
                 if 'shear' in self.deformations:
-                    k @= self.stiffness_shear_force
-                    k += self.stiffness_second_order_p_delta(f_axial)
+                    k = (k @ self.stiffness_shear_force +
+                         self.stiffness_second_order_p_delta(f_axial))
                 else:
-                    k += self.stiffness_second_order_p_delta(f_axial)
+                    k = k + self.stiffness_second_order_p_delta(f_axial)
             else:
                 if 'shear' in self.deformations:
                     k @= self.stiffness_shear_force
@@ -1182,10 +1173,13 @@ class System:
 
 @dataclass(eq=False)
 class FirstOrder:
+
     system: System
 
     def __post_init__(self):
         self.dof = 3
+        self.order = 'first'
+        self.approach = None
 
     def _get_zero_matrix(self):
         x = len(self.system.nodes()) * self.dof
@@ -1195,21 +1189,24 @@ class FirstOrder:
         x = len(self.system.nodes()) * self.dof
         return np.zeros((x, 1))
 
-    def stiffness_matrix(
-            self, order: Literal['first', 'second'] = 'first', approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None
-    ):
+    def _get_f_axial(self, index):
+        if self.order == 'second':
+            return self.averaged_longitudinal_force[index]
+        return 0
+
+    @cache
+    def stiffness_matrix(self):
         k_system = self._get_zero_matrix()
         nodes = self.system.nodes()
         f_axial = 0
         for index, bar in enumerate(self.system.segmented_bars):
             i = nodes.index(bar.node_i) * self.dof
             j = nodes.index(bar.node_j) * self.dof
-            if order == 'second':
-                f_axial = self.averaged_longitudinal_force[index]
 
-            k = bar.stiffness_matrix(order=order, approach=approach,
-                                     f_axial=f_axial)
+            f_axial = self._get_f_axial(index)
+
+            k = bar.stiffness_matrix(
+                self.order, self.approach, f_axial=f_axial)
 
             k_system[i:i + self.dof, i:i + self.dof] += k[:self.dof, :self.dof]
             k_system[i:i + self.dof, j:j + self.dof] += (
@@ -1220,6 +1217,7 @@ class FirstOrder:
                 k[self.dof:2 * self.dof, self.dof:2 * self.dof])
         return k_system
 
+    @cache
     def elastic_matrix(self):
         elastic = self._get_zero_matrix()
         nodes = self.system.nodes()
@@ -1242,35 +1240,28 @@ class FirstOrder:
                 el_bar[self.dof:2 * self.dof, self.dof:2 * self.dof])
         return elastic
 
-    def system_matrix(
-            self,
-            order: Literal['first', 'second'] = 'first',
-            approach: Literal[
-                          'analytic', 'taylor', 'p_delta', 'iterativ'
-            ] | None = None,
-    ):
-        return (self.stiffness_matrix(order, approach)
-                + self.elastic_matrix())
+    @cache
+    def system_matrix(self):
+        return self.stiffness_matrix() + self.elastic_matrix()
 
-    def f0(self, order: Literal['first', 'second'] = 'first',
-           approach:
-           Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
-           ):
+    @cache
+    def f0(self):
         f0_system = self._get_zero_vec()
         nodes = self.system.nodes()
         f_axial = 0
         for index, bar in enumerate(self.system.segmented_bars):
             i = nodes.index(bar.node_i) * self.dof
             j = nodes.index(bar.node_j) * self.dof
-            if order == 'second':
-                f_axial = self.averaged_longitudinal_force[index]
 
-            f0 = bar.f0(order=order, approach=approach, f_axial=f_axial)
+            f_axial = self._get_f_axial(index)
+
+            f0 = bar.f0(self.order, self.approach, f_axial=f_axial)
 
             f0_system[i:i + self.dof, :] += f0[:self.dof, :]
             f0_system[j:j + self.dof, :] += f0[self.dof:2 * self.dof, :]
         return f0_system
 
+    @cache
     def p0(self):
         p0 = self._get_zero_vec()
         for i, node in enumerate(self.system.nodes()):
@@ -1278,19 +1269,14 @@ class FirstOrder:
                 node.load)
         return p0
 
-    def p(self, order: Literal['first', 'second'] = 'first',
-          approach:
-          Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
-          ):
-        return self.p0() - self.f0(order, approach)
+    @cache
+    def p(self):
+        return self.p0() - self.f0()
 
-    def apply_boundary_conditions(
-            self, order: Literal['first', 'second'] = 'first',
-            approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
-    ):
-        k = self.system_matrix(order, approach)
-        p = self.p(order, approach)
+    @cache
+    def apply_boundary_conditions(self):
+        k = self.system_matrix()
+        p = self.p()
         for idx, node in enumerate(self.system.nodes()):
             node_offset = idx * self.dof
             for dof_nr, attribute in enumerate(['u', 'w', 'phi']):
@@ -1302,22 +1288,14 @@ class FirstOrder:
                     p[node_offset + dof_nr] = 0
         return k, p
 
-    def node_deformation(
-            self, order: Literal['first', 'second'] = 'first', approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
-    ):
+    @cache
+    def node_deformation(self):
         modified_stiffness_matrix, modified_p = (
-            self.apply_boundary_conditions(order, approach))
+            self.apply_boundary_conditions())
         return np.linalg.solve(modified_stiffness_matrix, modified_p)
 
-    def create_list_node_deformation(
-            self,
-            order: Literal['first', 'second'] = 'first',
-            approach: Literal[
-                          'analytic', 'taylor', 'p_delta', 'iterativ'
-            ] | None = None,
-    ):
-        node_deform = self.node_deformation(order, approach)
+    def create_list_node_deformation(self):
+        node_deform = self.node_deformation()
         nodes = self.system.nodes()
         return [
             np.vstack([
@@ -1331,64 +1309,50 @@ class FirstOrder:
             for bar in self.system.segmented_bars
         ]
 
-    def bar_deform(
-            self,
-            order: Literal['first', 'second'] = 'first',
-            approach: Literal[
-                'analytic', 'taylor', 'p_delta', 'iterativ'
-            ] | None = None,
-    ):
-        node_deform_list = self.create_list_node_deformation(order, approach)
-
+    @cache
+    def bar_deform(self):
+        node_deform = self.node_deformation()
+        nodes = self.system.nodes()
         return [
             np.transpose(bar.transformation_matrix())
-            @ node_deform_list[i]
-            for i, bar in enumerate(self.system.segmented_bars)
+            @ np.vstack([
+                node_deform[nodes.index(bar.node_i) *
+                            self.dof: nodes.index(bar.node_i) * self.dof +
+                            self.dof, :],
+                node_deform[nodes.index(bar.node_j) *
+                            self.dof: nodes.index(bar.node_j) * self.dof +
+                            self.dof, :]
+            ])
+            for bar in self.system.segmented_bars
         ]
 
-    def create_list_of_bar_forces(
-            self, order: Literal['first', 'second'] = 'first',
-            approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
-    ):
-        node_deform = self.create_list_node_deformation(order, approach)
-        f_axial = 0
-        if order == 'second':
-            for i, bar in enumerate(self.system.segmented_bars):
-                f_axial = self.averaged_longitudinal_force[i]
-        f_node = [
-            bar.stiffness_matrix(
-                order=order, approach=approach, f_axial=f_axial) @ deform +
-            bar.f0(order=order, approach=approach, f_axial=f_axial)
-            for i, (bar, deform) in
-            enumerate(zip(self.system.segmented_bars, node_deform))
-        ]
+    @cache
+    def create_list_of_bar_forces(self):
+        bar_deform = self.bar_deform()
         return [
-            np.transpose(
-                bar.transformation_matrix()) @ forces - bar.f0_point_load
-            for bar, forces in zip(self.system.segmented_bars, f_node)
+            bar.stiffness_matrix(to_node_coord=False,
+                                 f_axial=self._get_f_axial(i)) @ deform +
+            bar.f0(to_node_coord=False,
+                   f_axial=self._get_f_axial(i)) + bar.f0_point
+            for i, (bar, deform) in
+            enumerate(zip(self.system.segmented_bars, bar_deform))
         ]
 
-    def _apply_hinge_modification(
-            self, order: Literal['first', 'second'] = 'first',
-            approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
-    ):
+    @cache
+    def _apply_hinge_modification(self):
         deform_list = []
-        f_axial = 0
-        bar_deform_list = self.bar_deform(order, approach)
+        bar_deform_list = self.bar_deform()
         for i, bar in enumerate(self.system.segmented_bars):
             delta_rel = np.zeros((6, 1))
             if True in bar.hinge:
-                if (order == 'second' and
-                        approach in ['analtic', 'taylor', 'p_delta']):
-                    f_axial = self.averaged_longitudinal_force[i]
-                k = bar.stiffness_matrix(order, approach,
-                                         hinge_modification=False,
-                                         f_axial=f_axial)
+                k = bar.stiffness_matrix(
+                    self.order, self.approach, hinge_modification=False,
+                    f_axial=self._get_f_axial(i)
+                )
                 bar_deform = bar_deform_list[i]
-                f0 = bar.f0(order, approach, hinge_modification=False,
-                            f_axial=f_axial)
+                f0 = bar.f0(
+                    self.order, self.approach, hinge_modification=False,
+                    f_axial=self._get_f_axial(i))
 
                 idx = [i for i, value in enumerate(bar.hinge) if value]
                 if idx:
@@ -1401,6 +1365,7 @@ class FirstOrder:
             deform_list.append(delta_rel)
         return deform_list
 
+    @cache
     def bar_deform_node_displacement(self):
         return [
             np.transpose(bar.transformation_matrix())
@@ -1409,14 +1374,10 @@ class FirstOrder:
             for bar in self.system.segmented_bars
         ]
 
-    def create_bar_deform_list(
-            self, order: Literal['first', 'second'] = 'first',
-            approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
-    ):
-        hinge_modifications = self._apply_hinge_modification(
-            order, approach)
-        bar_deforms = self.bar_deform(order, approach)
+    @cache
+    def create_bar_deform_list(self):
+        hinge_modifications = self._apply_hinge_modification()
+        bar_deforms = self.bar_deform()
         bar_deform_node_displacement = self.bar_deform_node_displacement()
         combined_results = []
         for i in range(len(hinge_modifications)):
@@ -1425,30 +1386,27 @@ class FirstOrder:
             combined_results.append(result)
         return combined_results
 
-    def solvable(
-            self, order: Literal['first', 'second'] = 'first',
-            approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
-    ):
-        k, p = self.apply_boundary_conditions(order, approach)
+    @cache
+    def solvable(self):
+        k, p = self.apply_boundary_conditions()
         if np.linalg.matrix_rank(k) < k.shape[0]:
             print("Stiffness matrix is singular.")
             return False
         return True
 
-    def calc(
-            self, order: Literal['first', 'second'] = 'first',
-            approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None
-    ):
-        if self.solvable(order, approach):
+    @cache
+    def calc(self):
+        if self.solvable():
             return (
-                self.create_bar_deform_list(order, approach),
-                self.create_list_of_bar_forces(order, approach))
+                self.create_bar_deform_list(),
+                self.create_list_of_bar_forces())
 
     @cached_property
     def averaged_longitudinal_force(self):
         l_averaged_list = []
+        original_order = self.order
+        self.order = 'first'
+
         for deform, force in zip(
                 self.create_bar_deform_list(),
                 self.create_list_of_bar_forces()):
@@ -1460,6 +1418,8 @@ class FirstOrder:
             l_j = n_j * np.cos(phi_j) + v_j * np.sin(phi_j)
             l_averaged = (l_i + l_j) / 2
             l_averaged_list.append(l_averaged)
+
+        self.order = original_order
         return l_averaged_list
 
 
@@ -1467,23 +1427,20 @@ class FirstOrder:
 @dataclass(eq=False)
 class SecondOrder(FirstOrder):
 
-    approach: (
+    calc_approach: (
             Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None) = None
     iteration_type: Literal['incremental', 'cumulativ'] | None = None
     iterations: float = 10
     iteration_tolerance: float = 1e-3
 
-    def calc(
-            self,
-            order: Literal['first', 'second'] = 'first',
-            approach:
-            Literal[
-                'analytic', 'taylor', 'p_delta', 'iterativ'
-            ] | None = None):
-        return super().calc(order='second', approach=self.approach)
+    def __post_init__(self):
+        super().__post_init__()
+        self.dof = 3
+        self.order = 'second'
+        self.approach = self.calc_approach
 
     def calc_second(self):
-        if self.solvable('second', self.approach):
+        if self.solvable():
             if self.approach == 'iterativ':
                 iteration_data = []
                 iteration_data.append(self.recursive_iteration(
@@ -1500,16 +1457,15 @@ class SecondOrder(FirstOrder):
                         len(self.system.segmented_bars))]))
                 return iteration_data
             else:
-                return (
-                    self.create_bar_deform_list('second', self.approach),
-                    self._conversion_transversial_in_iternal_force)
+                return (self.create_bar_deform_list(),
+                        self._conversion_transversial_in_iternal_force)
 
     @cached_property
     def _conversion_transversial_in_iternal_force(self):
         forces_list = []
         for deform, force in zip(
-                self.create_bar_deform_list('second', self.approach),
-                self.create_list_of_bar_forces('second', self.approach)):
+                self.create_bar_deform_list(),
+                self.create_list_of_bar_forces()):
             phi_i, phi_j = deform[2, 0], deform[5, 0]
             l_i, l_j = -force[0, 0], force[3, 0]
             t_i, t_j = -force[1, 0], force[4, 0]
@@ -1524,11 +1480,10 @@ class SecondOrder(FirstOrder):
             forces_list.append(force_sec)
         return forces_list
 
-    @cached_property
+    @property
     def initial_system_iteration(self):
-        initial_system = replace(self.system)
         updated_bars = []
-        for bar in initial_system.bars:
+        for bar in self.system.bars:
             updated_bar = replace(
                 bar,
                 node_i=replace(bar.node_i, displacements=(), loads=()),
@@ -1538,7 +1493,7 @@ class SecondOrder(FirstOrder):
                 temp=BarTemp(temp_o=0, temp_u=0),
             )
             updated_bars.append(updated_bar)
-        return replace(initial_system, bars=updated_bars)
+        return replace(self.system, bars=updated_bars)
 
     def recursive_iteration(self, input_system, previous_system, iteration,
                             max_iterations, tolerance, iteration_results,
