@@ -5,7 +5,7 @@ from typing import Literal
 
 import numpy as np
 
-from sstatics.core import BarTemp, System
+from sstatics.core import Bar, BarTemp, Node, System, SystemModifier
 
 
 @dataclass(eq=False)
@@ -422,3 +422,108 @@ class SecondOrder(FirstOrder):
             tolerance, iteration_results, calculation_type, total_deltas_bar,
             total_internal_forces, total_deltas_node, total_deltas_system
         )
+
+
+@dataclass(eq=False)
+class InfluenceLine:
+
+    system: System
+
+    def __post_init__(self):
+        self.dof = 3
+        self.modifier = SystemModifier(self.system)
+
+    def force(self, force: Literal['fx', 'fz', 'fm'], obj,
+              position: float = 0):
+        if force not in ['fx', 'fz', 'fm']:
+            raise ValueError(f"Invalid force type: {force}")
+
+        if isinstance(obj, Bar):
+            self.modified_system = self.modifier.modify_bar_force(
+                obj, force, position, virt_force=1)
+
+        elif isinstance(obj, Node):
+            if position:
+                raise ValueError(
+                    "If obj is an instance of Node, position must be None.")
+            self.modified_system = self.modifier.modify_node_force(
+                obj, force, virt_force=1)
+        else:
+            raise ValueError("obj must be an instance of Bar or Node")
+
+        calc_system = FirstOrder(self.modified_system)
+
+        if calc_system.solvable():
+            norm_force = self.calc_norm_force(force, obj)
+            if isinstance(obj, Bar):
+                self.modified_system = self.modifier.modify_bar_force(
+                    obj, force, position, virt_force=norm_force)
+            elif isinstance(obj, Node):
+                self.modified_system = self.modifier.modify_node_force(
+                    obj, force, virt_force=norm_force)
+            calc_system = FirstOrder(self.modified_system)
+            return calc_system.calc()
+        else:
+            # TODO: Hier wird die Verschiebungsfigur zurückgegeben und
+            #       nicht deform, force wie bei calc_system.calc()
+            return None
+
+    def calc_norm_force(self, force: Literal['fx', 'fz', 'fm'],
+                        obj):
+        """
+        Normalize the deformation of the bar system based on the given force.
+        This method calculates a virtual force to balance the deformation
+        difference between two connected bars, based on their deformation.
+        """
+        calc_system = FirstOrder(self.modified_system)
+        if isinstance(obj, Bar):
+            # calc bar deformations
+            deform = calc_system.create_bar_deform_list()
+
+            # Get the index of the bar in the system
+            bars = list(self.system.bars)
+            idx = bars.index(obj)
+
+            deform_bar_i, deform_bar_j = deform[idx], deform[idx + 1]
+
+            # Map the force type to corresponding indices for the deformation
+            # values
+            force_indices = {'fx': (3, 0), 'fz': (4, 1), 'fm': (5, 2)}
+            idx_i, idx_j = force_indices[force]
+
+            # Calculate the difference in deformation between the two bars
+            delta = deform_bar_j[idx_j][0] - deform_bar_i[idx_i][0]
+        elif isinstance(obj, Node):
+            node_deformation = calc_system.node_deformation()
+            for i, node in enumerate(self.system.nodes()):
+                if node == obj:
+                    node_deform = node_deformation[
+                               i * self.dof:i * self.dof + self.dof, :]
+                    force_indices = {'fx': 0, 'fz': 1, 'fm': 2}
+                    delta = node_deform[force_indices[force]][0]
+                    break
+        else:
+            raise ValueError("obj must be an instance of Bar or Node")
+
+        if delta == 0:
+            raise ZeroDivisionError("Deformation difference (delta) is zero, "
+                                    "cannot calculate norm force.")
+        return -1 * float(np.abs(1 / delta))
+
+    def deform(self, deform: Literal['u', 'w', 'phi'], obj: Bar,
+               position: float = 0):
+        if deform not in ['u', 'w', 'phi']:
+            raise ValueError(f"Invalid deform type: {deform}")
+
+        if isinstance(obj, Bar):
+            if not (0 <= position <= 1):
+                raise ValueError(
+                    f"Position {position} must be between 0 and 1.")
+
+            self.modified_system = (
+                self.modifier.modify_bar_deform(obj, deform, position))
+
+            calc_system = FirstOrder(self.modified_system)
+
+            return calc_system.calc()
+        raise ValueError("obj must be an instance of Bar")

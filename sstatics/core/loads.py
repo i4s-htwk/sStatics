@@ -66,9 +66,41 @@ class BarLineLoad:
 
 @dataclass(eq=False)
 class BarPointLoad(PointLoad):
-    """ TODO """
+    """Creates a point load applied at a specific position along a bar.
 
-    # TODO: Documentation for variable position
+    Parameters
+    ----------
+    x : :any:`float`
+        The force component in the x-direction.
+    z : :any:`float`
+        The force component in the z-direction.
+    phi : :any:`float`
+        The moment applied along the beam.
+    rotation : :any:`float`, default=0.0
+        The rotation of the load components.
+    position : :any:`float`, default=0.0
+        Describes the relative position of the load along the bar. A value of
+        `0` indicates the start of the bar, and `1` indicates the end of the
+        bar.
+
+    Notes
+    -----
+    This class models a point load applied to a bar (or beam) at a specific
+    position. The load is applied in the x and z directions and includes a
+    moment (phi) along the beam. The position is a normalized value between 0
+    and 1, where 0 corresponds to the start of the bar and 1 corresponds to the
+    end of the bar.
+
+    Raises
+    ------
+    ValueError
+        :py:attr:`position` has to be a value between 0 and 1.
+
+    See Also
+    --------
+    :py:class:`NodePointLoad` and :py:class:`DegreesOfFreedom`
+    """
+
     position: float = 0.0
 
     def __post_init__(self):

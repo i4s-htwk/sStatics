@@ -31,14 +31,14 @@ class Bar:
     hinge_w_j: bool = False
     hinge_phi_j: bool = False
     deformations: (
-            tuple[Literal['moment', 'normal', 'shear'], ...] |
-            list[Literal['moment', 'normal', 'shear']] |
-            Literal['moment', 'normal', 'shear']
+        tuple[Literal['moment', 'normal', 'shear'], ...] |
+        list[Literal['moment', 'normal', 'shear']] |
+        Literal['moment', 'normal', 'shear']
     ) = ('moment', 'normal')
     line_loads: tuple[BarLineLoad, ...] | list[BarLineLoad] | BarLineLoad = ()
     temp: BarTemp = field(default_factory=lambda: BarTemp(0, 0))
     point_loads: (
-            tuple[BarPointLoad, ...] | list[BarPointLoad] | BarPointLoad
+        tuple[BarPointLoad, ...] | list[BarPointLoad] | BarPointLoad
     ) = ()
 
     # TODO: other validations? validate hinges
@@ -81,12 +81,12 @@ class Bar:
     def same_location(self, other):
         """ TODO """
         a = (
-                self.node_i.same_location(other.node_i) and
-                self.node_j.same_location(other.node_j)
+            self.node_i.same_location(other.node_i) and
+            self.node_j.same_location(other.node_j)
         )
         b = (
-                self.node_i.same_location(other.node_j) and
-                self.node_j.same_location(other.node_i)
+            self.node_i.same_location(other.node_j) and
+            self.node_j.same_location(other.node_i)
         )
         return a or b
 
@@ -201,9 +201,9 @@ class Bar:
         f0_displacement = np.vstack(
             (self.node_i.displacement, self.node_j.displacement)
         )
-        trans_m = self.transformation_matrix()
+        trans_m = self.transformation_matrix(to_node_coord=True)
         k = self.stiffness_matrix(
-            hinge_modification=False
+            hinge_modification=False, to_node_coord=True
         )
         return k @ trans_m @ f0_displacement
 
@@ -563,7 +563,7 @@ class Bar:
 
         if order == 'first':
             if 'shear' in self.deformations:
-                k = k @ self.stiffness_shear_force
+                k @= self.stiffness_shear_force
         else:
             if approach == 'analytic':
                 k @= self.stiffness_second_order_analytic(f_axial)
@@ -592,29 +592,23 @@ class Bar:
 
         return k
 
-    def segment(self, positions: list[float] | None = None):
+    def segment(self, dividing_positions: list[float] = []):
         """ TODO """
-        if positions is None:
-            positions = []
-        for position in positions:
-            if not 0 <= position <= 1.0:
-                raise ValueError(
-                    'All positions have to be in the interval [0, 1].'
-                )
-
-        pos, segmentation = defaultdict(list), False
+        positions, segmentation = defaultdict(list), False
         for load in self.point_loads:
-            pos[load.position].append(load)
+            positions[load.position].append(load)
             if load.position not in (0.0, 1.0):
                 segmentation = True
+        for pos in dividing_positions:
+            positions.setdefault(pos)
+            segmentation = True
         if not segmentation:
             return [self]
 
         bars = []
-        positions = list(set(positions) | set(pos.keys()))
-        for position in sorted(positions):
+        for position in sorted(positions.keys()):
 
-            if position == 0.0:
+            if position == 0.0 or position == 1.0:
                 continue
 
             # calculate nodes
@@ -624,7 +618,7 @@ class Bar:
             z = self.node_i.z - s * position * self.length
             node_loads = [
                 NodePointLoad(load.x, load.z, load.phi, load.rotation)
-                for load in pos[position]
+                for load in positions[position] or []
             ]
             node_j = self.node_j if position == 1.0 else Node(
                 x, z, loads=node_loads
@@ -643,21 +637,34 @@ class Bar:
             # set point loads
             point_loads = []
             if not bars:
-                point_loads = pos[0.0]
-            elif position == 1.0:
-                point_loads = pos[1.0]
+                point_loads = positions[0.0]
 
             bars.append(replace(
                 self, node_i=node_i, node_j=node_j, line_loads=line_loads,
                 point_loads=point_loads
             ))
 
+        # calculate bar line loads
+        line_loads = []
+        for i, line_load in enumerate(self.line_loads):
+            pi = (bars[-1].line_loads[i].pj)
+            line_loads.append(replace(line_load, pi=pi))
+
+        point_loads = []
+        if 1.0 in positions:
+            point_loads = positions[1.0]
+
+        bars.append(replace(
+            self, node_i=node_j, node_j=self.node_j, line_loads=line_loads,
+            point_loads=point_loads
+        ))
+
         return bars
 
     # TODO: refactor
     def deform_line(
-            self, deform: ArrayLike, force: ArrayLike, scale: float = 1.0,
-            lambdify: bool = True, n_points: int | None = None
+        self, deform: ArrayLike, force: ArrayLike, scale: float = 1.0,
+        lambdify: bool = True, n_points: int | None = None
     ):
         """ TODO """
         try:
@@ -711,7 +718,7 @@ class Bar:
         return x, z
 
     def max_deform(
-            self, deform: np.array, force: np.array, n_points: int = 50
+        self, deform: np.array, force: np.array, n_points: int = 50
     ):
         """ TODO """
         x, z = self.deform_line(deform, force, n_points=n_points)
