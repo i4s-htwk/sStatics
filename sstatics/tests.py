@@ -174,6 +174,14 @@ class TestBarLineLoad(TestCase):
         }
         for kwargs in kwargs_combs:
             with self.subTest(**kwargs):
+                if kwargs['coord'] == 'bar' and kwargs['length'] == 'proj':
+                    with self.assertRaises(
+                        ValueError, msg='If "coord" is set to "bar" and '
+                        '"length" is set to "proj", a ValueError has to be '
+                        'raised.'
+                    ):
+                        BarLineLoad(0, 0, **kwargs)
+                    continue
                 load = BarLineLoad(3.8, -5.4, **kwargs)
                 for i, rotation in enumerate((np.pi, 0.3, -0.6)):
                     if kwargs['coord'] == 'bar':

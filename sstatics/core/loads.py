@@ -41,6 +41,11 @@ class BarLineLoad:
             raise ValueError('coord has to be either "bar" or "system".')
         if self.length not in ('exact', 'proj'):
             raise ValueError('length has to be either "exact" or "proj".')
+        if self.coord == 'bar' and self.length == 'proj':
+            raise ValueError(
+                'If the used coordinate system is set to "bar", then the '
+                'length cannot be set to "proj".'
+            )
 
     @cached_property
     def vector(self):
