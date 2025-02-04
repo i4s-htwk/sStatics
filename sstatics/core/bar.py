@@ -124,15 +124,15 @@ class Bar:
     EI = property(lambda self: self.flexural_stiffness)
     """ Alias of :py:attr:`flexural_stiffness`. """
 
-    @cached_property
-    def modified_flexural_stiffness(self):
+    def modified_flexural_stiffness(self, f_axial):
         """ TODO """
         if 'shear' in self.deformations:
-            return self.EI * (1 + self.f0_first_order[0][0] / self.GA_s)
+            return self.EI * (1 + f_axial / self.GA_s)
         else:
             return self.EI
 
-    B_s = property(lambda self: self.modified_flexural_stiffness)
+    def B_s(self, f_axial):
+        return self.modified_flexural_stiffness(f_axial)
     """ Alias of :py:attr:`modified_flexural_stiffness`. """
 
     @cached_property
@@ -149,7 +149,8 @@ class Bar:
         """ TODO """
         GA_s = self.material.shear_mod * self.cross_section.area
         GA_s *= self.cross_section.shear_cor
-        return GA_s if 'shear' in self.deformations else 1_000 * GA_s
+        EI = self.material.young_mod * self.cross_section.mom_of_int
+        return GA_s if 'shear' in self.deformations else 1_000 * EI
 
     GA_s = property(lambda self: self.shear_stiffness)
     """ Alias of :py:attr:`shear_stiffness`. """
@@ -159,11 +160,9 @@ class Bar:
         """ TODO """
         return 12 * self.EI / (self.GA_s * self.length ** 2)
 
-    @cached_property
-    def characteristic_number(self):
+    def characteristic_number(self, f_axial):
         """ TODO """
-        f0_x_i = self.f0_first_order[0][0]
-        return np.sqrt(abs(f0_x_i) / self.B_s) * self.length
+        return np.sqrt(abs(f_axial) / self.B_s(f_axial)) * self.length
 
     @cached_property
     def line_load(self):
@@ -174,7 +173,7 @@ class Bar:
             [load.rotate(self.inclination) for load in self.line_loads], axis=0
         )
 
-    @cached_property
+    @property
     def point_load(self):
         """ TODO """
         if len(self.point_loads) == 0:
@@ -183,10 +182,10 @@ class Bar:
             [load.rotate() for load in self.point_loads], axis=0
         )
 
-    @cached_property
-    def f0_point_load(self):
+    @property
+    def f0_point(self):
         """ TODO """
-        m = np.transpose(self.transformation_matrix(to_node_coord=True))
+        m = np.transpose(self.transformation_matrix())
         return m @ self.point_load
 
     @cached_property
@@ -204,14 +203,14 @@ class Bar:
         f0_displacement = np.vstack(
             (self.node_i.displacement, self.node_j.displacement)
         )
-        trans_m = self.transformation_matrix(to_node_coord=False)
+        trans_m = self.transformation_matrix(to_node_coord=True)
         k = self.stiffness_matrix(
-            hinge_modification=False, to_node_coord=False
+            hinge_modification=False, to_node_coord=True
         )
         return k @ trans_m @ f0_displacement
 
     @cached_property
-    def f0_first_order(self):
+    def f0_line(self):
         """ TODO """
         p, const = self.line_load, self.GA_s * self.length ** 2
         factors = np.array([
@@ -226,19 +225,17 @@ class Bar:
             factors @ np.array([[p[0][0]], [p[3][0]], [p[4][0]], [p[1][0]]]),
             factors @ np.array([[p[3][0]], [p[0][0]], [p[1][0]], [p[4][0]]]),
         ))
-        return f0 * np.array([[-1], [-1], [1], [-1], [1], [-1]])
+        return f0 * np.array([[-1], [-1], [1], [-1], [-1], [-1]])
 
-    @cached_property
-    def f0_second_order_analytic(self):
+    def f0_line_analytic(self, f_axial):
         """ TODO """
         p_vec = self.line_load
-        f0_x_i = self.f0_first_order[0][0]
-        mu = self.characteristic_number
-        B_s = self.B_s
+        mu = self.characteristic_number(f_axial)
+        B_s = self.B_s(f_axial)
         p_i, p_j = p_vec[1][0], p_vec[4][0]
         p_sum, p_diff = p_vec[1][0] + p_vec[4][0], p_vec[1][0] - p_vec[4][0]
 
-        if f0_x_i < 0:
+        if f_axial < 0:
             sin_mu = np.sin(mu)
             cos_mu = np.cos(mu)
             denominator = (self.GA_s * self.length ** 2 * mu * sin_mu + (
@@ -345,11 +342,10 @@ class Bar:
                  [f0_m_j]])
         )
 
-    @cached_property
-    def f0_second_order_taylor(self):
+    def f0_line_taylor(self, f_axial):
         """ TODO """
         p_vec = self.line_load
-        B_s = self.B_s
+        B_s = self.B_s(f_axial)
         p_i, p_j = p_vec[1][0], p_vec[4][0]
 
         f0_z_i = (self.length / 20) * (720 * B_s ** 2 * (p_j + p_i) - (
@@ -373,16 +369,7 @@ class Bar:
                 self.EI - B_s) * (p_j - p_i) / (
                 12 * B_s + self.GA_s * self.length ** 2)
 
-        f0_z_j = (self.length / 20) * (720 * B_s ** 2 * (p_j + p_i) - (
-                4 * self.EI * self.GA_s * self.length ** 2) * (p_j - p_i) + (
-                20 * B_s * self.GA_s * self.length ** 2) * (
-                5 * p_j + 7 * p_i) + self.GA_s ** 2 * self.length ** 4 * (
-                3 * p_j + 7 * p_i)) / (
-                12 * B_s + self.GA_s * self.length ** 2) ** 2 - (
-                self.EI * (p_j - p_i)) / (self.GA_s * self.length) - (
-                self.length * (p_j + p_i)) / 2 - (12 * B_s / self.length) * (
-                self.EI - B_s) * (p_j - p_i) / (
-                12 * B_s + self.GA_s * self.length ** 2)
+        f0_z_j = f0_z_i - (p_j + p_i) * self.length / 2
 
         f0_m_j = (4320 * B_s ** 3 * (p_j + p_i) - (
                 6 * self.EI * self.GA_s ** 2 * self.length ** 4) * (
@@ -417,15 +404,13 @@ class Bar:
             [0, 1, 2 - self.phi, 0, 1, 4 + self.phi],
         ]) / (1 + self.phi)
 
-    @cached_property
-    def stiffness_second_order_analytic(self):
+    def stiffness_second_order_analytic(self, f_axial):
         """ TODO """
-        f0_x_i = self.f0_first_order[0][0]
-        mu = self.characteristic_number
-        B_s = self.B_s
+        mu = self.characteristic_number(f_axial)
+        B_s = self.B_s(f_axial)
         factor = B_s / (self.GA_s * self.length ** 2)
 
-        if f0_x_i < 0:
+        if f_axial < 0:
             sin_mu = np.sin(mu)
             cos_mu = np.cos(mu)
             denominator = 2 * (factor * mu ** 2 + 1) * (
@@ -433,8 +418,9 @@ class Bar:
             f_1 = -(B_s / (12 * self.EI)) * (mu ** 3 * sin_mu) / denominator
             f_2 = (B_s / (6 * self.EI)) * (
                     (cos_mu - 1) * mu ** 2) / denominator
-            f_3 = -(B_s / (4 * self.EI)) * (
-                    factor * mu ** 2 + 1) * sin_mu * mu / denominator
+            f_3 = (-(B_s / (4 * self.EI)) * (
+                    (factor * mu ** 2 + 1) * sin_mu - mu * cos_mu) * mu
+                   / denominator)
             f_4 = (B_s / (2 * self.EI)) * (
                     (factor * mu ** 2 + 1) * sin_mu - mu) * mu / denominator
         else:
@@ -457,32 +443,30 @@ class Bar:
                          [0, f_1, f_2, 0, f_1, f_2],
                          [0, f_2, f_4, 0, f_2, f_3]])
 
-    @cached_property
-    def stiffness_second_order_taylor(self):
+    def stiffness_second_order_taylor(self, f_axial):
         """ TODO """
-        f0_x_i = self.f0_first_order[0][0]
-        B_s = self.B_s
+        B_s = self.B_s(f_axial)
         factor = B_s / (self.GA_s * self.length ** 2)
         denominator_common = factor + 1 / 12
         denominator_squared = denominator_common ** 2
         inv_denominator_common = 1 / denominator_common
 
         f_1 = (B_s / (12 * self.EI * denominator_common) +
-               f0_x_i * self.length ** 2 / (144 * self.EI) *
+               f_axial * self.length ** 2 / (144 * self.EI) *
                (factor + 1 / 10) * inv_denominator_common ** 2)
 
         f_2 = (B_s / (12 * self.EI * denominator_common) +
-               f0_x_i * self.length ** 2 / (8640 * self.EI) *
+               f_axial * self.length ** 2 / (8640 * self.EI) *
                inv_denominator_common ** 2)
 
         f_3 = (B_s * (factor + 1 / 3) / (
                 4 * self.EI * denominator_common) +
-               f0_x_i * self.length ** 2 / (48 * self.EI) *
+               f_axial * self.length ** 2 / (48 * self.EI) *
                (1 / (240 * denominator_squared) + 1))
 
         f_4 = (-B_s * (factor - 1 / 6) / (
                 2 * self.EI * denominator_common) +
-               f0_x_i * self.length ** 2 / (24 * self.EI) *
+               f_axial * self.length ** 2 / (24 * self.EI) *
                (1 / (240 * denominator_squared) - 1))
 
         return np.array([[1, 0, 0, 0, 0, 0],
@@ -492,10 +476,9 @@ class Bar:
                          [0, f_1, f_2, 0, f_1, f_2],
                          [0, f_2, f_4, 0, f_2, f_3]])
 
-    @cached_property
-    def stiffness_second_order_p_delta(self):
+    def stiffness_second_order_p_delta(self, f_axial):
         """ TODO """
-        c = self.f0_first_order[0][0] / self.length
+        c = f_axial / self.length
         return np.array([
             [0, 0, 0, 0, 0, 0],
             [0, c, 0, 0, -c, 0],
@@ -509,10 +492,10 @@ class Bar:
     def _validate_order_approach(order, approach):
         if order not in ('first', 'second'):
             raise ValueError('order has to be either "first" or "second".')
-        if approach not in ('analytic', 'taylor', 'p_delta', None):
+        if approach not in ('analytic', 'taylor', 'p_delta', 'iterativ', None):
             raise ValueError(
-                'approach has to be either "analytic", "taylor", "p_delta" or '
-                'None.'
+                'approach has to be either "analytic", "taylor", "p_delta", '
+                '"iterativ" or ''None.'
             )
         if approach == 'first' and approach is not None:
             raise ValueError('In first order the approach has to be None.')
@@ -520,27 +503,31 @@ class Bar:
     # TODO: Ludwigs Kriterium verwenden, wann man die analytische Lösung
     # TODO: verwenden kann?
     def f0(
-        self, order: Literal['first', 'second'] = 'first',
-        approach: Literal['analytic', 'taylor', 'p_delta'] | None = None,
-        hinge_modification: bool = True, to_node_coord: bool = True
+
+            self, order: Literal['first', 'second'] = 'first',
+            approach:
+            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
+            hinge_modification: bool = True, to_node_coord: bool = True,
+            f_axial: float = 0
     ):
         """ TODO """
         self._validate_order_approach(order, approach)
 
         if order == 'first':
-            f0 = self.f0_first_order
+            f0_line = self.f0_line
         else:
             if approach == 'analytic':
-                f0 = self.f0_second_order_analytic
+                f0_line = self.f0_line_analytic(f_axial)
             elif approach == 'taylor':
-                f0 = self.f0_second_order_taylor
+                f0_line = self.f0_line_taylor(f_axial)
             else:
-                f0 = self.f0_first_order
-        f0 += self.f0_temp + self.f0_displacement + self.f0_point_load
+                f0_line = self.f0_line
+        f0 = f0_line + self.f0_temp + self.f0_displacement - self.f0_point
 
         if hinge_modification:
             k = self.stiffness_matrix(
-                order, approach, hinge_modification=False, to_node_coord=False
+                order, approach, hinge_modification=False, to_node_coord=False,
+                f_axial=f_axial
             )
             for i, value in enumerate(self.hinge):
                 if value:
@@ -556,9 +543,11 @@ class Bar:
 
     # TODO: analytic + taylor und shear not in deform => Error?
     def stiffness_matrix(
-        self, order: Literal['first', 'second'] = 'first',
-        approach: Literal['analytic', 'taylor', 'p_delta'] | None = None,
-        hinge_modification: bool = True, to_node_coord: bool = True
+            self, order: Literal['first', 'second'] = 'first',
+            approach:
+            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
+            hinge_modification: bool = True, to_node_coord: bool = True,
+            f_axial: float = 0
     ):
         """ TODO """
         self._validate_order_approach(order, approach)
@@ -579,15 +568,18 @@ class Bar:
                 k @= self.stiffness_shear_force
         else:
             if approach == 'analytic':
-                k @= self.stiffness_second_order_analytic
+                k @= self.stiffness_second_order_analytic(f_axial)
             elif approach == 'taylor':
-                k @= self.stiffness_second_order_taylor
+                k @= self.stiffness_second_order_taylor(f_axial)
+            elif approach == 'p_delta':
+                if 'shear' in self.deformations:
+                    k = (k @ self.stiffness_shear_force +
+                         self.stiffness_second_order_p_delta(f_axial))
+                else:
+                    k = k + self.stiffness_second_order_p_delta(f_axial)
             else:
                 if 'shear' in self.deformations:
                     k @= self.stiffness_shear_force
-                    k += self.stiffness_second_order_p_delta
-                else:
-                    k += self.stiffness_second_order_p_delta
 
         if hinge_modification:
             for i, value in enumerate(self.hinge):
@@ -602,29 +594,23 @@ class Bar:
 
         return k
 
-    def segment(self, positions: list[float] | None = None):
+    def segment(self, dividing_positions: list[float] = []):
         """ TODO """
-        if positions is None:
-            positions = []
-        for position in positions:
-            if not 0 <= position <= 1.0:
-                raise ValueError(
-                    'All positions have to be in the interval [0, 1].'
-                )
-
-        pos, segmentation = defaultdict(list), False
+        positions, segmentation = defaultdict(list), False
         for load in self.point_loads:
-            pos[load.position].append(load)
+            positions[load.position].append(load)
             if load.position not in (0.0, 1.0):
                 segmentation = True
+        for pos in dividing_positions:
+            positions.setdefault(pos)
+            segmentation = True
         if not segmentation:
             return [self]
 
         bars = []
-        positions = list(set(positions) | set(pos.keys()))
-        for position in sorted(positions):
+        for position in sorted(positions.keys()):
 
-            if position == 0.0:
+            if position == 0.0 or position == 1.0:
                 continue
 
             # calculate nodes
@@ -634,7 +620,7 @@ class Bar:
             z = self.node_i.z - s * position * self.length
             node_loads = [
                 NodePointLoad(load.x, load.z, load.phi, load.rotation)
-                for load in pos[position]
+                for load in positions[position] or []
             ]
             node_j = self.node_j if position == 1.0 else Node(
                 x, z, loads=node_loads
@@ -653,14 +639,27 @@ class Bar:
             # set point loads
             point_loads = []
             if not bars:
-                point_loads = pos[0.0]
-            elif position == 1.0:
-                point_loads = pos[1.0]
+                point_loads = positions[0.0]
 
             bars.append(replace(
                 self, node_i=node_i, node_j=node_j, line_loads=line_loads,
                 point_loads=point_loads
             ))
+
+        # calculate bar line loads
+        line_loads = []
+        for i, line_load in enumerate(self.line_loads):
+            pi = (bars[-1].line_loads[i].pj)
+            line_loads.append(replace(line_load, pi=pi))
+
+        point_loads = []
+        if 1.0 in positions:
+            point_loads = positions[1.0]
+
+        bars.append(replace(
+            self, node_i=node_j, node_j=self.node_j, line_loads=line_loads,
+            point_loads=point_loads
+        ))
 
         return bars
 
