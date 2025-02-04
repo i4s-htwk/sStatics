@@ -24,6 +24,8 @@ class Bar:
     node_j: Node
     cross_section: CrossSection
     material: Material
+    # TODO: what if all hinges are set to True? Problem for calculations or
+    # TODO: representation?
     hinge_u_i: bool = False
     hinge_w_i: bool = False
     hinge_phi_i: bool = False
