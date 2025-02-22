@@ -88,11 +88,11 @@ class Node:
 
         Examples
         --------
-        >>> from sstatics import Node
+        >>> from sstatics.core import Node
         >>> Node(1, 2).displacement
         array([[0], [0], [0]])
 
-        >>> from sstatics import NodeDisplacement
+        >>> from sstatics.core import NodeDisplacement
         >>> displacements = (NodeDisplacement(1.5, 2, 0.5),
         >>>                  NodeDisplacement(-2, 3, -0.3))
         >>> Node(-1, 3, displacements=displacements).displacement
@@ -137,10 +137,10 @@ class Node:
 
         Examples
         --------
-        >>> from sstatics import Node, NodePointLoad
+        >>> from sstatics.core import Node, NodePointLoad
             >>> import numpy
         >>> load = NodePointLoad(1, 2, 0.5, rotation=2 * numpy.pi)
-        >>> Node(6, 5, rotation=numpy.pi, loads=(load,)).rotate_load()
+        >>> Node(6, 5, rotation=numpy.pi, loads=(load,)).load
         array([[-1], [-2], [0.5]])
         """
         if len(self.loads) == 0:
@@ -151,7 +151,38 @@ class Node:
 
     @cached_property
     def elastic_support(self):
-        """ TODO """
+        r"""Sets the stiffness values from the support conditions on the
+        diagonal of the matrix.
+
+        To account for the elastic support of nodes, the support conditions
+        of :py:attr:`u`, :py:attr:`w`, and :py:attr:`phi` are considered and
+        placed on the diagonal of a zero matrix.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            A 3x3 zero matrix with the diagonal populated by the values of
+            :py:attr:`u`, :py:attr:`w` and :py:attr:`phi`.
+
+        Notes
+        -----
+            If an attribute is a string, its value is set to zero.
+
+        .. math::
+        \begin{bmatrix}
+               u & 0 & 0 \\
+               0 & w & 0 \\
+               0 & 0 & \phi \\
+           \end{bmatrix}$
+
+        Examples
+        --------
+        >>> from sstatics.core import Node
+        >>> Node(0, 0, u='fixed', w='fixed', phi='free').elastic_support
+        array([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
+        >>> Node(0, 0, u=100, w=200, phi=1000).elastic_support
+        array([[100, 0, 0], [0, 200, 0], [0, 0, 1000]])
+        """
         u = 0 if isinstance(self.u, str) else self.u
         w = 0 if isinstance(self.w, str) else self.w
         phi = 0 if isinstance(self.phi, str) else self.phi
@@ -174,7 +205,7 @@ class Node:
 
         Examples
         --------
-        >>> from sstatics import Node
+        >>> from sstatics.core import Node
         >>> node = Node(1, 2)
         >>> node.same_location(Node(1, 2))
         True

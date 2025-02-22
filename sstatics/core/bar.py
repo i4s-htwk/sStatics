@@ -18,6 +18,51 @@ from sstatics.core import (
 # TODO: find solution for factor in EI, EA, GA_s, B_s
 @dataclass(eq=False)
 class Bar:
+    """Create a bar for a statical system.
+
+     Parameters
+    ----------
+    node_i : :any:`Node`
+        Node at the start of the bar.
+    node_j : :any:`Node`
+        Node at the end of the bar.
+    cross_section : :any:`CrossSection`
+        Cross-sectional properties of the bar.
+    material : :any:`Material`
+        Material properties of the bar.
+    hinge_u_i : :any:`bool`, default=False
+        Normal hinge at the start of the bar.
+    hinge_w_i : :any:`bool`, default=False
+        Shear hinge at the start of the bar.
+    hinge_phi_i : :any:`bool`, default=False
+        Moment hinge at the start of the bar.
+    hinge_u_j : :any:`bool`, default=False
+        Normal hinge at the end of the bar.
+    hinge_w_j : :any:`bool`, default=False
+        Shear hinge at the end of the bar.
+    hinge_phi_j : :any:`bool`, default=False
+        Moment hinge at the end of the bar.
+    deformations : :any:`tuple` | :any:`list`, default=('moment', 'normal')
+        Deformation components considered in the calculation.
+        Valid options: "moment", "normal", "shear".
+    line_loads : :any:`tuple` | :any:`list`, default=()
+        Distributed loads acting on the bar.
+    temp : :any:`BarTemp`, default=(BarTemp(0, 0))
+        Temperature loads acting on the bar.
+    point_loads : :any:`tuple` | :any:`list`, default=()
+        Point loads acting on the bar.
+
+    Raises
+    ------
+    ValueError
+        :py:attr:`node_i` and :py:attr:`node_j` need to have different
+        locations.
+    ValueError
+        There has to be at least one deformation.
+    ValueError
+        Valid deformation key words are "moment", "normal" and "shear".
+    More discription...
+    """
     """ TODO """
 
     node_i: Node
@@ -69,7 +114,71 @@ class Bar:
                 )
 
     def transformation_matrix(self, to_node_coord: bool = True):
-        """ TODO """
+        r"""Create a 6x6 rotation matrix based on the bar's inclination
+        and node components.
+
+        Parameters
+        ----------
+        to_node_coord : :any:`bool`, default=True
+            Determines whether a transformation into the node coordinate system
+            takes place.
+            :python:`True` if transformation to the node coordinate system is
+            applied.
+            :python:`False` if the transformation is not applied.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            A 6x6 matrix for rotating 6x1 vectors.
+
+        Notes
+        -----
+        If the transformation to the node coordinate system is not applied,
+        the rotation angle is determined solely by the inclination of the bar:
+        :python:`alpha = bar.inclination`.
+
+        If the transformation to the node coordinate system is applied,
+        the rotation is calculated by subtracting the node rotations from the
+        bar inclination:
+        :python:`alpha_i = bar.inclination - bar.node_i.rotation`
+        :python:`alpha_j = bar.inclination - bar.node_j.rotation`
+
+        The resulting matrix has the form
+
+        .. math::
+            \left(\begin{array}{c}
+            \cos(\alpha_i) & \sin(\alpha_i) & 0 & 0 & 0 & 0\\
+            -\sin(\alpha_i) & \cos(\alpha_i) & 0 & 0 & 0 & 0\\
+            0 & 0 & 1 & 0 & 0 & 0 \\
+            0 & 0 & 0 & \cos(\alpha_j) & \sin(\alpha_j) & 0 \\
+            0 & 0 & 0 & -\sin(\alpha_j) & \cos(\alpha_j) & 0 \\
+            0 & 0 & 0 & 0 & 0 & 1
+            \end{array}\right)
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+            >>> import numpy
+        >>> node_1 = Node(0, 0, rotation=numpy.pi/4)
+        >>> node_2 = Node(4, -3)
+        >>> cross_sec = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> material = Material(210000000, 0.1, 81000000, 0.1)
+        >>> bar = Bar(node_1, node_2, cross_sec, material)
+        >>> bar.transformation_matrix()
+        array([[0.98994949, -0.14142136, 0., 0., 0., 0.],
+        [0.14142136, 0.98994949, 0., 0., 0., 0.],
+        [0., 0., 1., 0., 0., 0.],
+        [0., 0., 0., 0.8, 0.6, 0.],
+        [0., 0., 0., -0.6, 0.8, 0.],
+        [0., 0., 0., 0., 0., 1.]])
+        >>> bar.transformation_matrix(False)
+        array([[0.8, 0.6, 0., 0., 0., 0.],
+        [-0.6, 0.8, 0., 0., 0., 0.],
+        [0., 0., 1., 0., 0., 0.],
+        [0., 0., 0., 0.8, 0.6, 0.],
+        [0., 0., 0., -0.6, 0.8, 0.],
+        [0., 0., 0., 0., 0., 1.]])
+        """
         alpha_i = alpha_j = self.inclination
         if to_node_coord:
             alpha_i -= self.node_i.rotation
@@ -94,14 +203,62 @@ class Bar:
 
     @cached_property
     def inclination(self):
-        """ TODO """
+        r""" Calculates the inclination of the beam in relation to the node
+        coordinates.
+
+        Returns
+        -------
+        :any:`float`
+            Angle of inclination in radiant.
+
+        Notes
+        -----
+        .. math::
+        The inclination is calcultated by using the following equation:
+            \alpha = \arctan \frac{-z_2 + z_1}{x_2 - x_1}
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> node_1 = Node(0, 0)
+        >>> node_2 = Node(4, -2)
+        >>> cross_sec = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> material = Material(210000000, 0.1, 81000000, 0.1)
+        >>> bar_1 = Bar(node_1, node_2, cross_sec, material)
+        >>> bar_1.inclination
+        0.7853981634
+        """
         return np.arctan2(
             -self.node_j.z + self.node_i.z, self.node_j.x - self.node_i.x
         )
 
     @cached_property
     def length(self):
-        """ TODO """
+        r"""Calculates the distance between two nodes that define the bar
+        element.
+
+        Returns
+        -------
+        :any:`float`
+            Length of bar element.
+
+        Notes
+        -----
+        The length is calcultated by using the following equation:
+        .. math::
+            L = \\sqrt{(x_2 - x_1)^2 + (z_2 - z_1)^2}
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> node_1 = Node(2, 5)
+        >>> node_2 = Node(10, 6)
+        >>> cross_sec = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> material = Material(210000000, 0.1, 81000000, 0.1)
+        >>> bar_1 = Bar(node_1, node_2, cross_sec, material)
+        >>> bar_1.length
+        8.06225774829855
+        """
         return np.sqrt(
             (self.node_j.x - self.node_i.x) ** 2 +
             (self.node_j.z - self.node_i.z) ** 2
@@ -117,7 +274,30 @@ class Bar:
 
     @cached_property
     def flexural_stiffness(self):
-        """ TODO """
+        r"""Calculates the flexural stiffness (EI) of the element.
+
+        The flexural stiffness is defined as the product of the Young's modulus
+        (:math:`E`) and the second moment of area (moment of inertia,
+        :math:`I`) of the cross-section.
+
+        Returns
+        -------
+        :any: float
+            The flexural stiffness :math:`EI`.
+
+        Notes
+        -----
+        The flexural stiffness is given by:
+
+        .. math::
+            EI = E \cdot I
+
+        If :py:attr:`deformations` does not include 'moment', the returned
+        value is scaled:
+
+        .. math::
+            EI = 1000 \cdot E \cdot I
+        """
         EI = self.material.young_mod * self.cross_section.mom_of_int
         return EI if 'moment' in self.deformations else 1_000 * EI
 
@@ -125,7 +305,45 @@ class Bar:
     """ Alias of :py:attr:`flexural_stiffness`. """
 
     def modified_flexural_stiffness(self, f_axial):
-        """ TODO """
+        r"""Computes the modified flexural stiffness (:math:`B_s`) based on
+        **second-order theory** , considering both shear deformations and
+        axial force effects.
+
+        The modified flexural stiffness :math:`B_s` accounts for shear
+        deformations and the influence of axial force on the beam element.
+        If shear deformations are considered (`'shear'` in
+        :py:attr:`deformations`), the flexural stiffness is adjusted based on
+        the axial force (L) and the shear rigidity :math:`GA_s`.
+        Otherwise, the unmodified flexural stiffness is returned.
+
+        Parameters
+        ----------
+        f_axial : :any:`float`
+            The axial force (L) applied to the beam element, which is obtained
+            from the internal force results of the first-order theory.
+
+        Returns
+        -------
+        :any:`float`
+            The modified flexural stiffness :math:`B_s`.
+
+        See Also
+        --------
+        :py:class:`FirstOrder`
+
+        Notes
+        -----
+        The modified flexural stiffness is calculated as:
+
+        .. math::
+            B_s = EI \cdot ( 1 + \dfrac{L}{GA_s})
+
+        if shear deformations are considered. Otherwise, the function returns
+        the unmodified flexural stiffness:
+
+        .. math::
+            B_s = EI
+        """
         if 'shear' in self.deformations:
             return self.EI * (1 + f_axial / self.GA_s)
         else:
@@ -157,7 +375,18 @@ class Bar:
 
     @cached_property
     def phi(self):
-        """ TODO """
+        r"""Calculates the stiffness contributions of shear deformation.
+
+        Returns
+        -------
+        :any:`float`
+            Stiffness contributions of shear deformation.
+
+        Notes
+        -----
+        .. math::
+            \varphi = \dfrac{12 * E * I}{GA_s * l^2}
+        """
         return 12 * self.EI / (self.GA_s * self.length ** 2)
 
     def characteristic_number(self, f_axial):
@@ -166,7 +395,40 @@ class Bar:
 
     @cached_property
     def line_load(self):
-        """ TODO """
+        """The overall line load on a bar element as a 6x1 vector.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            Sum of all line loads specified in :py:attr:`line_loads`.
+
+        See Also
+        --------
+        :py:class:`BarLineLoad`
+
+        Notes
+        -----
+            If no line loads are specified, then a 6x1 zero vector is
+            returned.
+            The load components are rotated by the inclination of the beam.
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> node_1 = Node(0, 0)
+        >>> node_2 = Node(3, -4)
+        >>> cross_sec = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> material = Material(210000000, 0.1, 81000000, 0.1)
+        >>> Bar(node_1, node_2, cross_sec, material).line_load
+        array([[0], [0], [0], [0], [0], [0]])
+
+        >>> from sstatics.core import BarLineLoad
+        >>> line_loads = (BarLineLoad(1, 1, 'z', 'bar', 'exact'),
+        >>>               BarLineLoad(2, 3, 'x', 'system', 'proj'))
+        >>> Bar(node_1, node_2, cross_sec, material,
+        >>>     line_loads=line_loads).line_load
+        array([[0.96], [2.28], [0], [1.44], [2.92], [0]])
+        """
         if len(self.line_loads) == 0:
             return np.array([[0], [0], [0], [0], [0], [0]])
         return np.sum(
@@ -175,7 +437,40 @@ class Bar:
 
     @property
     def point_load(self):
-        """ TODO """
+        """The overall point load on a bar element as a 6x1 vector.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            Sum of all point loads specified in :py:attr:`point_loads`.
+
+        See Also
+        --------
+        :py:class:`BarPointLoad`
+
+        Notes
+        -----
+            If no point loads are specified, then a 6x1 zero vector is
+            returned.
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> node_1 = Node(0, 0)
+        >>> node_2 = Node(3, 0)
+        >>> cross_sec = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> material = Material(210000000, 0.1, 81000000, 0.1)
+        >>> Bar(node_1, node_2, cross_sec, material).point_load
+        array([[0], [0], [0], [0], [0], [0]])
+
+        >>> from sstatics.core import BarPointLoad
+            >>> import numpy
+        >>> point_loads = (BarPointLoad(1, 0, 0),
+        >>>                BarPointLoad(0, 2, numpy.pi/4, position=1))
+        >>> Bar(node_1, node_2, cross_sec, material,
+        >>>     point_loads=point_loads).point_load
+        array([[1], [0], [0], [1.41421356], [1.41421356], [0]])
+        """
         if len(self.point_loads) == 0:
             return np.array([[0], [0], [0], [0], [0], [0]])
         return np.sum(
@@ -184,13 +479,62 @@ class Bar:
 
     @property
     def f0_point(self):
-        """ TODO """
+        r"""Calculates the internal forces due to point loads related to
+        the local bar coordinate system.
+
+        The method rotates the point load components from the system
+        coordination system into the bar coordination system. Only point load
+        componants at the beginning (position = 0) and at the end
+        (position = 1) of the beam are included.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            6x1 vector of the rotated point load components.
+
+        Notes
+        -----
+        The transformation is performed using the following rotation matrix:
+        .. math::
+           \begin{bmatrix}
+               \cos(\alpha- \beta_i) & \sin(\alpha - \beta_i) & 0 & 0 & 0 & 0\\
+               -\sin(\alpha - \beta_i) & \cos(\alpha - \beta_i) & 0 &
+               0 & 0 & 0\\
+               0 & 0 & 1 & 0 & 0 & 0 \\
+               0 & 0 & 0 & \cos(\alpha- \beta_j) & \sin(\alpha - \beta_j)
+               & 0 \\
+               0 & 0 & 0 & -\sin(\alpha - \beta_j) & \cos(\alpha - \beta_j)
+               & 0\\
+               0 & 0 & 0 & 0 & 0 & 1
+           \end{bmatrix}^{T} \cdot
+           F^{0}}
+
+        """
         m = np.transpose(self.transformation_matrix())
         return m @ self.point_load
 
     @cached_property
     def f0_temp(self):
-        """ TODO """
+        r"""Calculates the internal forces due to temperature loads related to
+        the local bar coordinate system.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            6x1 vector of the internal forces due to temperature loads.
+
+        Notes
+        -----
+        The vector is calculated by the following mathmatical equations:
+        .. math::
+        F^{0'} =
+        \left\lbrace\begin{array}{c}
+        \alpha_T \cdot T \cdot E \cdot A \\ 0 \\
+        \dfrac{\alpha_T \cdot \Delta T \cdot E \cdot I}{h} \\
+        - \alpha_T \cdot T \cdot E \cdot A \\ 0 \\
+        - \dfrac{\alpha_T \cdot \Delta T \cdot E \cdot I}{h}
+        \end{array}\right\rbrace
+        """
         factor = self.material.therm_exp_coeff * self.material.young_mod
         f0_x = factor * self.temp.temp_s * self.cross_section.area
         f0_m = factor * self.temp.temp_delta * self.cross_section.mom_of_int
