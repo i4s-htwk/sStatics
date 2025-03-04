@@ -24,6 +24,9 @@ class Figure(go.Figure):
 
 class GraphicObject(abc.ABC):
 
+    # TODO: find a better solution to pass down options to customize an object
+    # TODO: each instance should be customizable
+    # TODO: default values should be the intended appearance
     scatter_options = {
         'mode': 'lines',
         'line_color': 'black',
@@ -134,6 +137,7 @@ class CoordinateSystem(GraphicObject):
                 x=x, y=z, text=self.x_text, showarrow=False, font_size=12,
                 textangle=np.rad2deg(self.rotation)
             ))
+        # TODO: add z_text
         return tuple(annotations)
 
     @property
