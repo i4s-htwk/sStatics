@@ -1202,15 +1202,12 @@ class Polplan:
         bar_index_map = {bar: idx for idx, bar in enumerate(self.bars)}
 
         for i, chain in enumerate(self.chains):
-            print(i, chain.angle)
-
             if chain.stiff:
                 continue
             if chain.absolute_pole.is_infinite:
                 displacement = self._calc_displacement_from_translation(chain)
                 for bar in chain.bars:
                     idx = bar_index_map[bar]
-                    print('Bar: ', idx)
 
                     displacement_bar = displacement_bar_list[idx]
                     displacement_bar[0:2, :] = displacement
@@ -1258,7 +1255,6 @@ class Polplan:
             for conn_chain in self.node_to_chain_map[rPole.node]:
                 # Überprüft, ob es sich um eine verbundene Scheibe handelt
                 if (conn_chain != chain and not conn_chain.stiff):
-                    print(f'Connected Chain: {self.chains.index(conn_chain)}')
                     aPole_coords = np.array([
                         [conn_chain.absolute_pole.node.x],
                         [conn_chain.absolute_pole.node.z]])
