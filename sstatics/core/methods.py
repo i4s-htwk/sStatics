@@ -8,6 +8,7 @@ import numpy as np
 from sstatics.core import (
     Bar, Node, System, SystemModifier
 )
+from sstatics.core.utils import get_angle
 
 
 @dataclass(eq=False)
@@ -248,9 +249,101 @@ class InfluenceLine:
             calc_system = FirstOrder(self.modified_system)
             return calc_system.calc()
         else:
-            # TODO: Hier wird die Verschiebungsfigur zurückgegeben und
-            #       nicht deform, force wie bei calc_system.calc()
-            return None
+            # 1. polplan aufstellen
+            self.modified_system.get_polplan()
+
+            if self.modified_system.polplan.solved:
+                # 2. Winkelberechnung für Scheibe in dem das obj enthalten ist
+                chain, angle = self.get_chain_and_angle(obj, force, position)
+
+                # 2.3 Berechnung aller weiteren Winkel
+                self.modified_system.polplan._calc_angle_from_chain(
+                    target_chain=chain, target_angle=angle)
+
+                # 3. Berechnung der Verschiebungsfigur
+                return (self.modified_system.polplan.get_displacement_figure(),
+                        None)
+            else:
+                raise ValueError('poleplan is not solved.')
+
+    def get_chain_and_angle(self, obj, force, position):
+        if isinstance(obj, Bar):
+            angle = 0
+            # 2.1 Um welche Scheibe handelt es sich
+            idx = list(self.system.bars).index(obj)
+            bar = self.modified_system.bars[idx]
+            chain = self.modified_system.polplan._get_chain(bars={bar})
+
+            # 2.2 Wie groß ist der Winkel
+            if force == 'fz':
+                if position in {0, 1}:
+                    node = obj.node_i if position == 0 else obj.node_j
+                    displacement = 1 if position == 0 else -1
+
+                    if chain.absolute_pole.is_infinite:
+                        print(
+                            f'Position {position}: {chain.absolute_pole} '
+                            f'liegt im Unendlichen!')
+                        aPole_coords, node_coords, c = (
+                            self.modified_system.polplan._find_adjacent_chain(
+                                node, chain))
+
+                        if aPole_coords is None:
+                            print('Schauen, ob es angrenzende Scheiben gibt')
+                            for rPole in chain.relative_pole:
+                                if rPole != node:
+                                    aPole_coords, node_coords, c = (
+                                        self.modified_system.polplan.
+                                        _find_adjacent_chain(
+                                            rPole.node, chain))
+                        idx_chain = self.modified_system.polplan.chains.index(
+                            chain)
+                        next_chain = self.modified_system.polplan.chains.index(
+                            c)
+
+                        angle = get_angle(point=node_coords,
+                                          center=aPole_coords,
+                                          displacement=displacement)
+                        if idx_chain < next_chain:
+                            angle = angle / c.angle_factor
+                    else:
+                        print('aPol liegt nicht im Unendlichen!')
+                        aPole_coords = chain.absolute_pole.coords
+                        node_coords = np.array([[node.x],
+                                                [node.z]])
+
+                        angle = get_angle(point=node_coords,
+                                          center=aPole_coords,
+                                          displacement=displacement)
+                else:
+                    print(bar.node_j)
+                    angle = -1 / obj.length
+            elif force == 'fm':
+                if position == 0:
+                    angle = -1
+                elif position == 1:
+                    angle = 1
+                else:
+                    angle = (1 - position) / obj.length
+
+            return chain, angle
+        elif isinstance(obj, Node):
+            # 2.1 Um welche Scheibe handelt es sich
+            chain = self.modified_system.polplan._get_chain_node(obj)
+            angle = 0
+
+            # 2.2 Wie groß ist der Winkel
+            if force == 'fz':
+                aPole_coords = chain.absolute_pole.coords
+                node_coords = np.array([[obj.x], [obj.z]])
+
+                angle = get_angle(point=node_coords,
+                                  center=aPole_coords,
+                                  displacement=1)
+            elif force == 'fm':
+                angle = -1
+
+            return chain, angle
 
     def calc_norm_force(self, force: Literal['fx', 'fz', 'fm'],
                         obj):
@@ -294,7 +387,7 @@ class InfluenceLine:
                                     "cannot calculate norm force.")
         return -1 * float(np.abs(1 / delta))
 
-    def deform(self, deform: Literal['u', 'w', 'phi'], obj: Bar,
+    def deform(self, deform: Literal['u', 'w', 'phi'], obj,
                position: float = 0):
         if deform not in ['u', 'w', 'phi']:
             raise ValueError(f"Invalid deform type: {deform}")
@@ -307,7 +400,15 @@ class InfluenceLine:
             self.modified_system = (
                 self.modifier.modify_bar_deform(obj, deform, position))
 
-            calc_system = FirstOrder(self.modified_system)
+        elif isinstance(obj, Node):
+            if position:
+                raise ValueError(
+                    "If obj is an instance of Node, position must be None.")
+            self.modified_system = self.modifier.modify_node_deform(
+                obj, deform, virt_force=1)
+        else:
+            raise ValueError("obj must be an instance of Bar or Node")
 
-            return calc_system.calc()
-        raise ValueError("obj must be an instance of Bar")
+        calc_system = FirstOrder(self.modified_system)
+
+        return calc_system.calc()
