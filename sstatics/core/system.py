@@ -1247,15 +1247,11 @@ class Polplan:
         return displacement_bar_list
 
     def _calc_displacement_from_translation(self, chain: Chain):
-        print(' -> Translation')
         # bestimme die Richtung r basierend auf m
         m, _ = chain.absolute_pole.line()
-        print(m)
         r = np.array([[1], [0]] if m is None else [[-m], [1]])
-        print(r)
         # Normiere den Vektor
         v_norm = r / np.linalg.norm(r)
-        print(v_norm)
         # Iteriere über die relativen Pole der Scheibe
         for rPole in chain.relative_pole:
             # Iteriere über die verbundenen Scheiben
@@ -1279,10 +1275,8 @@ class Polplan:
                     return r * sign * conn_chain.angle * v_norm
 
     def _calc_displacement_from_rotation(self, point, center, angle):
-        print(' -> Rotation')
         delta = point - center
         r = np.array([[0, -1], [1, 0]])
-        print(angle * r @ delta)
         return angle * r @ delta
 
     def _find_adjacent_chain(self, node, chain):
