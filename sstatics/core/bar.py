@@ -60,7 +60,7 @@ class Bar:
     ValueError
         There has to be at least one deformation.
     ValueError
-        Valid deformation key words are "moment", "normal" and "shear".
+        Valid deformation keywords are "moment", "normal" and "shear".
     More discription...
     """
     """ TODO """
@@ -133,27 +133,28 @@ class Bar:
 
         Notes
         -----
-        If the transformation to the node coordinate system is not applied,
-        the rotation angle is determined solely by the inclination of the bar:
-        :python:`alpha = bar.inclination`.
+            If the transformation to the node coordinate system is not applied,
+            the rotation angle is determined solely by the inclination of the
+            bar:
+            :python:`alpha = bar.inclination`.
 
-        If the transformation to the node coordinate system is applied,
-        the rotation is calculated by subtracting the node rotations from the
-        bar inclination:
-        :python:`alpha_i = bar.inclination - bar.node_i.rotation`
-        :python:`alpha_j = bar.inclination - bar.node_j.rotation`
+            If the transformation to the node coordinate system is applied,
+            the rotation is calculated by subtracting the node rotations from
+            the bar inclination:
+            :python:`alpha_i = bar.inclination - bar.node_i.rotation`
+            :python:`alpha_j = bar.inclination - bar.node_j.rotation`
 
-        The resulting matrix has the form
+            The resulting matrix has the form
 
-        .. math::
-            \left(\begin{array}{c}
-            \cos(\alpha_i) & \sin(\alpha_i) & 0 & 0 & 0 & 0\\
-            -\sin(\alpha_i) & \cos(\alpha_i) & 0 & 0 & 0 & 0\\
-            0 & 0 & 1 & 0 & 0 & 0 \\
-            0 & 0 & 0 & \cos(\alpha_j) & \sin(\alpha_j) & 0 \\
-            0 & 0 & 0 & -\sin(\alpha_j) & \cos(\alpha_j) & 0 \\
-            0 & 0 & 0 & 0 & 0 & 1
-            \end{array}\right)
+            .. math::
+                \left(\begin{array}{c}
+                \cos(\alpha_i) & \sin(\alpha_i) & 0 & 0 & 0 & 0\\
+                -\sin(\alpha_i) & \cos(\alpha_i) & 0 & 0 & 0 & 0\\
+                0 & 0 & 1 & 0 & 0 & 0 \\
+                0 & 0 & 0 & \cos(\alpha_j) & \sin(\alpha_j) & 0 \\
+                0 & 0 & 0 & -\sin(\alpha_j) & \cos(\alpha_j) & 0 \\
+                0 & 0 & 0 & 0 & 0 & 1
+                \end{array}\right)
 
         Examples
         --------
@@ -213,9 +214,10 @@ class Bar:
 
         Notes
         -----
-        .. math::
-        The inclination is calcultated by using the following equation:
-            \alpha = \arctan \frac{-z_2 + z_1}{x_2 - x_1}
+            The inclination is calcultated by using the following equation:
+
+            .. math::
+                \alpha = \arctan \frac{(-z_2 + z_1)}{(x_2 - x_1)}
 
         Examples
         --------
@@ -244,9 +246,10 @@ class Bar:
 
         Notes
         -----
-        The length is calcultated by using the following equation:
-        .. math::
-            L = \\sqrt{(x_2 - x_1)^2 + (z_2 - z_1)^2}
+            The length is calcultated by using the following equation:
+
+            .. math::
+                L = \sqrt{(x_2 - x_1)^2 + (z_2 - z_1)^2}
 
         Examples
         --------
@@ -266,7 +269,16 @@ class Bar:
 
     @cached_property
     def hinge(self):
-        """ TODO """
+        """Creates a tuple containing bar hinges.
+
+        The tuple consists of six elements representing different hinge
+        parameters.
+
+        Returns
+        -------
+        :any:`tuple`
+            A tuple containing
+        """
         return (
             self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
             self.hinge_u_j, self.hinge_w_j, self.hinge_phi_j,
@@ -274,7 +286,7 @@ class Bar:
 
     @cached_property
     def flexural_stiffness(self):
-        r"""Calculates the flexural stiffness (EI) of the element.
+        r"""Calculates the flexural stiffness (:math:`EI`) of the element.
 
         The flexural stiffness is defined as the product of the Young's modulus
         (:math:`E`) and the second moment of area (moment of inertia,
@@ -282,21 +294,24 @@ class Bar:
 
         Returns
         -------
-        :any: float
+        :any:`float`
             The flexural stiffness :math:`EI`.
 
         Notes
         -----
-        The flexural stiffness is given by:
+            The flexural stiffness is given by:
 
-        .. math::
-            EI = E \cdot I
+            .. math::
+                EI = E \cdot I
 
-        If :py:attr:`deformations` does not include 'moment', the returned
-        value is scaled:
+            If the bending deformation component is not to be considered in the
+            calculation (:py:attr:`deformations` does not include 'moment'),
+            the flexural stiffness of the bar is scaled to reduce the
+            deformation component so that the bending deformation becomes
+            negligibly small.
 
-        .. math::
-            EI = 1000 \cdot E \cdot I
+            .. math::
+                EI = 1000 \cdot E \cdot I
         """
         EI = self.material.young_mod * self.cross_section.mom_of_int
         return EI if 'moment' in self.deformations else 1_000 * EI
@@ -311,38 +326,24 @@ class Bar:
 
         The modified flexural stiffness :math:`B_s` accounts for shear
         deformations and the influence of axial force on the beam element.
-        If shear deformations are considered (`'shear'` in
-        :py:attr:`deformations`), the flexural stiffness is adjusted based on
-        the axial force (L) and the shear rigidity :math:`GA_s`.
-        Otherwise, the unmodified flexural stiffness is returned.
 
         Parameters
         ----------
         f_axial : :any:`float`
-            The axial force (L) applied to the beam element, which is obtained
-            from the internal force results of the first-order theory.
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
 
         Returns
         -------
         :any:`float`
             The modified flexural stiffness :math:`B_s`.
 
-        See Also
-        --------
-        :py:class:`FirstOrder`
-
         Notes
         -----
-        The modified flexural stiffness is calculated as:
+            The modified flexural stiffness is calculated as:
 
-        .. math::
-            B_s = EI \cdot ( 1 + \dfrac{L}{GA_s})
-
-        if shear deformations are considered. Otherwise, the function returns
-        the unmodified flexural stiffness:
-
-        .. math::
-            B_s = EI
+            .. math::
+                B_s = EI \cdot ( 1 + \dfrac{L}{GA_s})
         """
         if 'shear' in self.deformations:
             return self.EI * (1 + f_axial / self.GA_s)
@@ -354,19 +355,71 @@ class Bar:
     """ Alias of :py:attr:`modified_flexural_stiffness`. """
 
     @cached_property
-    def extensional_stiffness(self):
-        """ TODO """
+    def axial_rigidity(self):
+        r"""Calculates the axial rigidity (:math:`EA`) of the bar.
+
+        The axial rigidity is defined as the product of the Young's modulus
+        (:math:`E`) and the area (:math:`A`).
+
+        Returns
+        -------
+        :any:`float`
+            The axial rigidity :math:`EA`.
+
+        Notes
+        -----
+            The axial rigidity is given by:
+
+            .. math::
+                EA = E \cdot A
+
+            If the axial deformation component is not to be considered in the
+            calculation (:py:attr:`deformations` does not include 'normal'),
+            the axial rigidity of the bar is scaled to reduce the
+            deformation component so that the axial deformation becomes
+            negligibly small.
+
+            .. math::
+                EA = 1000 \cdot E \cdot A
+        """
         EA = self.material.young_mod * self.cross_section.area
         return EA if 'normal' in self.deformations else 1_000 * EA
 
-    EA = property(lambda self: self.extensional_stiffness)
-    """ Alias of :py:attr:`extensional_stiffness`. """
+    EA = property(lambda self: self.axial_rigidity)
+    """ Alias of :py:attr:`axial_rigidity`. """
 
     @cached_property
     def shear_stiffness(self):
-        """ TODO """
-        GA_s = self.material.shear_mod * self.cross_section.area
-        GA_s *= self.cross_section.shear_cor
+        r"""Calculates the shear stiffness (:math:`GA_s`) of the bar.
+
+        The shear stiffness is calculated using the shear modulus (:math:`G`)
+        and the shear area (:math:`A_s`). The modification of the shear area
+        (:math:`A_s`) compared to the cross-sectional area (:math:`A`) is taken
+        into account using the shear correction factor (:math:`\kappa`).
+
+        Returns
+        -------
+        :any:`float`
+            The shear stiffness :math:`GA_s`.
+
+        Notes
+        -----
+            The shear stiffness is given by:
+
+            .. math::
+                GA_s = G \cdot A \cdot \kappa
+
+            If the shear deformation component is not to be considered in the
+            calculation (:py:attr:`deformations` does not include 'shear'),
+            the flexural stiffness of the bar is scaled to reduce the
+            deformation component so that the shear deformation becomes
+            negligibly small.
+
+            .. math::
+                GA_s = 1000 \cdot EI
+        """
+        GA = self.material.shear_mod * self.cross_section.area
+        GA_s = GA * self.cross_section.shear_cor
         EI = self.material.young_mod * self.cross_section.mom_of_int
         return GA_s if 'shear' in self.deformations else 1_000 * EI
 
@@ -384,13 +437,47 @@ class Bar:
 
         Notes
         -----
-        .. math::
-            \varphi = \dfrac{12 * E * I}{GA_s * l^2}
+            .. math::
+                \phi = \dfrac{12 \cdot E \cdot I}{GA_s \cdot \ell^2}
         """
         return 12 * self.EI / (self.GA_s * self.length ** 2)
 
     def characteristic_number(self, f_axial):
-        """ TODO """
+        r"""Returns the characteristic number :math:`\mu` of the beam element.
+
+        This dimensionless characteristic number integrates both the bending
+        and shear stiffness as well as the axial force in the beam. It is used
+        in the correction functions applied in the calculation of the load
+        vector and stiffness matrix based on the analytical approach of
+        second-order theory.
+
+        Parameters
+        ----------
+        f_axial : :any:`float`
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
+
+        Returns
+        -------
+        :any:`float`
+            The dimensionless characteristic number :math:`\mu`.
+
+        See Also
+        --------
+        :py:attr:`stiffness_second_order_analytic`
+        :py:attr:`f0_line_analytic`
+
+        Notes
+        -----
+            It should be noted that the correction functions are not defined at
+            :math:`\mu = 0`, which may lead to numerical instabilities in this
+            range.
+
+            The characteristic number is defined by the following equation:
+
+            .. math::
+                \mu = \sqrt{\dfrac{\mid L \mid}{B_s}} \cdot \ell
+        """
         return np.sqrt(abs(f_axial) / self.B_s(f_axial)) * self.length
 
     @cached_property
@@ -494,21 +581,23 @@ class Bar:
 
         Notes
         -----
-        The transformation is performed using the following rotation matrix:
-        .. math::
-           \begin{bmatrix}
-               \cos(\alpha- \beta_i) & \sin(\alpha - \beta_i) & 0 & 0 & 0 & 0\\
-               -\sin(\alpha - \beta_i) & \cos(\alpha - \beta_i) & 0 &
-               0 & 0 & 0\\
-               0 & 0 & 1 & 0 & 0 & 0 \\
-               0 & 0 & 0 & \cos(\alpha- \beta_j) & \sin(\alpha - \beta_j)
-               & 0 \\
-               0 & 0 & 0 & -\sin(\alpha - \beta_j) & \cos(\alpha - \beta_j)
-               & 0\\
-               0 & 0 & 0 & 0 & 0 & 1
-           \end{bmatrix}^{T} \cdot
-           F^{0}}
+            The transformation is performed using the following rotation
+            matrix:
 
+            .. math::
+               \begin{bmatrix}
+                   \cos(\alpha- \beta_i) & \sin(\alpha - \beta_i) & 0 & 0 & 0
+                   & 0\\
+                   -\sin(\alpha - \beta_i) & \cos(\alpha - \beta_i) & 0 &
+                   0 & 0 & 0\\
+                   0 & 0 & 1 & 0 & 0 & 0 \\
+                   0 & 0 & 0 & \cos(\alpha- \beta_j) & \sin(\alpha - \beta_j)
+                   & 0 \\
+                   0 & 0 & 0 & -\sin(\alpha - \beta_j) & \cos(\alpha - \beta_j)
+                   & 0\\
+                   0 & 0 & 0 & 0 & 0 & 1
+               \end{bmatrix}^{T} \cdot
+               f^{0}
         """
         m = np.transpose(self.transformation_matrix())
         return m @ self.point_load
@@ -525,15 +614,16 @@ class Bar:
 
         Notes
         -----
-        The vector is calculated by the following mathmatical equations:
-        .. math::
-        F^{0'} =
-        \left\lbrace\begin{array}{c}
-        \alpha_T \cdot T \cdot E \cdot A \\ 0 \\
-        \dfrac{\alpha_T \cdot \Delta T \cdot E \cdot I}{h} \\
-        - \alpha_T \cdot T \cdot E \cdot A \\ 0 \\
-        - \dfrac{\alpha_T \cdot \Delta T \cdot E \cdot I}{h}
-        \end{array}\right\rbrace
+            The vector is calculated by the following mathmatical equations:
+
+            .. math::
+                f^{0'} =
+                \left\lbrace\begin{array}{c}
+                \alpha_T \cdot T \cdot E \cdot A \\ 0 \\
+                \dfrac{\alpha_T \cdot \Delta T \cdot E \cdot I}{h} \\
+                - \alpha_T \cdot T \cdot E \cdot A \\ 0 \\
+                - \dfrac{\alpha_T \cdot \Delta T \cdot E \cdot I}{h}
+                \end{array}\right\rbrace
         """
         factor = self.material.therm_exp_coeff * self.material.young_mod
         f0_x = factor * self.temp.temp_s * self.cross_section.area
@@ -543,7 +633,38 @@ class Bar:
 
     @cached_property
     def f0_displacement(self):
-        """ TODO """
+        r"""Calculates the internal forces due to support stresses related to
+        the local bar coordinate system.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            6x1 vector of the internal forces due to support stresses.
+
+        Notes
+        -----
+            The support displacements of the initial and end nodes are combined
+            into a 6x1 vector. By multiplying the stiffness matrix with the
+            acting support displacements, the resulting internal forces are
+            obtained. Since the support displacements are given in the node
+            coordinate system, a transformation using the transformation matrix
+            is required to obtain the internal forces in the bar coordinate
+            system.
+
+            The vector is calculated using the following mathematical
+            equations:
+
+            .. math::
+                f^{0'} = k^{'} \cdot \Delta^{'}
+
+            Including the transformation matrix, the following equation is
+            used:
+
+            .. math::
+                f^{0'} = k^{'} \cdot T \cdot \left\lbrace\begin{array}{c}
+                u_i \\ w_i \\ \varphi_i \\ u_j \\ w_j \\ \varphi_j
+                \end{array}\right\rbrace
+        """
         f0_displacement = np.vstack(
             (self.node_i.displacement, self.node_j.displacement)
         )
@@ -555,7 +676,48 @@ class Bar:
 
     @cached_property
     def f0_line(self):
-        """ TODO """
+        r"""Calculates the internal forces due to external loads related to
+        the local bar coordinate system.
+
+
+        Returns
+        -------
+        :any:`numpy.array`
+            6x1 vector of the internal forces due to external loads
+
+        Notes
+        -----
+
+            In the calculation of the deformation method, the load
+            deformation state (LDS) of the bar element is considered in
+            addition to unit deformation state (UDS) of the unloaded bar.
+            For common loading conditions, internal forces
+            are tabulated in engineering handbooks. The implemented vector for
+            internal forces due to distributed loads assumes a trapezoidal load
+            distribution. The vector also takes shear deformations into
+            account.
+
+            The vector is calculated using the following mathematical
+            equations:
+
+            .. math::
+                f^{0'} =
+                \left\lbrace\begin{array}{c}
+                f_{x,i}^{(0)'} \\ f_{z,i}^{(0)'} \\ f_{M,i}^{(0)'} \\
+                f_{x,j}^{(0)'} \\ f_{z,j}^{(0)'} \\ f_{M,j}^{(0)'}
+                \end{array}\right\rbrace = \left\lbrace\begin{array}{c}
+                \dfrac{(7n_i + 3 n_j) \ell}{20} \\
+                \dfrac{(40EIp_j + 80EIp_i + 3GA_s \ell^2 p_j + 7 G A_s \ell^2
+                p_i) \ell}{240 EI + 20 GA_s \ell^2} \\
+                -\dfrac{(30 EI p_j + 30 EI p_i + 2 GA_s \ell p_j + 3 GA_s
+                \ell^2 p_i) \ell^2}{720EI + 60 GA_s \ell^2} \\
+                -\dfrac{(3n_i + 7 n_j) \ell}{20} \\
+                -\dfrac{(80EIp_j + 40EIp_i + 7GA_s \ell^2 p_j + 3 G A_s \ell^2
+                p_i) \ell}{240 EI + 20 GA_s \ell^2} \\
+                -\dfrac{(30 EI p_j + 30 EI p_i + 3 GA_s \ell p_j + 2 GA_s
+                \ell^2 p_i) \ell^2}{720EI + 60 GA_s \ell^2}
+                \end{array}\right\rbrace
+        """
         p, const = self.line_load, self.GA_s * self.length ** 2
         factors = np.array([
             [7, 3, 0, 0],
@@ -572,7 +734,147 @@ class Bar:
         return f0 * np.array([[-1], [-1], [1], [-1], [-1], [-1]])
 
     def f0_line_analytic(self, f_axial):
-        """ TODO """
+        r"""Calculates the internal forces due to external loads related to
+        the local bar coordinate system for the analytical solution of the
+        second-order theory.
+
+        To calculate the internal forces for the second-order theory, this
+        function considers the particular solution while taking into account
+        the axial force (f_axial, :math:`L`) in the beam element.
+
+        Parameters
+        ----------
+        f_axial : :any:`float`
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            6x1 vector of the internal forces due to external loads for the
+            analytical solution of the second-order theory.
+
+        See Also
+        --------
+        :py:attr:`averaged_longitudinal_force`
+
+        Notes
+        -----
+        The application of continuous element loads can generate full
+        constraint forces in the base element. This function calculates the
+        particular solution of the deformation line according to the
+        second-order theory. The particular solution is determined separately
+        for positive and negative axial forces :math:`L`, which are evaluated
+        based on the input parameter.
+
+        **For negative axial forces, the internal forces are given by:**
+
+        .. math::
+             f^{0'} = \left\lbrace\begin{array}{c}
+                -\dfrac{(7n_i + 3 n_j) \ell}{20} \\
+                -\dfrac{B_s \mu^2}{\ell^2} \cdot c_2 - [\dfrac{\ell}{\mu^2} +
+                \dfrac{EI}{GA_s \ell}] (p_j - p_i) \\
+                \dfrac{B_s \mu^2}{\ell^2} \cdot c_3 - [\dfrac{\ell^2}{\mu^2} +
+                \dfrac{EI}{GA_s}] \cdot p_i \\
+                \dfrac{(3n_i + 7 n_j) \ell}{20} \\
+                -\dfrac{B_s \mu^2}{\ell^2} \cdot c_2 - p_i \cdot \ell -
+                [\dfrac{\ell}{\mu^2} + \dfrac{EI}{GA_s \ell} + \dfrac{\ell}{2}]
+                (p_j - p_i) \\
+                \dfrac{B_s \mu^2}{\ell^2} [c_3 \cdot \cos (\mu) + c_4 \cdot
+                \sin ( \mu)] - [\dfrac{\ell^2}{\mu^2} + \dfrac{EI}{GA_s}] \cdot
+                 p_j
+                \end{array}\right\rbrace
+
+        with the coefficients:
+
+        .. math::
+            \begin{array}{ll}
+                c_1 = \dfrac{\ell^2}{6 B_s \mu^3} \cdot &  \bigg(\dfrac{3 \big[
+                GA_s \ell^4 + 2 B_s \ell^2 \mu^2 + \frac{B_{s}^2}{GA_s} \mu^4
+                \big] \sinh (\mu) (p_i + p_j)}
+                {GA_s \ell^2 \mu \sin (\mu) + 2 [GA_s \ell^2 + B_s \mu^2] (\cos
+                 ( \mu) - 1)}\\
+                 & + \dfrac{6 EI \ell^2 \mu (1- \cos ( \mu)) (p_i - p_j)}{GA_s
+                  \ell^2 \mu \sin (\mu) + 2 [GA_s \ell^2 + B_s \mu^2] (\cos (
+                  \mu) - 1)} \\
+                 & + \dfrac{[B_s \ell^2 \mu^3 + GA_s \ell^4 \mu] [p_i + 2 p_j +
+                  (2 p_i + p_j) \cos (\mu)]}{GA_s \ell^2 \mu \sin (\mu) + 2
+                  [GA_s \ell^2 + B_s \mu^2] (\cos ( \mu) - 1)}\bigg)
+                \end{array}
+
+        .. math::
+             \begin{array}{ll}
+                c_2 = -\dfrac{\ell^3}{6 B_s \mu^3} \cdot &  \bigg(\dfrac{12 EI
+                ( 1- \cos ( \mu)) (p_i - p_j) + GA_s \ell^2 \mu \sin (\mu)
+                (2 p_i + p_j)}
+                {GA_s \ell^2 \mu \sin (\mu) + 2 [GA_s \ell^2 + B_s \mu^2]
+                (\cos ( \mu) - 1)}\\
+                 & - \dfrac{3 (GA_s \ell^2 + B_s \mu^2) (1 - \cos ( \mu))
+                 (p_i + p_j)}{GA_s \ell^2 \mu \sin (\mu) + 2 [GA_s \ell^2 + B_s
+                  \mu^2] (\cos ( \mu) - 1))}\bigg)
+                \end{array}
+
+        .. math::
+            c_3 = - c_1
+
+        .. math::
+            c_4 = -\bigg[ \dfrac{B_s \mu}{G A_s \ell} + \dfrac{\ell}{\mu}
+            \bigg] \cdot c_2 - \dfrac{EI \ell^2 ( p_j - p_i)}{B_s GA_s \mu^3}
+
+        **For positive axial forces, the internal forces are given by:**
+
+        .. math::
+             f^{0'} = \left\lbrace\begin{array}{c}
+                -\dfrac{(7n_i + 3 n_j) \ell}{20} \\
+                \dfrac{B_s \mu^2}{\ell^2} \cdot c_2 + [\dfrac{\ell}{\mu^2} -
+                \dfrac{EI}{GA_s \ell}] (p_j - p_i) \\
+                -\dfrac{B_s \mu^2}{\ell^2} \cdot c_3 + [\dfrac{\ell^2}{\mu^2} -
+                \dfrac{EI}{GA_s}] \cdot p_i \\
+                \dfrac{(3n_i + 7 n_j) \ell}{20} \\
+                -\dfrac{B_s \mu^2}{\ell^2} \cdot c_2 - \dfrac{(p_j + p_i)
+                \ell}{2} + [\dfrac{\ell}{\mu^2} + \dfrac{EI}{GA_s \ell}] (p_j -
+                p_i) \\
+                -B_s \cdot [c_3 \cdot \dfrac{\mu^2}{\ell^2} \cosh (\mu) + c_4
+                \cdot \dfrac{\mu^2}{\ell^2} \sinh ( \mu)] + [\dfrac{\ell^2}
+                {\mu^2} - \dfrac{EI}{GA_s}] \cdot p_j
+                \end{array}\right\rbrace
+
+
+        with the coefficients:
+
+        .. math::
+            \begin{array}{ll}
+            c_1 = \dfrac{\ell^2}{6 B_s \mu^3} \cdot &  \bigg(\dfrac{3 \big[GA_s
+            \ell^4 - 2 B_s \ell^2 \mu^2 + \frac{B_{s}^2}{GA_s} \mu^4 \big]
+            \sinh (\mu) (p_i + p_j)}{2 [GA_s \ell^2 - B_s \mu^2] (1- \cosh
+            (\mu)) + GA_s \ell^2 \mu \sinh(\mu)}\\
+             & + \dfrac{6 EI \ell^2 \mu (1- \cosh ( \mu)) (p_i - p_j)}{2 [GA_s
+              \ell^2 - B_s \mu^2] (1- \cosh (\mu)) + GA_s \ell^2 \mu
+              \sinh(\mu)} \\
+             & + \dfrac{[B_s \ell^2 \mu^3 - GA_s \ell^4 \mu] [p_i + 2 p_j +
+             (2 p_i + p_j) \cosh (\mu)]}{2 [GA_s \ell^2 - B_s \mu^2] (1- \cosh
+             (\mu)) + GA_s \ell^2 \mu \sinh(\mu)}\bigg)
+            \end{array}
+        .. math::
+            \begin{array}{ll}
+            c_2 = -\dfrac{\ell^3}{6 B_s \mu^3} \cdot &  \bigg(\dfrac{12 EI ( 1-
+             \cosh ( \mu)) (p_i - p_j) - GA_s \ell^2 \mu \sinh (\mu) (2 p_i +
+             p_j)}
+            {2 [GA_s \ell^2 - B_s \mu^2] (1- \cosh (\mu)) + GA_s \ell^2 \mu
+            \sinh(\mu)}\\
+             & - \dfrac{3 (GA_s \ell^2 - B_s \mu^2) (1 - \cosh ( \mu)) (p_i +
+             p_j)}{2 [GA_s \ell^2 - B_s \mu^2] (1- \cosh (\mu)) + GA_s \ell^2
+             \mu \sinh(\mu)}\bigg)
+            \end{array}
+
+        .. math::
+            c_3 = - c_1
+
+        .. math::
+            c_4 = \bigg[ \dfrac{B_s \mu}{G A_s \ell} - \dfrac{\ell}{\mu} \bigg]
+             \cdot c_2 + \dfrac{EI \ell^2 ( p_j - p_i)}{B_s GA_s \mu^3}
+
+        """
         p_vec = self.line_load
         mu = self.characteristic_number(f_axial)
         B_s = self.B_s(f_axial)
@@ -687,7 +989,88 @@ class Bar:
         )
 
     def f0_line_taylor(self, f_axial):
-        """ TODO """
+        r"""Calculates the internal forces due to external loads related to
+        the local bar coordinate system for the Taylor series expansion of the
+        second-order theory.
+
+        To calculate the internal forces for the second-order theory, this
+        function considers the Taylor series expansion while taking into
+        account the axial force (f_axial, :math:`L`) in the beam element.
+
+        Parameters
+        ----------
+        f_axial : :any:`float`
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            6x1 vector of the internal forces due to external loads for the
+            Taylor series expansion of the second-order theory.
+
+        See Also
+        --------
+        :py:attr:`averaged_longitudinal_force`
+
+        Notes
+        -----
+            The application of continuous element loads can generate full
+            constraint forces in the base element. This function calculates the
+            internal forces by using a Taylor series expansion according to the
+            second-order theory.
+
+            **The vector is calculated by the following mathmatical
+            equations:**
+
+            .. math::
+                \begin{array}{ll}
+                    f_{z,i}^{(0)'} = \dfrac{\ell}{20} \cdot &  \bigg(\dfrac{720
+                     B_{s}^2 (p_j + p_i) - 4 EIGA_s \ell^2 (p_j - p_i) + 20 B_s
+                      GA_s \ell^2 ( 5 p_j + 7 p_i)}{(12 B_s + GA_s \ell^2)^2}\\
+                     & \dfrac{(GA_s)^2 \ell^4 (3 p_j + 7 p_i)}{(12 B_s + GA_s
+                     \ell^2)^2} - \dfrac{EI (p_j - p_i)}{GA_s \ell} -
+                     \dfrac{12 B_s}{L \ell} \cdot \dfrac{(EI - B_s)
+                     (p_j - p_i)}{(12 B_s + GA_s \ell^2)}\bigg)
+                \end{array}
+
+            .. math::
+                \begin{array}{ll}
+                    f_{M,i}^{(0)'} = & \dfrac{4320 B_{s}^3(p_j + p_i) + 6 EI
+                    (GA_s)^2 \ell^4 (p_j- p_i) + 60 B_s GA_s \ell^2 (12B_s p_i
+                     - GA_s \ell^2 p_j)}{60 GA_s (12 B_s + GA_s \ell^2)^2}\\
+                     & - \dfrac{(GA_s)^3 \ell^6 (2p_j + 3 p_i)}{60 GA_s (12 B_s
+                      + GA_s \ell^2)^2} - \dfrac{EI}{GA_s} \cdot p_i +
+                      \dfrac{6 B_s}{L} \cdot \dfrac{(EI - B_s) ( p_j - p_i)}
+                      {(12 B_s + GA_s \ell^2)}
+                \end{array}
+
+            .. math::
+                f_{z,j}^{(0)'} = f_{z,i}^{(0)'} - \dfrac{(p_j + p_i) \cdot
+                \ell}{2}
+
+            .. math::
+                \begin{array}{ll}
+                f_{M,j}^{(0)'} = & \dfrac{4320 B_{s}^3(p_j + p_i) - 6 EI
+                (GA_s)^2 \ell^4 (p_j- p_i) + 60 B_s GA_s \ell^2 (12B_s p_j -
+                GA_s \ell^2 p_i)}{60 GA_s (12 B_s + GA_s \ell^2)^2}\\
+                 & - \dfrac{(GA_s)^3 \ell^6 (3p_j + 2 p_i)}{60 GA_s (12 B_s +
+                 GA_s \ell^2)^2} - \dfrac{EI}{GA_s} \cdot p_j - \dfrac{6 B_s}
+                 {L} \cdot \dfrac{(EI - B_s) ( p_j - p_i)}{(12 B_s + GA_s
+                 \ell^2)}
+                \end{array}
+
+            .. math::
+                f^{0'} = \left\lbrace\begin{array}{c}
+                -\dfrac{(7n_i + 3 n_j) \ell}{20} \\
+                -f_{z,i}^{(0)'} \\
+                -f_{M,i}^{(0)'} \\
+                -\dfrac{(3n_i + 7 n_j) \ell}{20}\\
+                f_{z,j}^{(0)'}\\
+                f_{M,j}^{(0)'}
+                \end{array}\right\rbrace
+
+        """
         p_vec = self.line_load
         B_s = self.B_s(f_axial)
         p_i, p_j = p_vec[1][0], p_vec[4][0]
@@ -738,7 +1121,43 @@ class Bar:
 
     @cached_property
     def stiffness_shear_force(self):
-        """ TODO """
+        r"""Computes the element stiffness matrix considering shear effects.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            A 6x6 matrix representing the element stiffness matrix according to
+            first-order theory, including shear effects.
+
+        Notes
+        -----
+            The element stiffness matrix accounts for the deformation
+            components of the beam due to axial force, bending, and shear.
+            The factor :py:attr:`phi` describes the influence of shear
+            deformation.
+
+            The general form of the element stiffness matrix :math:`k^{'}` is
+            given by:
+
+            .. math::
+                k^{'} =
+                \left[\begin{array}{rrr|rrr}
+                \dfrac{EA}{\ell} & 0 & 0 & -\dfrac{EA}{\ell} & 0 & 0 \\
+                0 & \dfrac{12EI}{\ell^3 ( 1 + \phi)} & -\dfrac{6EI}{\ell^2
+                (1 + \phi)} & 0 & -\dfrac{12EI}{\ell^3(1 + \phi)} & -
+                \dfrac{6EI}{\ell^2(1 + \phi)} \\
+                0 & -\dfrac{6EI}{\ell^2(1 + \phi)} & \dfrac{EI(4 + \phi)}{\ell
+                (1 + \phi)} & 0 & \dfrac{6EI}{\ell^2(1 + \phi)} & \dfrac{EI(2 -
+                 \phi)}{\ell(1 + \phi)} \\  \hline
+                -\dfrac{EA}{\ell} & 0 & 0 & \dfrac{EA}{\ell} & 0 & 0 \\
+                0 & -\dfrac{12EI}{\ell^3(1 + \phi)} & \dfrac{6EI}{\ell^2(1 +
+                \phi)} & 0 & \dfrac{12EI}{\ell^3(1 + \phi)} & \dfrac{6EI}
+                {\ell^2(1 + \phi)} \\
+                0 & -\dfrac{6EI}{\ell^2(1 + \phi)} & \dfrac{EI(2 - \phi)}{\ell
+                (1 + \phi)} & 0 & \dfrac{6EI}{\ell^2(1 + \phi)} & \dfrac{EI(4 +
+                 \phi)}{\ell(1 + \phi)} \\
+                \end{array}\right]
+    """
         return np.array([
             [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
             [0, 1, 1, 0, 1, 1],
@@ -749,7 +1168,109 @@ class Bar:
         ]) / (1 + self.phi)
 
     def stiffness_second_order_analytic(self, f_axial):
-        """ TODO """
+        r"""Creates the element stiffness matrix according to second-order
+        theory for the analytical solution.
+
+        To establish the stiffness matrix based on second-order theory, four
+        correction functions must be calculated, which account for the
+        influence of the axial force (:math:`L`).
+
+        Parameters
+        ----------
+        f_axial : :any:`float`
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            A 6x6 matrix representing the theoretically exact element stiffness
+            matrix according to second-order theory for a shear-flexible and
+            bending-flexible beam under constant negative or positive axial
+            force.
+
+        See Also
+        --------
+        :py:attr:`averaged_longitudinal_force`
+
+        Notes
+        -----
+            The correction functions are computed depending on the sign of the
+            axial force. The functions are also dependent on the
+            :py:attr:`characteristic_number`, which is defined by
+            the equation:
+
+            .. math::
+                \mu = \sqrt{\dfrac{\mid L \mid}{B_s}} \cdot \ell
+
+            For a negative axial force, the following equations apply:
+
+            .. math::
+                f_1(\mu) = - \dfrac{B_s}{12EI} \cdot \dfrac{\mu^3 \cdot \sin
+                ( \mu)}{2 [\frac{B_s}{GA_s \ell^2} \mu^2 + 1] (\cos (\mu) - 1)
+                + \mu \cdot \sin ( \mu)}
+
+            .. math::
+                f_2(\mu) = \dfrac{B_s}{6EI} \cdot \dfrac{(\cos (\mu) - 1) \cdot
+                \mu^2}{2 [\frac{B_s}{GA_s \ell^2} \mu^2 + 1] (\cos (\mu) - 1)
+                + \mu \cdot \sin ( \mu)}
+
+            .. math::
+                f_3(\mu) = -\dfrac{B_s}{4EI} \cdot \dfrac{\big([\frac{B_s}{GA_s
+                 \ell^2} \mu^2 + 1] \sin ( \mu) - \mu \cdot \cos( \mu ) \big)
+                 \cdot \mu}{2 [\frac{B_s}{GA_s \ell^2} \mu^2 + 1] (\cos (\mu)
+                 - 1) + \mu \cdot \sin ( \mu)}
+
+            .. math::
+                f_4(\mu) = \dfrac{B_s}{2EI} \cdot \dfrac{\big([\frac{B_s}{GA_s
+                 ell^2} \mu^2 + 1] \sin ( \mu) - \mu \big) \cdot \mu}{2 [\frac
+                 {B_s}{GA_s \ell^2} \mu^2 + 1] (\cos (\mu) - 1) + \mu \cdot
+                 \sin ( \mu)}
+
+            For a positive axial force, the equations are as follows:
+
+            .. math::
+                f_1(\mu) = \dfrac{B_s}{12EI} \cdot \dfrac{\mu^3 \cdot \sinh (
+                \mu)}{2 [\frac{B_s}{GA_s \ell^2} \mu^2 + 1] (\cosh (\mu) - 1)
+                + \mu \cdot \sinh ( \mu)}
+
+            .. math::
+                f_2(\mu) = \dfrac{B_s}{6EI} \cdot \dfrac{(\cosh (\mu) - 1)
+                \cdot \mu^2}{2 [\frac{B_s}{GA_s \ell^2} \mu^2 + 1] (\cosh (\mu)
+                 - 1) + \mu \cdot \sinh ( \mu)}
+
+            .. math::
+                f_3(\mu) = \dfrac{B_s}{4EI} \cdot \dfrac{\big([\frac{B_s}{GA_s
+                 \ell^2} \mu^2 + 1] \sinh ( \mu) - \mu \cdot \cosh( \mu ) \big)
+                  \cdot \mu}{2 [\frac{B_s}{GA_s \ell^2} \mu^2 + 1] (\cosh (\mu)
+                   - 1) + \mu \cdot \sinh ( \mu)}
+
+            .. math::
+                f_4(\mu) = \dfrac{B_s}{2EI} \cdot \dfrac{\big([\frac{B_s}{GA_s
+                 \ell^2} \mu^2 + 1] \sinh ( \mu) - \mu \big) \cdot \mu}{2 [
+                 \frac{B_s}{GA_s \ell^2} \mu^2 + 1] (\cosh (\mu) - 1) + \mu
+                 \cdot \sinh ( \mu)}
+
+            Which leads to the element stiffness matrix:
+
+            .. math::
+                k^{'} =
+                \left[\begin{array}{rrr|rrr}
+                \dfrac{EA}{\ell} & 0 & 0 & -\dfrac{EA}{\ell} & 0 & 0 \\
+                0 & \dfrac{12EI}{\ell^3} \cdot f_1 & -\dfrac{6EI}{\ell^2}
+                \cdot f_2 & 0 & -\dfrac{12EI}{\ell^3}\cdot f_1 & -\dfrac{6EI}
+                {\ell^2}\cdot f_2 \\
+                0 & -\dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{4EI}{\ell}\cdot f_3
+                & 0 & \dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{2EI}{\ell}\cdot f_4
+                 \\  \hline
+                -\dfrac{EA}{\ell} & 0 & 0 & \dfrac{EA}{\ell} & 0 & 0 \\
+                0 & -\dfrac{12EI}{\ell^3}\cdot f_1 & \dfrac{6EI}{\ell^2}\cdot
+                f_2 & 0 & \dfrac{12EI}{\ell^3}\cdot f_1 & \dfrac{6EI}{\ell^2}
+                \cdot f_2 \\
+                0 & -\dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{2EI}{\ell}\cdot f_4
+                & 0 & \dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{4EI}{\ell}\cdot f_3
+                \end{array}\right]
+        """
         mu = self.characteristic_number(f_axial)
         B_s = self.B_s(f_axial)
         factor = B_s / (self.GA_s * self.length ** 2)
@@ -788,7 +1309,78 @@ class Bar:
                          [0, f_2, f_4, 0, f_2, f_3]])
 
     def stiffness_second_order_taylor(self, f_axial):
-        """ TODO """
+        r"""Creates the element stiffness matrix according to second-order
+        theory for a Taylor series.
+
+        To establish the stiffness matrix based on second-order theory, four
+        correction functions must be calculated, which account for the
+        influence of the axial force (:math:`L`).
+
+        Parameters
+        ----------
+        f_axial : :any:`float`
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            A 6x6 matrix representing the theoretically exact element stiffness
+            matrix according to second-order theory for a shear-flexible and
+            bending-flexible beam under constant negative or positive axial
+            force.
+
+        See Also
+        --------
+        :py:attr:`averaged_longitudinal_force`
+
+        Notes
+        -----
+            The correction function are calculated by the following equations:
+
+            .. math::
+                f_1= \dfrac{B_s}{12EI ( \frac{B_s}{GA_s \ell^2}+ \frac{1}{12})}
+                 + \dfrac{L \ell^2}{144 EI} \cdot \Bigg(\dfrac{\frac{B_s}{GA_s
+                  \ell^2} + \frac{1}{10}}{(\frac{B_s}{GA_s \ell^2} + \frac{1}
+                  {12})^2}\Bigg)
+
+            .. math::
+                f_2= \dfrac{B_s}{12EI ( \frac{B_s}{GA_s \ell^2}+ \frac{1}{12})}
+                 + \dfrac{L \ell^2}{8640 EI} \cdot \Bigg(\dfrac{1}{(\frac{B_s}
+                 {GA_s \ell^2} + \frac{1}{12})^2}\Bigg)
+
+            .. math::
+                f_3= \dfrac{B_s ( \frac{B_s}{GA_s \ell^2}+ \frac{1}{3})}{4EI (
+                 \frac{B_s}{GA_s \ell^2}+ \frac{1}{12})} + \dfrac{L \ell^2}
+                 {48 EI} \cdot \Bigg(\dfrac{1}{240(\frac{B_s}{GA_s \ell^2} +
+                 \frac{1}{12})^2} + 1\Bigg)
+
+            .. math::
+                f_4= -\dfrac{B_s ( \frac{B_s}{GA_s \ell^2}- \frac{1}{6})}{2EI
+                ( \frac{B_s}{GA_s \ell^2}+ \frac{1}{12})} + \dfrac{L \ell^2}
+                {24 EI} \cdot \Bigg(\dfrac{1}{240(\frac{B_s}{GA_s \ell^2} +
+                \frac{1}{12})^2} - 1\Bigg)
+
+            Which leads to the element stiffness matrix:
+
+            .. math::
+                k^{'} =
+                \left[\begin{array}{rrr|rrr}
+                \dfrac{EA}{\ell} & 0 & 0 & -\dfrac{EA}{\ell} & 0 & 0 \\
+                0 & \dfrac{12EI}{\ell^3} \cdot f_1 & -\dfrac{6EI}{\ell^2}
+                \cdot f_2 & 0 & -\dfrac{12EI}{\ell^3}\cdot f_1 & -\dfrac{6EI}
+                {\ell^2}\cdot f_2 \\
+                0 & -\dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{4EI}{\ell}\cdot f_3
+                & 0 & \dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{2EI}{\ell}\cdot f_4
+                 \\  \hline
+                -\dfrac{EA}{\ell} & 0 & 0 & \dfrac{EA}{\ell} & 0 & 0 \\
+                0 & -\dfrac{12EI}{\ell^3}\cdot f_1 & \dfrac{6EI}{\ell^2}\cdot
+                f_2 & 0 & \dfrac{12EI}{\ell^3}\cdot f_1 & \dfrac{6EI}{\ell^2}
+                \cdot f_2 \\
+                0 & -\dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{2EI}{\ell}\cdot f_4
+                & 0 & \dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{4EI}{\ell}\cdot f_3
+                \end{array}\right]
+        """
         B_s = self.B_s(f_axial)
         factor = B_s / (self.GA_s * self.length ** 2)
         denominator_common = factor + 1 / 12
@@ -821,7 +1413,48 @@ class Bar:
                          [0, f_2, f_4, 0, f_2, f_3]])
 
     def stiffness_second_order_p_delta(self, f_axial):
-        """ TODO """
+        r"""Creates the geometric stiffness matrix :math:`k_{G}^{'}`
+
+        The geometric stiffness matrix describes the relationship between
+        beam forces and displacements. It represents the transverse forces
+        resulting from the moment offset of axial forces (:math:`L`)
+        according to second-order theory.
+
+        Parameters
+        ----------
+        f_axial : :any:`float`
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            A 6x6 matrix representing the geometric stiffness
+            matrix according to second-order theory for the P- :math:`\Delta`
+            -effect.
+
+        Notes
+        -----
+            To obtain the approximate solution considering the P-Delta effect,
+            a geometric stiffness matrix is added to the element stiffness
+            matrix from first-order theory.
+
+            .. math::
+                k^{'} = k_{0}^{'} + k_{G}^{'}
+
+            The geometric stiffness matrix is given by:
+
+            .. math::
+                k_{G}^{'} =
+                \left[\begin{array}{ccc|ccc}
+                0 & 0 & 0 & 0 & 0 & 0 \\
+                0 & \dfrac{L}{\ell} & 0 & 0 & -\dfrac{L}{\ell} & 0 \\
+                0 & 0 & 0 & 0 & 0 & 0 \\  \hline
+                0 & 0 & 0 & 0 & 0 & 0 \\
+                0 & -\dfrac{L}{\ell} & 0 & 0 & \dfrac{L}{\ell} & 0 \\
+                0 & 0 & 0 & 0 & 0 & 0 \\
+                \end{array}\right]
+        """
         c = f_axial / self.length
         return np.array([
             [0, 0, 0, 0, 0, 0],
@@ -847,14 +1480,69 @@ class Bar:
     # TODO: Ludwigs Kriterium verwenden, wann man die analytische Lösung
     # TODO: verwenden kann?
     def f0(
-
-            self, order: Literal['first', 'second'] = 'first',
-            approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
+            self,
+            order: Literal['first', 'second'] = 'first',
+            approach: Literal['analytic', 'taylor', 'p_delta', 'iterativ']
+            | None = None,
             hinge_modification: bool = True, to_node_coord: bool = True,
             f_axial: float = 0
     ):
-        """ TODO """
+        r"""Represents the vector of internal forces at the beam element ends
+        in the load-deformation state (LDS).
+
+        Due to external loads acting on the beam element, internal forces
+        develop at the element ends. These internal forces are assembled in
+        the vector :math:`f^{(0)'}.
+
+        Parameters
+        ----------
+        order : {'first', 'second'}, default='first'
+            Specifies whether the calculation follows first-order or
+            second-order theory.
+        approach : {'analytic', 'taylor', 'p_delta', 'iterative'}, default=None
+            Defines the calculation approach for second-order theory.
+        hinge_modification : :any:`bool`, default=True
+            Modifies the load vector and the element stiffness matrix to
+            account for hinges.
+        to_node_coord : :any:`bool`, default=True
+            Transforms the load vector into the nodal coordinate system.
+        f_axial : :any:`float`, default=0
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            The 6x1 vector of internal forces at the beam element ends due to
+            external loads.
+
+        See Also
+        --------
+        :py:attr:`f0_displacement`
+        :py:attr:`f0_line`
+        :py:attr:`f0_line_analytic`
+        :py:attr:`f0_line_taylor`
+        :py:attr:`f0_point`
+        :py:attr:`f0_temp`
+
+        Notes
+        -----
+        The beam element can be subjected to distributed loads and point loads.
+        In statically indeterminate systems, internal forces may also arise due
+        to temperature effects and support deformations.
+
+        These loading cases are collected within the algorithm. The calculation
+        distinguishes between first-order and second-order theory, where the
+        load vectors in second-order theory are adapted based on the chosen
+        calculation approach.
+
+        If hinges are present in the beam, it is necessary to modify the
+        stiffness matrix and load vector to account for discontinuities in
+        deformations at hinge locations.
+
+        Finally, the load vector may be transformed into the nodal coordinate
+        system if required.
+        """
         self._validate_order_approach(order, approach)
 
         if order == 'first':
@@ -887,13 +1575,79 @@ class Bar:
 
     # TODO: analytic + taylor und shear not in deform => Error?
     def stiffness_matrix(
-            self, order: Literal['first', 'second'] = 'first',
-            approach:
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None = None,
+            self,
+            order: Literal['first', 'second'] = 'first',
+            approach: Literal['analytic', 'taylor', 'p_delta', 'iterativ']
+            | None = None,
             hinge_modification: bool = True, to_node_coord: bool = True,
             f_axial: float = 0
     ):
-        """ TODO """
+        r""" Represents the element stiffness matrix for the beam element
+        :math:`k^{'}`.
+
+        The element stiffness matrix defines the relationship between nodal
+        displacements and rotations of a beam element and the resulting
+        internal forces at its ends.
+
+        Parameters
+        ----------
+        order : {'first', 'second'}, default='first'
+            Specifies whether the calculation follows first-order or
+            second-order theory.
+        approach : {'analytic', 'taylor', 'p_delta', 'iterative'}, default=None
+            Defines the calculation approach for second-order theory.
+        hinge_modification : :any:`bool`, default=True
+            Modifies the element stiffness matrix to account for hinges.
+        to_node_coord : :any:`bool`, default=True
+            Transforms the element stiffness matrix into the nodal coordinate
+            system.
+        f_axial : :any:`float`, default=0
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            The 6x6 matrix representing the element stiffness matrix.
+
+        See Also
+        --------
+        :py:attr:`stiffness_second_order_analytic`
+        :py:attr:`stiffness_second_order_p_delta`
+        :py:attr:`stiffness_second_order_taylor`
+        :py:attr:`stiffness_shear_force`
+
+        Notes
+        -----
+        The element stiffness matrix is symmetric and depends on the order of
+        calculation and the applied approach. If the beam is shear-flexible,
+        the shear component is included in the matrix.
+
+        The general form of the element stiffness matrix :math:`k^{'}` for a
+        shear-rigid beam is:
+
+        .. math::
+            k^{'} =
+            \left[\begin{array}{rrr|rrr}
+            \dfrac{EA}{\ell} & 0 & 0 & -\dfrac{EA}{\ell} & 0 & 0 \\
+            0 & \dfrac{12EI}{\ell^3} & -\dfrac{6EI}{\ell^2} & 0
+            & -\dfrac{12EI}{\ell^3} & -\dfrac{6EI}{\ell^2} \\
+            0 & -\dfrac{6EI}{\ell^2} & \dfrac{4EI}{\ell} & 0
+            & \dfrac{6EI}{\ell^2} & \dfrac{2EI}{\ell} \\  \hline
+            -\dfrac{EA}{\ell} & 0 & 0 & \dfrac{EA}{\ell} & 0 & 0 \\
+            0 & -\dfrac{12EI}{\ell^3} & \dfrac{6EI}{\ell^2} & 0
+            & \dfrac{12EI}{\ell^3} & \dfrac{6EI}{\ell^2} \\
+            0 & -\dfrac{6EI}{\ell^2} & \dfrac{2EI}{\ell} & 0
+            & \dfrac{6EI}{\ell^2} & \dfrac{4EI}{\ell} \\
+            \end{array}\right]
+
+        If hinges are present in the beam, it is necessary to modify the
+        stiffness matrix to account for discontinuities in deformations at
+        hinge locations.
+
+        Finally, the stiffness matrix may be transformed into the nodal
+        coordinate system if required.
+        """
         self._validate_order_approach(order, approach)
 
         EI_l = self.EI / self.length

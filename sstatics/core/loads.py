@@ -36,14 +36,12 @@ class PointLoad(DegreesOfFreedom):
 
     See Also
     --------
-    For specific implementations of point loads on nodes or bars, refer to the
-    following subclasses:
-    - :py:class:`NodePointLoad`
-    - :py:class:`BarPointLoad`
+    :py:class:`NodePointLoad`
+    :py:class:`BarPointLoad`
 
     Notes
     -----
-    This class serves as the base class for modeling point loads.
+        This class serves as the base class for modeling point loads.
     """
 
     rotation: float = 0.0
@@ -66,20 +64,20 @@ class PointLoad(DegreesOfFreedom):
 
         Notes
         -----
-        The rotation is performed by multiplying the transformation matrix
-        with the load vector. The angle for the transformation matrix is
-        calculated by subtracting the rotation of the point load from the
-        input rotation:
-        :python:`alpha = load.rotation - rotation`
+            The rotation is performed by multiplying the transformation matrix
+            with the load vector. The angle for the transformation matrix is
+            calculated by subtracting the rotation of the point load from the
+            input rotation:
+            :python:`alpha = load.rotation - rotation`
 
-        .. math ::
-            \left(\begin{array}{ccc}
-            \cos(\alpha) & \sin(\alpha) & 0 \\
-            -\sin(\alpha) & \cos(\alpha) & 0 \\
-            0 & 0 & 1
-            \end{array}\right)
-            \cdot
-            \left(\begin{array}{c} x \\ z \\ \varphi \end{array}\right)
+            .. math ::
+                \left(\begin{array}{ccc}
+                \cos(\alpha) & \sin(\alpha) & 0 \\
+                -\sin(\alpha) & \cos(\alpha) & 0 \\
+                0 & 0 & 1
+                \end{array}\right)
+                \cdot
+                \left(\begin{array}{c} x \\ z \\ \varphi \end{array}\right)
         """
         return transformation_matrix(self.rotation - rotation) @ self.vector
 
@@ -158,12 +156,12 @@ class BarLineLoad:
 
         Notes
         -----
-        - The force at the start of the bar (`pi`) is assigned to index 0 (x)
-          or 1 (z).
-        - The force at the end of the bar (`pj`) is assigned to index 3 (x) or
-          4 (z).
-        - If :py:attr:`pi` and :py:attr:`pj` are zero, then a 6x1 zero vector
-          is returned.
+            - The force at the start of the bar (`pi`) is assigned to index 0
+            (x) or 1 (z).
+            - The force at the end of the bar (`pj`) is assigned to index 3 (x)
+            or 4 (z).
+            - If :py:attr:`pi` and :py:attr:`pj` are zero, then a 6x1 zero
+            vector is returned.
         """
         vec = np.zeros((6, 1))
         vec[0 if self.direction == 'x' else 1] = self.pi
@@ -185,10 +183,11 @@ class BarLineLoad:
 
         Notes
         -----
-        - If the load is defined in the local bar coordinate system,
-          no rotation is applied.
-        - If the load is defined in the global coordinate system, the
-          transformation matrix accounts for rotation and projection effects.
+            - If the load is defined in the local bar coordinate system,
+              no rotation is applied.
+            - If the load is defined in the global coordinate system, the
+              transformation matrix accounts for rotation and projection
+              effects.
 
         Examples
         --------
@@ -239,15 +238,16 @@ class BarPointLoad(PointLoad):
 
     See Also
     --------
-    :py:class:`NodePointLoad` and :py:class:`DegreesOfFreedom`
+    :py:class:`PointLoad`
+    :py:class:`NodePointLoad`
 
     Notes
     -----
-    This class models a point load applied to a bar (or beam) at a specific
-    position. The load is applied in the x and z directions and includes a
-    moment (phi) along the beam. The position is a normalized value between 0
-    and 1, where 0 corresponds to the start of the bar and 1 corresponds to the
-    end of the bar.
+        This class models a point load applied to a bar (or beam) at a specific
+        position. The load is applied in the x and z directions and includes a
+        moment (phi) along the beam. The position is a normalized value between
+        0 and 1, where 0 corresponds to the start of the bar and 1 corresponds
+        to the end of the bar.
     """
 
     position: float = 0.0

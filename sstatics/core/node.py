@@ -168,12 +168,12 @@ class Node:
         -----
             If an attribute is a string, its value is set to zero.
 
-        .. math::
-        \begin{bmatrix}
-               u & 0 & 0 \\
-               0 & w & 0 \\
-               0 & 0 & \phi \\
-           \end{bmatrix}$
+            .. math::
+                \begin{bmatrix}
+                       u & 0 & 0 \\
+                       0 & w & 0 \\
+                       0 & 0 & \varphi \\
+                   \end{bmatrix}
 
         Examples
         --------
