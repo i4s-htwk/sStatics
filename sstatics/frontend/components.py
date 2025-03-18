@@ -63,7 +63,7 @@ class Table(html.Div):
     State({'type': 'store', 'index': MATCH}, 'data'),
     State({'type': 'table', 'index': MATCH}, 'columns'),
     State({'type': 'table', 'index': MATCH}, 'data'),
-    prevent_initial_call=True, allow_duplicate=True,
+    prevent_initial_call=True,
 )
 def add_table_row(_, stored_data, table_columns, table_data):
     new_obj_id = len(stored_data) + 1
