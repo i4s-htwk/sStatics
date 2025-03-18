@@ -1,9 +1,9 @@
 
-from base64 import b64decode, b64encode
-import pickle
+from dataclasses import asdict
 
 from dash import (
-    dash_table, html, callback, MATCH, Input, State, Output, ctx, dcc
+    dash_table, html, callback, MATCH, Input, State, Output, ctx, dcc,
+    no_update
 )
 import dash_bootstrap_components as dbc
 
@@ -14,22 +14,9 @@ class Store(dcc.Store):
 
     def __init__(self, name):
         super().__init__(
-            id={'type': 'store', 'index': name}, storage_type='session'
+            id={'type': 'store', 'index': name}, storage_type='session',
+            data={}
         )
-        self._data = None
-        self.data = {}
-        self.available_properties.append('test')
-        self.test = 'hallo'
-
-    @property
-    def data(self):
-        pickled = b64decode(self._data.encode())
-        return pickle.loads(pickled)
-
-    @data.setter
-    def data(self, value):
-        pickled = pickle.dumps(value)
-        self._data = b64encode(pickled).decode()
 
 
 class Card(dbc.Card):
@@ -70,24 +57,52 @@ class Table(html.Div):
 
 
 @callback(
-    Output({'type': 'table', 'index': MATCH}, 'data'),
+    Output({'type': 'table', 'index': MATCH}, 'data', allow_duplicate=True),
     Output({'type': 'store', 'index': MATCH}, 'data'),
     Input({'type': 'add-row', 'index': MATCH}, 'n_clicks'),
-    State({'type': 'store', 'index': MATCH}, 'test'),
+    State({'type': 'store', 'index': MATCH}, 'data'),
     State({'type': 'table', 'index': MATCH}, 'columns'),
-    prevent_initial_call=True
+    State({'type': 'table', 'index': MATCH}, 'data'),
+    prevent_initial_call=True, allow_duplicate=True,
 )
-def add_row(_, obj_dict, columns):
-    obj = None
-    new_obj_id = len(obj_dict) + 1
+def add_table_row(_, stored_data, table_columns, table_data):
+    new_obj_id = len(stored_data) + 1
+    # Default objects that get added when the "Add row" button is clicked.
     if ctx.triggered_id['index'] == 'nodes':
         obj = Node(0, 0)
-    obj_dict[new_obj_id] = obj
-    rows = [
-        {c['id']: getattr(obj, c['id']) for c in columns}
-        for obj in obj_dict.values()
-    ]
-    return rows, obj_dict
+    else:
+        raise ValueError(f"Unknown table name: '{ctx.triggered_id['index']}'.")
+    stored_data[new_obj_id] = asdict(obj)
+    new_table_entry = {'id': new_obj_id}
+    for column in table_columns[1:]:  # Skip the id column.
+        new_table_entry[column['id']] = getattr(obj, column['id'])
+    table_data.append(new_table_entry)
+    return table_data, stored_data
+
+
+@callback(
+    Output({'type': 'store', 'index': MATCH}, 'data', allow_duplicate=True),
+    Input({'type': 'table', 'index': MATCH}, 'data'),
+    State({'type': 'table', 'index': MATCH}, 'active_cell'),
+    State({'type': 'store', 'index': MATCH}, 'data'),
+    prevent_initial_call=True,
+)
+def edit_table_row(table_data, active_cell, stored_data):
+    if active_cell is None:
+        return no_update
+    # Decide which class to use based on the name of the table.
+    if ctx.triggered_id['index'] == 'nodes':
+        cls = Node
+    else:
+        raise ValueError(f"Unknown table name: '{ctx.triggered_id['index']}'.")
+    row = table_data[active_cell['row']]
+    obj_id = str(row.pop('id'))
+    obj_kwargs = stored_data[obj_id] | row
+    # TODO: This could raise errors because of invalid arguments.
+    # TODO: How to deal with this?
+    obj = cls(**obj_kwargs)
+    stored_data[obj_id] = asdict(obj)
+    return stored_data
 
 
 node_input_table = Table(
@@ -104,11 +119,15 @@ node_input_table = Table(
             'name': 'x\u0303',
             'id': 'x',
             'type': 'numeric',
+            'on_change': {'failure': 'default'},
+            'validation': {'default': 0},
         },
         {
             'name': 'z\u0303',
             'id': 'z',
             'type': 'numeric',
+            'on_change': {'failure': 'default'},
+            'validation': {'default': 0},
         }
     ]
 )
