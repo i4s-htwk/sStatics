@@ -68,6 +68,61 @@ class GraphicObject(abc.ABC):
         fig.show(*args, **kwargs)
 
 
+class Polygon(GraphicObject):
+
+    def __init__(self, x, z, vertices, **kwargs):
+        if len(vertices) < 3:
+            raise ValueError(
+                'a polygon needs at least three points'
+            )
+        if not all(
+                isinstance(v, (tuple, list)) and len(v) == 2 for v in vertices
+        ):
+            raise TypeError(
+                '"vertices" must be a list of (x, y) tuples or [x, y] lists'
+            )
+        super().__init__(x, z, **kwargs)
+        self.vertices = np.array(vertices)
+
+    @property
+    def traces(self):
+        center = np.mean(self.vertices, axis=0)
+        self.vertices = self.vertices - center + np.array([self.x, self.z])
+        x, z = self.vertices[:, 0], self.vertices[:, 1]
+        x, z = np.append(x, x[0]), np.append(z, z[0])
+        return go.Scatter(x=x, y=z, **self.scatter_kwargs),
+
+
+class Rectangle(GraphicObject):
+
+    def __init__(self, x, z, a, b=None, **kwargs):
+        if b is None:
+            b = a
+        if a <= 0 or b <= 0:
+            raise ValueError(
+                '"a" and "b" have to be a numbers greater than zero.'
+            )
+        super().__init__(x, z, **kwargs)
+        self.a = a * self.scale
+        self.b = b * self.scale
+
+    @property
+    def traces(self):
+        x_offset, z_offset = self.a / 2, self.b / 2
+        x = np.array([
+            self.x - x_offset, self.x + x_offset,
+            self.x + x_offset, self.x - x_offset,
+            self.x - x_offset
+        ])
+        z = np.array([
+            self.z - z_offset, self.z - z_offset,
+            self.z + z_offset, self.z + z_offset,
+            self.z - z_offset
+        ])
+        x, z = rotate(self.x, self.z, x, z, self.rotation)
+        return go.Scatter(x=x, y=z, **self.scatter_kwargs),
+
+
 class IsoscelesTriangle(GraphicObject):
 
     def __init__(self, x, z, angle=np.pi / 4, **kwargs):
@@ -80,19 +135,19 @@ class IsoscelesTriangle(GraphicObject):
 
     @property
     def traces(self):
-        x_offset = np.sin(self.angle / 2) * self.scale
+        x_offset = np.tan(self.angle / 2) * self.scale
         x = np.array([
             self.x - x_offset, self.x, self.x + x_offset, self.x - x_offset
         ])
         z = np.array([
-            self.z - self.scale, self.z, self.z - self.scale,
-            self.z - self.scale
+            self.z + self.scale, self.z, self.z + self.scale,
+            self.z + self.scale
         ])
         x, z = rotate(self.x, self.z, x, z, self.rotation)
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
-class Arrow(IsoscelesTriangle):
+class Arrow(GraphicObject):
 
     scatter_options = IsoscelesTriangle.scatter_options | {
         'fill': 'toself',
@@ -110,12 +165,20 @@ class Arrow(IsoscelesTriangle):
 
     @property
     def traces(self):
+        arrow = IsoscelesTriangle(
+            self.x, self.z, scale=self.scale, rotation=np.pi,
+            **self.scatter_kwargs
+        )
+        arrow_traces = arrow.rotate_traces(
+            self.x, self.z, rotation=self.rotation
+        )
         x = np.array([self.x, self.x])
         z = np.array([
             self.z - self.scale, self.z - (1 + self.tail_length) * self.scale
         ])
         x, z = rotate(self.x, self.z, x, z, self.rotation)
-        return super().traces + (go.Scatter(x=x, y=z, **self.scatter_kwargs),)
+        tail_traces = go.Scatter(x=x, y=z, **self.scatter_kwargs)
+        return *arrow_traces, tail_traces
 
 
 class CoordinateSystem(GraphicObject):
@@ -130,14 +193,24 @@ class CoordinateSystem(GraphicObject):
         annotations = []
         if self.x_text is not None:
             x, z = rotate(
-                self.x, self.z, (2 * self.x + self.scale) / 2, self.z,
+                self.x, self.z,
+                (2 * self.x + self.scale) / 2, self.z - self.scale / 15,
                 self.rotation
             )
             annotations.append(go.layout.Annotation(
-                x=x, y=z, text=self.x_text, showarrow=False, font_size=12,
+                x=x, y=z, text=self.x_text, showarrow=False, font_size=40,
                 textangle=np.rad2deg(self.rotation)
             ))
-        # TODO: add z_text
+        if self.z_text is not None:
+            x, z = rotate(
+                self.x, self.z,
+                self.x - self.scale / 15, (2 * self.z + self.scale) / 2,
+                self.rotation
+            )
+            annotations.append(go.layout.Annotation(
+                x=x, y=z, text=self.z_text, showarrow=False, font_size=40,
+                textangle=np.rad2deg(self.rotation)
+            ))
         return tuple(annotations)
 
     @property
@@ -160,7 +233,6 @@ class Ellipse(GraphicObject):
         self, x, z, a, b=None, angle_range=(0, 2 * np.pi), n_points=100,
         **kwargs
     ):
-        super().__init__(x, z, **kwargs)
         if b is None:
             b = a
         if a <= 0 or b <= 0:
@@ -182,6 +254,7 @@ class Ellipse(GraphicObject):
                 'The lower bound of "angle_range" has to be less than the '
                 'upper bound.'
             )
+        super().__init__(x, z, **kwargs)
         self.a = a
         self.b = b
         self.angle_range = angle_range
@@ -198,12 +271,67 @@ class Ellipse(GraphicObject):
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
+class Hatching(Rectangle):
+
+    def __init__(
+            self, x, z, a, b=None, angle=np.pi / 4, spacing=0.2,
+            rectangle=False, **kwargs
+    ):
+        if not 0 < angle < np.pi:
+            raise ValueError(
+                '"angle" has to be a number from the interval (0, pi).'
+            )
+        super().__init__(x, z, a, b, **kwargs)
+        self.angle = angle
+        self.spacing = spacing * self.scale
+        self.rectangle = rectangle
+
+    @property
+    def traces(self):
+        x_offset, z_offset = self.a / 2, self.b / 2
+        tan_angle = np.tan(self.angle)
+        rect = super().traces[0] if self.rectangle else go.Scatter(x=[], y=[])
+        x_list, z_list = [], []
+        n = 1
+        max_dim = max(self.a, self.b)
+        while (d := np.sqrt((n * self.spacing) ** 2 / 2)) <= max_dim:
+            if d * (1 + tan_angle) > self.b:
+                x = -x_offset + d - (self.b - d) / tan_angle
+                if x >= x_offset:
+                    break
+                x_list.append(x + self.x)
+                z_list.append(z_offset + self.z)
+            else:
+                x_list.append(-x_offset + self.x)
+                z_list.append(-z_offset + d * (1 + tan_angle) + self.z)
+
+            if d * (1 + 1 / tan_angle) < self.a:
+                x_list.append(-x_offset + d * (1 + 1 / tan_angle) + self.x)
+                z_list.append(-z_offset + self.z)
+            else:
+                z = -z_offset + d - (self.a - d) * tan_angle
+                x_list.append(x_offset + self.x)
+                z_list.append(z + self.z)
+            n += 1
+        x, z = rotate(
+            self.x, self.z,
+            np.array(x_list), np.array(z_list),
+            rotation=self.rotation
+        )
+        hatching = [
+            go.Scatter(x=[x[i], x[i + 1]], y=[z[i], z[i + 1]],
+                       **self.scatter_kwargs)
+            for i in range(0, len(x_list), 2)
+        ]
+        return rect, *hatching
+
+
 class Hinge(GraphicObject):
 
     def __init__(self, x, z, width, **kwargs):
-        super().__init__(x, z, **kwargs)
         if width <= 0:
             raise ValueError('"width" has to be a number greater than zero.')
+        super().__init__(x, z, **kwargs)
         self.width = width * self.scale
 
 
@@ -239,11 +367,11 @@ class NormalForceHinge(Hinge):
     @property
     def traces(self):
         x = np.array([
-            self.x - self.width / 2, self.x - self.width / 2,
-            self.x + self.width / 2, self.x + self.width / 2
+            self.x + self.scale, self.x, self.x, self.x + self.scale
         ])
         z = np.array([
-            self.z + self.scale, self.z, self.z, self.z + self.scale
+            self.z - self.width / 2, self.z - self.width / 2,
+            self.z + self.width / 2, self.z + self.width / 2
         ])
         x, z = rotate(self.x, self.z, x, z, rotation=self.rotation)
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
@@ -253,3 +381,46 @@ class MomentHinge(Hinge, Ellipse):
 
     def __init__(self, x, z, width=0.8, **kwargs):
         super().__init__(x, z, a=width / 2, width=width, **kwargs)
+
+
+class Support(GraphicObject):
+
+    def __init__(self, x, z, width, **kwargs):
+        if width <= 0:
+            raise ValueError('"width" has to be a number greater than zero.')
+        super().__init__(x, z, **kwargs)
+        self.width = width * self.scale
+
+
+class FreeSupport(Support, IsoscelesTriangle):
+
+    def __init__(self, x, z, width=4/3, **kwargs):
+        super().__init__(x, z, width=width, **kwargs)
+        self.angle = 2 * np.arctan(self.width / (2 * self.scale))
+
+    @property
+    def traces(self):
+        x, z = rotate(
+            self.x, self.z,
+            np.array([self.x - self.width / 2, self.x + self.width / 2]),
+            np.array([self.z + 4/3 * self.scale, self.z + 4/3 * self.scale]),
+            rotation=self.rotation
+        )
+        line = go.Scatter(x=x, y=z, **self.scatter_kwargs)
+        return line, *super().traces
+
+
+class FixedSupport(Support, IsoscelesTriangle):
+
+    def __init__(self, x, z, width=4/3, **kwargs):
+        super().__init__(x, z, width=width, **kwargs)
+        self.angle = 2 * np.arctan(self.width / (2 * self.scale))
+
+    @property
+    def traces(self):
+        hatching = Hatching(
+            self.x, self.z + self.scale * 7/6,
+            2 * self.width / (2 * self.scale), 1/3, scale=self.scale
+        )
+        hatching_traces = hatching.rotate_traces(self.x, self.z, self.rotation)
+        return *hatching_traces, *super().traces
