@@ -68,6 +68,32 @@ class GraphicObject(abc.ABC):
         fig.show(*args, **kwargs)
 
 
+class Line(GraphicObject):
+
+    def __init__(self, x, z, length=4/3, angle=0, **kwargs):
+        if length <= 0:
+            raise ValueError('"length" has to be a number greater than zero.')
+        if not 0 <= angle <= np.pi:
+            raise ValueError(
+                '"angle" has to be a number from the interval (0, pi).'
+            )
+        super().__init__(x, z, **kwargs)
+        self.length = length * self.scale
+        self.angle = angle
+
+    @property
+    def traces(self):
+        x, z = rotate(
+            self.x, self.z,
+            np.array([self.x + np.cos(self.angle) * self.length / 2,
+                      self.x - np.cos(self.angle) * self.length / 2]),
+            np.array([self.z + np.sin(self.angle) * self.length / 2,
+                      self.z - np.sin(self.angle) * self.length / 2]),
+            rotation=self.rotation
+        )
+        return go.Scatter(x=x, y=z, **self.scatter_kwargs),
+
+
 class Polygon(GraphicObject):
 
     def __init__(self, x, z, vertices, **kwargs):
@@ -199,7 +225,7 @@ class CoordinateSystem(GraphicObject):
             )
             annotations.append(go.layout.Annotation(
                 x=x, y=z, text=self.x_text, showarrow=False, font_size=40,
-                textangle=np.rad2deg(self.rotation)
+                textangle=None
             ))
         if self.z_text is not None:
             x, z = rotate(
@@ -209,7 +235,7 @@ class CoordinateSystem(GraphicObject):
             )
             annotations.append(go.layout.Annotation(
                 x=x, y=z, text=self.z_text, showarrow=False, font_size=40,
-                textangle=np.rad2deg(self.rotation)
+                textangle=None
             ))
         return tuple(annotations)
 
@@ -337,37 +363,36 @@ class Hinge(GraphicObject):
 
 class ShearForceHinge(Hinge):
 
-    def __init__(self, x, z, width=0.4, **kwargs):
+    def __init__(self, x, z, width=1/6, **kwargs):
         super().__init__(x, z, width=width, **kwargs)
 
     @property
     def traces(self):
-        x, z = rotate(
-            self.x, self.z,
-            np.array([self.x - self.width / 2, self.x - self.width / 2]),
-            np.array([self.z - self.scale / 2, self.z + self.scale / 2]),
-            rotation=self.rotation
+        left_line = Line(
+            self.x - self.width / 2, self.z, 2/3, np.pi/2, scale=self.scale
         )
-        left_line = go.Scatter(x=x, y=z, **self.scatter_kwargs)
-        x, z = rotate(
-            self.x, self.z,
-            np.array([self.x + self.width / 2, self.x + self.width / 2]),
-            np.array([self.z - self.scale / 2, self.z + self.scale / 2]),
-            rotation=self.rotation
+        left_line_traces = left_line.rotate_traces(
+            self.x, self.z, self.rotation
         )
-        right_line = go.Scatter(x=x, y=z, **self.scatter_kwargs)
-        return left_line, right_line
+        right_line = Line(
+            self.x + self.width / 2, self.z, 2/3, np.pi/2, scale=self.scale
+        )
+        right_line_traces = right_line.rotate_traces(
+            self.x, self.z, self.rotation
+        )
+        return *left_line_traces, *right_line_traces
 
 
 class NormalForceHinge(Hinge):
 
-    def __init__(self, x, z, width=0.8, **kwargs):
+    def __init__(self, x, z, width=2/5, **kwargs):
         super().__init__(x, z, width=width, **kwargs)
 
     @property
     def traces(self):
         x = np.array([
-            self.x + self.scale, self.x, self.x, self.x + self.scale
+            self.x + self.scale * 2/3, self.x,
+            self.x, self.x + self.scale * 2/3
         ])
         z = np.array([
             self.z - self.width / 2, self.z - self.width / 2,
@@ -379,7 +404,7 @@ class NormalForceHinge(Hinge):
 
 class MomentHinge(Hinge, Ellipse):
 
-    def __init__(self, x, z, width=0.8, **kwargs):
+    def __init__(self, x, z, width=1/3, **kwargs):
         super().__init__(x, z, a=width / 2, width=width, **kwargs)
 
 
@@ -392,7 +417,7 @@ class Support(GraphicObject):
         self.width = width * self.scale
 
 
-class FreeSupport(Support, IsoscelesTriangle):
+class RollerSupport(Support, IsoscelesTriangle):
 
     def __init__(self, x, z, width=4/3, **kwargs):
         super().__init__(x, z, width=width, **kwargs)
@@ -400,17 +425,12 @@ class FreeSupport(Support, IsoscelesTriangle):
 
     @property
     def traces(self):
-        x, z = rotate(
-            self.x, self.z,
-            np.array([self.x - self.width / 2, self.x + self.width / 2]),
-            np.array([self.z + 4/3 * self.scale, self.z + 4/3 * self.scale]),
-            rotation=self.rotation
-        )
-        line = go.Scatter(x=x, y=z, **self.scatter_kwargs)
-        return line, *super().traces
+        line = Line(self.x, self.z + 4/3 * self.scale, scale=self.scale)
+        line_traces = line.rotate_traces(self.x, self.z, self.rotation)
+        return *line_traces, *super().traces
 
 
-class FixedSupport(Support, IsoscelesTriangle):
+class FixedSupportUW(Support, IsoscelesTriangle):
 
     def __init__(self, x, z, width=4/3, **kwargs):
         super().__init__(x, z, width=width, **kwargs)
@@ -420,7 +440,43 @@ class FixedSupport(Support, IsoscelesTriangle):
     def traces(self):
         hatching = Hatching(
             self.x, self.z + self.scale * 7/6,
-            2 * self.width / (2 * self.scale), 1/3, scale=self.scale
+            self.width / self.scale, 1/3, scale=self.scale
         )
         hatching_traces = hatching.rotate_traces(self.x, self.z, self.rotation)
         return *hatching_traces, *super().traces
+
+
+class FixedSupportUPhi(Support):
+
+    def __init__(self, x, z, width=4/3, **kwargs):
+        super().__init__(x, z, width=width, **kwargs)
+
+    @property
+    def traces(self):
+        line_1 = Line(self.x, self.z, scale=self.scale)
+        line_traces_1 = line_1.rotate_traces(self.x, self.z, self.rotation)
+        line_2 = Line(self.x, self.z + self.scale * 1/3, scale=self.scale)
+        line_traces_2 = line_2.rotate_traces(self.x, self.z, self.rotation)
+        hatching = Hatching(
+            self.x, self.z + self.scale * 1/2,
+            self.width / self.scale, 1/3, scale=self.scale
+        )
+        hatching_traces = hatching.rotate_traces(self.x, self.z, self.rotation)
+        return *line_traces_1, *line_traces_2, *hatching_traces
+
+
+class ChampedSupport(Support):
+
+    def __init__(self, x, z, width=4/3, **kwargs):
+        super().__init__(x, z, width=width, **kwargs)
+
+    @property
+    def traces(self):
+        line = Line(self.x, self.z, scale=self.scale)
+        line_traces = line.rotate_traces(self.x, self.z, self.rotation)
+        hatching = Hatching(
+            self.x, self.z + self.scale * 1/6,
+            self.width / self.scale, 1/3, scale=self.scale
+        )
+        hatching_traces = hatching.rotate_traces(self.x, self.z, self.rotation)
+        return *line_traces, *hatching_traces
