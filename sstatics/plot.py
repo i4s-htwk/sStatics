@@ -356,6 +356,7 @@ def plot_InfluenceLine(influence_line_obj: InfluenceLine, deform=None,
                     if bar in show_bars:
                         if biegelinie[0]:
                             scale = scale
+                            # scale = 1000
                             points = bar.deform_line(
                                 deform=deform[idx], force=force[idx],
                                 scale=scale, n_points=num_points)
@@ -377,19 +378,22 @@ def plot_InfluenceLine(influence_line_obj: InfluenceLine, deform=None,
                             ax.plot(x_2, z_2, linestyle='-', color='r')
 
                             if show_values[0]:
+                                if scale > 1000:
+                                    scale_value = 1000
+                                else:
+                                    scale_value = scale
                                 ax.text(points[0][0],
-                                        points[1][0] - 0.03 * scale,
+                                        points[1][0] - 0.03 * scale_value,
                                         scientific_formatter(
                                             deform[idx][1][0]),
                                         fontsize=8, color="red")
                                 ax.text(points[0][num_points - 1],
                                         points[1][num_points - 1]
-                                        - 0.03 * scale,
+                                        - 0.03 * scale_value,
                                         scientific_formatter(
                                             deform[idx][4][0]),
                                         fontsize=8, color="red")
                         else:
-                            scale = 10000000
                             deform_vals = np.dot(bar.transformation_matrix(
                                 to_node_coord=False), deform[idx])
                             x = [bar.node_i.x + deform_vals[0] * scale,
@@ -411,11 +415,15 @@ def plot_InfluenceLine(influence_line_obj: InfluenceLine, deform=None,
                             ax.plot(x_2, z_2, linestyle='-', color='r')
 
                             if show_values[0]:
-                                ax.text(x[0], z[0] - 0.03 * scale,
+                                if scale > 1000:
+                                    scale_value = 1000
+                                else:
+                                    scale_value = scale
+                                ax.text(x[0], z[0] - 0.03 * scale_value,
                                         scientific_formatter(
                                             deform[idx][1][0]),
                                         fontsize=8, color="red")
-                                ax.text(x[1], z[1] - 0.03 * scale,
+                                ax.text(x[1], z[1] - 0.03 * scale_value,
                                         scientific_formatter(
                                             deform[idx][4][0]),
                                         fontsize=8, color="red")
@@ -546,10 +554,14 @@ def plot_InfluenceLine(influence_line_obj: InfluenceLine, deform=None,
                     ax.plot(x_2, z_2, linestyle='-', color='r')
 
                     if show_values[0]:
-                        ax.text(x[0], z[0] - 0.05 * scale,
+                        if scale > 1000:
+                            scale_value = 1000
+                        else:
+                            scale_value = scale
+                        ax.text(x[0], z[0] - 0.05 * scale_value,
                                 f'{deform[idx][1][0]:.2f}',
                                 fontsize=8, color="red")
-                        ax.text(x[1], z[1] - 0.05 * scale,
+                        ax.text(x[1], z[1] - 0.05 * scale_value,
                                 f'{deform[idx][4][0]:.2f}',
                                 fontsize=8, color="red")
 
@@ -597,7 +609,7 @@ def plot_InfluenceLine(influence_line_obj: InfluenceLine, deform=None,
     # # Slider for scaling
     slider_ax = plt.axes((left + 0.06, 0.8, width - 0.07, 0.03))
     scale_slider = Slider(ax=slider_ax, label="Skalierung", valmin=1,
-                          valmax=1000, valinit=initial_scale)
+                          valmax=100000, valinit=initial_scale)
     # scale_slider.label.set_visible(False)
     scale_slider.on_changed(lambda val: draw_plot(scale_slider.val))
 
@@ -903,7 +915,7 @@ def plot_chains(system):
 
     plt.xlabel("X-Koordinate")
     plt.ylabel("Z-Koordinate")
-    plt.title("Verschiebungsplan")
+    plt.title("Polplan mit Verschiebungsfigur")
     plt.grid(True)
     plt.axis("equal")
     plt.gca().invert_yaxis()  # Z-Achse umdrehen

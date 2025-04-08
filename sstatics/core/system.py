@@ -1096,7 +1096,7 @@ class Polplan:
             print(f'c{c2_idx}.angle_factor = {factor}')
 
     # Bestimme alle Winkel
-    def _calc_angle_from_chain(self, target_chain, target_angle):
+    def set_angle(self, target_chain, target_angle):
         print('---------------------------')
         print('Schritt 4: Winkelberechnung')
         print('---------------------------')

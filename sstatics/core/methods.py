@@ -240,14 +240,11 @@ class InfluenceLine:
 
         if calc_system.solvable():
             norm_force = self.calc_norm_force(force, obj)
-            if isinstance(obj, Bar):
-                self.modified_system = self.modifier.modify_bar_force(
-                    obj, force, position, virt_force=norm_force)
-            elif isinstance(obj, Node):
-                self.modified_system = self.modifier.modify_node_force(
-                    obj, force, virt_force=norm_force)
-            calc_system = FirstOrder(self.modified_system)
-            return calc_system.calc()
+            deform_1, force_1 = calc_system.calc()
+
+            deform_2 = [vec * norm_force for vec in deform_1]
+            force_2 = [vec * norm_force for vec in force_1]
+            return deform_2, force_2
         else:
             # 1. polplan aufstellen
             self.modified_system.get_polplan()
@@ -257,7 +254,7 @@ class InfluenceLine:
                 chain, angle = self.get_chain_and_angle(obj, force, position)
 
                 # 2.3 Berechnung aller weiteren Winkel
-                self.modified_system.polplan._calc_angle_from_chain(
+                self.modified_system.polplan.set_angle(
                     target_chain=chain, target_angle=angle)
 
                 # 3. Berechnung der Verschiebungsfigur
