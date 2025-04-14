@@ -665,11 +665,9 @@ class Bar:
         f0_displacement = np.vstack(
             (self.node_i.displacement, self.node_j.displacement)
         )
-        trans_m = self.transformation_matrix(to_node_coord=True)
-        k = self.stiffness_matrix(
-            hinge_modification=False, to_node_coord=True
-        )
-        return k @ trans_m @ f0_displacement
+        k = self.stiffness_matrix(hinge_modification=False,
+                                  to_node_coord=False)
+        return k @ np.transpose(self.transformation_matrix()) @ f0_displacement
 
     @cached_property
     def f0_line(self):
@@ -1158,19 +1156,14 @@ class Bar:
                  \phi)}{\ell(1 + \phi)} \\
                 \end{array}\right]
     """
-        phi = 1 / (1 + self.phi)
-        EI_l = phi * self.EI / self.length
-        EI_l2 = EI_l / self.length
         return np.array([
-            [self.EA, 0, 0, -self.EA, 0, 0],
-            [0, 12 * EI_l2, -6 * EI_l, 0, -12 * EI_l2, -6 * EI_l],
-            [0, -6 * EI_l, self.EI * (4 + self.phi) * phi, 0, 6 * EI_l,
-             self.EI * (2 - self.phi)],
-            [-self.EA, 0, 0, self.EA, 0, 0],
-            [0, -12 * EI_l2, 6 * EI_l, 0, 12 * EI_l2, 6 * EI_l],
-            [0, -6 * EI_l, self.EI * (2 - self.phi) * phi, 0, 6 * EI_l,
-             self.EI * (4 + self.phi) * phi],
-        ]) / self.length
+            [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
+            [0, 1, 1, 0, 1, 1],
+            [0, 1, (4 + self.phi)/4, 0, 1, (2 - self.phi)/2],
+            [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
+            [0, 1, 1, 0, 1, 1],
+            [0, 1, (2 - self.phi)/2, 0, 1, (4 + self.phi)/4],
+        ]) / (1 + self.phi)
 
     def stiffness_second_order_analytic(self, f_axial):
         r"""Creates the element stiffness matrix according to second-order
@@ -1280,8 +1273,6 @@ class Bar:
         mu = self.characteristic_number(f_axial)
         B_s = self.B_s(f_axial)
         factor = B_s / (self.GA_s * self.length ** 2)
-        EI_l = self.EI / self.length
-        EI_l2 = EI_l / self.length
 
         if f_axial < 0:
             sin_mu = np.sin(mu)
@@ -1309,18 +1300,12 @@ class Bar:
             f_4 = -(B_s / (2 * self.EI)) * (
                     factor * mu ** 2 - 1) * sinh_mu * mu / denominator
 
-        return np.array([
-            [self.EA, 0, 0, -self.EA, 0, 0],
-            [0, 12 * EI_l2 * f_1, -6 * EI_l * f_2, 0, -12 * EI_l2 * f_1,
-             -6 * EI_l * f_2],
-            [0, -6 * EI_l * f_2, 4 * self.EI * f_3, 0, 6 * EI_l * f_2,
-             2 * self.EI * f_4],
-            [-self.EA, 0, 0, self.EA, 0, 0],
-            [0, -12 * EI_l2 * f_1, 6 * EI_l * f_2, 0, 12 * EI_l2 * f_1,
-             6 * EI_l * f_2],
-            [0, -6 * EI_l * f_2, 2 * self.EI * f_4, 0, 6 * EI_l * f_2,
-             4 * self.EI * f_3],
-        ]) / self.length
+        return np.array([[1, 0, 0, 1, 0, 0],
+                         [0, f_1, f_2, 0, f_1, f_2],
+                         [0, f_2, f_3, 0, f_2, f_4],
+                         [1, 0, 0, 1, 0, 0],
+                         [0, f_1, f_2, 0, f_1, f_2],
+                         [0, f_2, f_4, 0, f_2, f_3]])
 
     def stiffness_second_order_taylor(self, f_axial):
         r"""Creates the element stiffness matrix according to second-order
@@ -1401,8 +1386,6 @@ class Bar:
         denominator_common = factor + 1 / 12
         denominator_squared = denominator_common ** 2
         inv_denominator_common = 1 / denominator_common
-        EI_l = self.EI / self.length
-        EI_l2 = EI_l / self.length
 
         f_1 = (B_s / (12 * self.EI * denominator_common) +
                f_axial * self.length ** 2 / (144 * self.EI) *
@@ -1422,18 +1405,12 @@ class Bar:
                f_axial * self.length ** 2 / (24 * self.EI) *
                (1 / (240 * denominator_squared) - 1))
 
-        return np.array([
-            [self.EA, 0, 0, -self.EA, 0, 0],
-            [0, 12 * EI_l2 * f_1, -6 * EI_l * f_2, 0, -12 * EI_l2 * f_1,
-             -6 * EI_l * f_2],
-            [0, -6 * EI_l * f_2, 4 * self.EI * f_3, 0, 6 * EI_l * f_2,
-             2 * self.EI * f_4],
-            [-self.EA, 0, 0, self.EA, 0, 0],
-            [0, -12 * EI_l2 * f_1, 6 * EI_l * f_2, 0, 12 * EI_l2 * f_1,
-             6 * EI_l * f_2],
-            [0, -6 * EI_l * f_2, 2 * self.EI * f_4, 0, 6 * EI_l * f_2,
-             4 * self.EI * f_3],
-        ]) / self.length
+        return np.array([[1, 0, 0, 1, 0, 0],
+                         [0, f_1, f_2, 0, f_1, f_2],
+                         [0, f_2, f_3, 0, f_2, f_4],
+                         [1, 0, 0, 1, 0, 0],
+                         [0, f_1, f_2, 0, f_1, f_2],
+                         [0, f_2, f_4, 0, f_2, f_3]])
 
     def stiffness_second_order_p_delta(self, f_axial):
         r"""Creates the geometric stiffness matrix :math:`k_{G}^{'}`
@@ -1692,21 +1669,21 @@ class Bar:
 
         if order == 'first':
             if 'shear' in self.deformations:
-                k = self.stiffness_shear_force
+                k = k * self.stiffness_shear_force
         else:
             if approach == 'analytic':
-                k = self.stiffness_second_order_analytic(f_axial)
+                k = k * self.stiffness_second_order_analytic(f_axial)
             elif approach == 'taylor':
-                k = self.stiffness_second_order_taylor(f_axial)
+                k = k * self.stiffness_second_order_taylor(f_axial)
             elif approach == 'p_delta':
                 if 'shear' in self.deformations:
-                    k = (self.stiffness_shear_force +
+                    k = (k * self.stiffness_shear_force +
                          self.stiffness_second_order_p_delta(f_axial))
                 else:
                     k = k + self.stiffness_second_order_p_delta(f_axial)
             else:
                 if 'shear' in self.deformations:
-                    k = self.stiffness_shear_force
+                    k = k * self.stiffness_shear_force
 
         if hinge_modification:
             for i, value in enumerate(self.hinge):
