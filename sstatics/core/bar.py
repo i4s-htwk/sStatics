@@ -1468,11 +1468,52 @@ class Bar:
 
     @staticmethod
     def _validate_f_axial(f_axial):
+        """ Validates that the axial force is not zero.
+
+        This check ensures that the axial force value is non-zero, as a zero
+        value would make further calculations (e.g., division or normalization)
+        invalid or meaningless in the given context.
+
+        Parameters
+        ----------
+        f_axial : :any:`float`
+            The axial force to be validated.
+
+        Raises
+        ------
+        ValueError
+            If `f_axial` is equal to zero.
+        """
         if f_axial == 0:
             raise ValueError('f_axial has to be unequal to zero.')
 
     @staticmethod
     def _validate_order_approach(order, approach):
+        """Validates the combination of `order` and `approach` arguments.
+
+        Ensures that the provided values for `order` and `approach` are valid
+        and logically consistent. The `order` must be either "first" or
+        "second", and the `approach` must match the expectations for the
+        selected order:
+
+        - For "first" order analysis, `approach` must be `None`.
+        - For "second" order analysis, supported approaches include "analytic",
+          "taylor", "p_delta", and "iterativ".
+
+        Parameters
+        ----------
+        order : :any:`str`
+            The analysis order. Must be either "first" or "second".
+        approach : :any:`str` or None
+            The method used for second-order analysis. Must be one of
+            "analytic", "taylor", "p_delta", "iterativ", or `None`.
+
+        Raises
+        ------
+        ValueError
+            If `order` or `approach` is invalid, or if the combination
+            is not allowed.
+            """
         if order not in ('first', 'second'):
             raise ValueError('order has to be either "first" or "second".')
         if approach not in ('analytic', 'taylor', 'p_delta', 'iterativ', None):
