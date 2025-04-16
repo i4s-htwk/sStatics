@@ -17,19 +17,21 @@ class Hinge(GraphicObject):
 
 class ShearForceHinge(Hinge):
 
-    def __init__(self, x, z, width=1/6, **kwargs):
+    def __init__(self, x, z, width=11/80, **kwargs):
         super().__init__(x, z, width=width, **kwargs)
 
     @property
     def traces(self):
         left_line = Line(
-            self.x - self.width / 2, self.z, 2/3, np.pi/2, scale=self.scale
+            self.x - self.width / 2, self.z, 11 / 20,
+            rotation=np.pi / 2, scale=self.scale, **self.scatter_kwargs
         )
         left_line_traces = left_line.rotate_traces(
             self.x, self.z, self.rotation
         )
         right_line = Line(
-            self.x + self.width / 2, self.z, 2/3, np.pi/2, scale=self.scale
+            self.x + self.width / 2, self.z, 11 / 20,
+            rotation=np.pi / 2, scale=self.scale, **self.scatter_kwargs
         )
         right_line_traces = right_line.rotate_traces(
             self.x, self.z, self.rotation
@@ -39,24 +41,24 @@ class ShearForceHinge(Hinge):
 
 class NormalForceHinge(Hinge):
 
-    def __init__(self, x, z, width=2/5, **kwargs):
+    def __init__(self, x, z, width=11/30, **kwargs):
         super().__init__(x, z, width=width, **kwargs)
 
     @property
     def traces(self):
         x = np.array([
-            self.x + self.scale * 2/3, self.x,
-            self.x, self.x + self.scale * 2/3
+            self.x + self.scale * 11 / 20, self.x,
+            self.x, self.x + self.scale * 11 / 20
         ])
         z = np.array([
             self.z - self.width / 2, self.z - self.width / 2,
             self.z + self.width / 2, self.z + self.width / 2
         ])
-        x, z = rotate(self.x, self.z, x, z, rotation=self.rotation)
+        x, z = rotate(self.x, self.z, x, z, self.rotation)
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
 class MomentHinge(Hinge, Ellipse):
 
-    def __init__(self, x, z, width=1/3, **kwargs):
+    def __init__(self, x, z, width=11/40, **kwargs):
         super().__init__(x, z, a=width / 2, width=width, **kwargs)
