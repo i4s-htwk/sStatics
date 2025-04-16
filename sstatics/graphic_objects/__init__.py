@@ -5,7 +5,8 @@ from sstatics.graphic_objects.geometry import (
 )
 from sstatics.graphic_objects.diagram import Arrow, CoordinateSystem, Hatching
 from sstatics.graphic_objects.supports import (
-    RollerSupport, FixedSupportUW, FixedSupportUPhi, ChampedSupport
+    RollerSupport, PinnedSupport, FixedSupportUW, FixedSupportUPhi,
+    FixedSupportWPhi, ChampedSupport
 )
 from sstatics.graphic_objects.hinges import (
     ShearForceHinge, NormalForceHinge, MomentHinge
@@ -19,12 +20,14 @@ __all__ = [
     'Ellipse',
     'FixedSupportUPhi',
     'FixedSupportUW',
+    'FixedSupportWPhi',
     'GraphicObject',
     'Hatching',
     'IsoscelesTriangle',
     'Line',
     'MomentHinge',
     'NormalForceHinge',
+    'PinnedSupport',
     'Polygon',
     'Rectangle',
     'RollerSupport',
