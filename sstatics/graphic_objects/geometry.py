@@ -6,25 +6,18 @@ from sstatics.graphic_objects import rotate, GraphicObject
 
 class Line(GraphicObject):
 
-    def __init__(self, x, z, length=4/3, angle=0, **kwargs):
+    def __init__(self, x, z, length=4/3, **kwargs):
         if length <= 0:
             raise ValueError('"length" has to be a number greater than zero.')
-        if not 0 <= angle <= np.pi:
-            raise ValueError(
-                '"angle" has to be a number from the interval (0, pi).'
-            )
         super().__init__(x, z, **kwargs)
         self.length = length * self.scale
-        self.angle = angle
 
     @property
     def traces(self):
         x, z = rotate(
             self.x, self.z,
-            np.array([self.x + np.cos(self.angle) * self.length / 2,
-                      self.x - np.cos(self.angle) * self.length / 2]),
-            np.array([self.z + np.sin(self.angle) * self.length / 2,
-                      self.z - np.sin(self.angle) * self.length / 2]),
+            np.array([self.x + self.length / 2, self.x - self.length / 2]),
+            np.array([self.z, self.z]),
             rotation=self.rotation
         )
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
@@ -62,23 +55,33 @@ class Rectangle(GraphicObject):
 
 class IsoscelesTriangle(GraphicObject):
 
-    def __init__(self, x, z, angle=np.pi / 4, **kwargs):
-        if not 0 < angle < np.pi:
-            raise ValueError(
-                '"angle" has to be a number from the interval (0, pi).'
-            )
-        self.angle = angle
+    def __init__(self, x, z, angle=np.pi / 4, width=None, **kwargs):
         super().__init__(x, z, **kwargs)
+        if width is None:
+            if not 0 < angle < np.pi:
+                raise ValueError(
+                    '"angle" has to be a number from the interval [0, pi].'
+                )
+            self.angle = angle
+            self.width = 2 * np.sin(self.angle / 2) * self.scale
+        else:
+            if width <= 0 or width >= 2 * self.scale:
+                raise ValueError(
+                    '"width" has to be a number from the interval (0, 2).'
+                )
+            self.width = width
+            self.angle = 2 * np.arcsin(self.width / (2 * self.scale))
 
     @property
     def traces(self):
-        x_offset = np.tan(self.angle / 2) * self.scale
+        x_offset = np.sin(self.angle / 2) * self.scale
+        z_offset = np.cos(self.angle / 2) * self.scale
         x = np.array([
             self.x - x_offset, self.x, self.x + x_offset, self.x - x_offset
         ])
         z = np.array([
-            self.z + self.scale, self.z, self.z + self.scale,
-            self.z + self.scale
+            self.z + z_offset, self.z, self.z + z_offset,
+            self.z + z_offset
         ])
         x, z = rotate(self.x, self.z, x, z, self.rotation)
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),

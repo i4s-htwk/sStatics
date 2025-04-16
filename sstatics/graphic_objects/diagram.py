@@ -3,7 +3,7 @@
 import numpy as np
 import plotly.graph_objs as go
 from sstatics.graphic_objects import (
-    rotate, GraphicObject, IsoscelesTriangle, Rectangle
+    rotate, GraphicObject, Line, IsoscelesTriangle, Rectangle
 )
 
 
@@ -21,24 +21,21 @@ class Arrow(GraphicObject):
             )
         super().__init__(x, z, **kwargs)
         self.tail_length = tail_length
-        self.scale = self.scale / (1 + self.tail_length)
 
     @property
     def traces(self):
         arrow = IsoscelesTriangle(
-            self.x, self.z, scale=self.scale, rotation=np.pi,
-            **self.scatter_kwargs
+            self.x, self.z, rotation=np.pi,
+            scale=self.scale / (1 + self.tail_length), **self.scatter_kwargs
         )
-        arrow_traces = arrow.rotate_traces(
-            self.x, self.z, rotation=self.rotation
+        arrow_traces = arrow.rotate_traces(self.x, self.z, self.rotation)
+        z_offset = np.cos(np.pi / 8) * self.scale / (1 + self.tail_length)
+        tail = Line(
+            self.x, self.z - (self.scale + z_offset) / 2,
+            self.scale - z_offset, rotation=np.pi / 2, **self.scatter_kwargs
         )
-        x = np.array([self.x, self.x])
-        z = np.array([
-            self.z - self.scale, self.z - (1 + self.tail_length) * self.scale
-        ])
-        x, z = rotate(self.x, self.z, x, z, self.rotation)
-        tail_traces = go.Scatter(x=x, y=z, **self.scatter_kwargs)
-        return *arrow_traces, tail_traces
+        tail_traces = tail.rotate_traces(self.x, self.z, self.rotation)
+        return *arrow_traces, *tail_traces
 
 
 class CoordinateSystem(GraphicObject):
@@ -90,7 +87,7 @@ class CoordinateSystem(GraphicObject):
 class Hatching(Rectangle):
 
     def __init__(
-            self, x, z, a, b=None, angle=np.pi / 4, spacing=0.2,
+            self, x, z, a, b=None, angle=np.pi / 4, spacing=0.17,
             rectangle=False, **kwargs
     ):
         if not 0 < angle < np.pi:
