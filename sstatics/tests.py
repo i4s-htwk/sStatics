@@ -488,3 +488,330 @@ class TestBar(TestCase):
             np.array([[-6.5], [-5.750148612337139], [10.000743061685700],
                       [-8.5], [-6.749851387662860],
                       [-10.832590271647636]]))
+
+    def test_f0_line_analytic(self):
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        line_load = BarLineLoad(1, 1.5, 'z', 'bar', 'exact')
+        n1, n2 = Node(0, 0), Node(0, -4)
+        b = Bar(n1, n2, cross, material, line_loads=line_load)
+        assert_allclose(
+            b.f0_line_analytic(-181.99971053936605),
+            np.array([[0], [-2.299903905345166], [1.613939467730169],
+                      [0], [-2.700096094654834], [-1.747657179682811]]))
+        assert_allclose(
+            b.f0_line_analytic(181.99971053936605),
+            np.array([[0], [-2.300144713318061], [1.586491286791585],
+                      [0], [-2.699855286681939], [-1.719245766852758]]))
+
+    def test_f0_line_taylor(self):
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        line_load = BarLineLoad(1, 1.5, 'z', 'bar', 'exact')
+        n1, n2 = Node(0, 0), Node(0, -4)
+        b = Bar(n1, n2, cross, material, line_loads=line_load)
+        assert_allclose(
+            b.f0_line_taylor(-181.99971053936605),
+            np.array([[0], [-2.300024975792029], [1.600049990707627],
+                      [0], [-2.699975024207971], [-1.733283420872844]]))
+        assert_allclose(
+            b.f0_line_taylor(181.99971053936605),
+            np.array([[0], [-2.300024986736074], [1.600049934348581],
+                      [0], [-2.699975013263926], [-1.733283320737616]]))
+
+    def test_stiffness_shear_force(self):
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        n1, n2 = Node(0, 0), Node(0, -4)
+        b = Bar(n1, n2, cross, material,
+                deformations=['moment', 'normal', 'shear'])
+        assert_allclose(
+            b.stiffness_shear_force,
+            np.array([
+                [1, 0, 0, 1, 0, 0],
+                [0, 0.988957461335696, 0.988957461335696, 0, 0.988957461335696,
+                 0.988957461335696],
+                [0, 0.988957461335696, 0.991718096001772, 0, 0.988957461335696,
+                 0.983436192003544],
+                [1, 0, 0, 1, 0, 0],
+                [0, 0.988957461335696, 0.988957461335696, 0, 0.988957461335696,
+                 0.988957461335696],
+                [0, 0.988957461335696, 0.983436192003544, 0, 0.988957461335696,
+                 0.991718096001772]
+            ]))
+
+    def test_stiffness_second_order_analytic(self):
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        line_load = BarLineLoad(1, 1.5, 'z', 'bar', 'exact')
+        n1, n2 = Node(0, 0), Node(0, -4)
+        b = Bar(n1, n2, cross, material, line_loads=line_load)
+        assert_allclose(
+            b.stiffness_second_order_analytic(-181.99971053936605),
+            np.array([
+                [1, 0, 0, 1, 0, 0],
+                [0, 0.949154629596613, 0.990855423302253, 0, 0.949154629596613,
+                 0.990855423302253],
+                [0, 0.990855423302253, 0.982612659783107, 0, 0.990855423302253,
+                 1.007340950340543],
+                [1, 0, 0, 1, 0, 0],
+                [0, 0.949154629596613, 0.990855423302253, 0, 0.949154629596613,
+                 0.990855423302253],
+                [0, 0.990855423302253, 1.007340950340543, 0, 0.990855423302253,
+                 0.982612659783107]]))
+        assert_allclose(
+            b.stiffness_second_order_analytic(181.99971053936605),
+            np.array([
+                [1, 0, 0, 1, 0, 0],
+                [0, 1.049286243245867, 1.007585973187277, 0, 1.049286243245867,
+                 1.007585973187277],
+                [0, 1.007585973187277, 1.016044207086668, 0, 1.007585973187277,
+                 0.990669505388496],
+                [1, 0, 0, 1, 0, 0],
+                [0, 1.049286243245867, 1.007585973187277, 0, 1.049286243245867,
+                 1.007585973187277],
+                [0, 1.007585973187277, 0.990669505388496, 0, 1.007585973187277,
+                 1.016044207086668]
+            ]))
+
+    def test_stiffness_second_order_taylor(self):
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        line_load = BarLineLoad(1, 1.5, 'z', 'bar', 'exact')
+        n1, n2 = Node(0, 0), Node(0, -4)
+        b = Bar(n1, n2, cross, material, line_loads=line_load)
+        assert_allclose(
+            b.stiffness_second_order_taylor(-181.99971053936605),
+            np.array([
+                [1, 0, 0, 1, 0, 0],
+                [0, 0.949184922004305, 0.990885453929866, 0, 0.949184922004305,
+                 0.990885453929866],
+                [0, 0.990885453929866, 0.982723314147304, 0, 0.990885453929866,
+                 1.007209733494989],
+                [1, 0, 0, 1, 0, 0],
+                [0, 0.949184922004305, 0.990885453929866, 0, 0.949184922004305,
+                 0.990885453929866],
+                [0, 0.990885453929866, 1.007209733494989, 0, 0.990885453929866,
+                 0.982723314147304]]))
+        assert_allclose(
+            b.stiffness_second_order_taylor(181.99971053936605),
+            np.array([
+                [1, 0, 0, 1, 0, 0],
+                [0, 1.049316199412877, 1.007615669443616, 0, 1.049316199412877,
+                 1.007615669443616],
+                [0, 1.007615669443616, 1.016152528382807, 0, 1.007615669443616,
+                 0.990541951565234],
+                [1, 0, 0, 1, 0, 0],
+                [0, 1.049316199412877, 1.007615669443616, 0, 1.049316199412877,
+                 1.007615669443616],
+                [0, 1.007615669443616, 0.990541951565234, 0, 1.007615669443616,
+                 1.016152528382807]
+            ]))
+
+    def test_stiffness_second_order_p_delta(self):
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        line_load = BarLineLoad(1, 1.5, 'z', 'bar', 'exact')
+        n1, n2 = Node(0, 0), Node(0, -4)
+        b = Bar(n1, n2, cross, material, line_loads=line_load)
+        assert_allclose(
+            b.stiffness_second_order_p_delta(-181.99971053936605),
+            np.array([
+                [0, 0, 0, 0, 0, 0],
+                [0, -45.499927634841512, 0, 0, 45.499927634841512, 0],
+                [0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0],
+                [0, 45.499927634841512, 0, 0, -45.499927634841512, 0],
+                [0, 0, 0, 0, 0, 0]]))
+
+    def test_validate_f_axial(self):
+        with self.assertRaises(
+            ValueError, msg='f_axial with a value of zero must raise a  '
+                            'ValueError'
+        ):
+            cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+            material = Material(210000000, 0.1, 81000000, 0.1)
+            n1, n2 = Node(0, 0), Node(0, -4)
+            b = Bar(n1, n2, cross, material)
+            b._validate_f_axial(0)
+
+    def test_validate_order_approach(self):
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        n1, n2 = Node(0, 0), Node(0, -4)
+        b = Bar(n1, n2, cross, material)
+        with self.assertRaises(
+                ValueError, msg='order has to be either "first" or "second".'
+        ):
+            b._validate_order_approach('wrong_order', None)
+        with self.assertRaises(
+                ValueError, msg='approach has to be either "analytic", '
+                                '"taylor", "p_delta", "iterativ" or ''None.'
+        ):
+            b._validate_order_approach('first', 'wrong_approach')
+        with self.assertRaises(
+            ValueError, msg='In first order the approach has to be None.'
+        ):
+            b._validate_order_approach('first', 'p_delta')
+        with self.assertRaises(
+                ValueError,
+                msg='In second order the approach can not be None.'
+        ):
+            b._validate_order_approach('second', None)
+
+    def test_f0_bar(self):
+        kwargs_combs = [
+            {'order': order, 'approach': approach}
+            for order, approach
+            in product(('first', 'second'),
+                       ('analytic', 'taylor', 'p_delta', 'iterativ', None))
+            if not (order == 'first' and approach is not None) and not (
+                        order == 'second' and approach is None)
+        ]
+
+        common_solutions = (
+            np.array([[0], [-2.300024981264052], [1.600049962528104], [0],
+                      [-2.699975018735948], [-1.733283370805230]]),
+            np.array([[-2.300024981264052], [0], [1.600049962528104],
+                      [-2.699975018735948], [0], [-1.733283370805230]]),
+            np.array(
+                [[-1.700006245316013], [0], [0], [-3.299993754683987], [0],
+                 [-2.533308352069282]])
+        )
+
+        solutions = {
+            ('first', None): common_solutions,
+            ('second', 'analytic'): (
+                np.array([[0], [-2.299903905345166], [1.613939467730169], [0],
+                          [-2.700096094654834], [-1.747657179682811]]),
+                np.array([[-2.299903905345166], [0], [1.613939467730169],
+                          [-2.700096094654834], [0], [-1.747657179682811]])
+            ),
+            ('second', 'taylor'): (
+                np.array([[0], [-2.300024975792029], [1.600049990707627], [0],
+                          [-2.699975024207971], [-1.733283420872844]]),
+                np.array([[-2.300024975792029], [0], [1.600049990707627],
+                          [-2.699975024207971], [0], [-1.733283420872844]])
+            ),
+            ('second', 'p_delta'): common_solutions[:2],
+            ('second', 'iterativ'): common_solutions[:2],
+        }
+
+        for kwargs in kwargs_combs:
+            cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+            material = Material(210000000, 0.1, 81000000, 0.1)
+            n_load = NodePointLoad(0, 182, 0, rotation=0)
+            line_load = BarLineLoad(1, 1.5, 'z', 'bar', 'exact')
+            n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+            n2 = Node(0, -4, loads=n_load)
+            force = -181.99971053936605
+            key = (kwargs['order'], kwargs['approach'])
+
+            b = Bar(n1, n2, cross, material, line_loads=line_load)
+
+            assert_allclose(
+                b.f0(kwargs['order'], kwargs['approach'], True, False, force),
+                solutions[key][0],
+                err_msg=f"Failed for {key}"
+            )
+
+            assert_allclose(
+                b.f0(kwargs['order'], kwargs['approach'], True, True, force),
+                solutions[key][1],
+                err_msg=f"Failed for {key}"
+            )
+
+            if key == ('first', None):
+                b = Bar(n1, n2, cross, material, line_loads=line_load,
+                        hinge_phi_i=True)
+                assert_allclose(
+                    b.f0(kwargs['order'], kwargs['approach'], True, True,
+                         force),
+                    solutions[key][2],
+                    err_msg="Failed for ('first', None) with modified Bar"
+                            " (hinge_phi_i=True)"
+                )
+
+    def test_segment(self):
+        """TODO"""
+
+    def test_deformation_line(self):
+        """TODO"""
+
+    def test_max_deform(self):
+        """TODO"""
+
+
+class TestSystem(TestCase):
+
+    def test_connected_nodes(self):
+        """TODO"""
+
+    def test_node_to_bar_map(self):
+        """TODO"""
+
+    def test_nodes(self):
+        """TODO"""
+
+    def test_get_polplan(self):
+        """TODO"""
+
+
+class TestFirstOrder(TestCase):
+
+    def test_get_zero_matrix(self):
+        """TODO"""
+
+    def test_get_zero_vec(self):
+        """TODO"""
+
+    def test_get_f_axial(self):
+        """TODO"""
+
+    def test_stiffness_matrix(self):
+        """TODO"""
+
+    def test_elastic_matrix(self):
+        """TODO"""
+
+    def test_system_matrix(self):
+        """TODO"""
+
+    def test_f0_1_order(self):
+        """TODO"""
+
+    def test_p0(self):
+        """TODO"""
+
+    def test_p(self):
+        """TODO"""
+
+    def test_apply_boundary_conditions(self):
+        """TODO"""
+
+    def test_node_deformation(self):
+        """TODO"""
+
+    def test_create_list_node_deformation(self):
+        """TODO"""
+
+    def test_bar_deform(self):
+        """TODO"""
+
+    def create_list_of_bar_forces(self):
+        """TODO"""
+
+    def test_apply_hinge_modification(self):
+        """TODO"""
+
+    def test_bar_deform_node_displacement(self):
+        """TODO"""
+
+    def test_create_bar_deform_list(self):
+        """TODO"""
+
+    def test_solveable(self):
+        """TODO"""
+
+    def test_averaged_longitudinal_force(self):
+        """TODO"""
