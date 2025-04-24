@@ -58,7 +58,7 @@ class Bar:
         :py:attr:`node_i` and :py:attr:`node_j` need to have different
         locations.
     ValueError
-        There has to be at least one deformation.
+        There has to be at least one deformation component.
     ValueError
         Valid deformation keywords are "moment", "normal" and "shear".
     More discription...
@@ -269,15 +269,42 @@ class Bar:
 
     @cached_property
     def hinge(self):
-        """Creates a tuple containing bar hinges.
+        """Creates a tuple containing bar hinges at both ends of a structural
+        element.
 
-        The tuple consists of six elements representing different hinge
-        parameters.
+        This method assembles and returns the hinge conditions of a bar
+        at its start node (*i*) and end node (*j*). Hinges define how the bar
+        is allowed to move or rotate at its ends.
+
+        The tuple consists of six elements representing the hinges at each
+        node:
 
         Returns
         -------
-        :any:`tuple`
-            A tuple containing
+        tuple
+            A 6-tuple containing the hinge parameters in the following order:
+            - :py:attr:`hinge_u_i` (bool): Normal hinge at node *i*.
+            - :py:attr:`hinge_w_i` (bool): Shear hinge at node *i*.
+            - :py:attr:`hinge_phi_i` (bool): Moment hinge at node *i*.
+            - :py:attr:`hinge_u_j` (bool): Normal at node *j*.
+            - :py:attr:`hinge_w_j` (bool): Shear hinge at node *j*.
+            - :py:attr:`hinge_phi_j` (bool): Moment at node *j*.
+
+        Notes
+        -----
+        A value of ``True`` indicates the presence of a hinge,
+        while ``False`` indicates a rigid connection at that degree of freedom.
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+        >>> n2 = Node(4, 0, u='fixed', w='fixed', phi='fixed')
+        >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> mat = Material(210000000, 0.1, 81000000, 0.1)
+        >>> b = Bar(n1, n2, cross, mat, hinge_w_i=True, hinge_phi_j=True)
+        >>> b.hinge
+        (False, True, False, False, False, True)
         """
         return (
             self.hinge_u_i, self.hinge_w_i, self.hinge_phi_i,
@@ -312,6 +339,20 @@ class Bar:
 
             .. math::
                 EI = 1000 \cdot E \cdot I
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> n1 = Node(0, 0, u='fixed', w='fixed')
+        >>> n2 = Node(4, 0, w='fixed')
+        >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> mat = Material(210000000, 0.1, 81000000, 0.1)
+        >>> b = Bar(n1, n2, cross, mat)
+        >>> b.flexural_stiffness
+        5814.900000000001
+        >>> b = Bar(n1, n2, cross, mat, deformations=['normal'])
+        >>> b.flexural_stiffness
+        5814900.000000001
         """
         EI = self.material.young_mod * self.cross_section.mom_of_int
         return EI if 'moment' in self.deformations else 1_000 * EI
@@ -378,6 +419,20 @@ class Bar:
 
             .. math::
                 EA = 1000 \cdot E \cdot A
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> n1 = Node(0, 0, u='fixed', w='fixed')
+        >>> n2 = Node(4, 0, w='fixed')
+        >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> mat = Material(210000000, 0.1, 81000000, 0.1)
+        >>> b = Bar(n1, n2, cross, mat)
+        >>> b.axial_rigidity
+        1613640.0
+        >>> b = Bar(n1, n2, cross, mat, deformations=['moment'])
+        >>> b.axial_rigidity
+        1613640000.0
         """
         EA = self.material.young_mod * self.cross_section.area
         return EA if 'normal' in self.deformations else 1_000 * EA
@@ -414,6 +469,20 @@ class Bar:
 
             .. math::
                 GA_s = 1000 \cdot EI
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> n1 = Node(0, 0, u='fixed', w='fixed')
+        >>> n2 = Node(4, 0, w='fixed')
+        >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> mat = Material(210000000, 0.1, 81000000, 0.1)
+        >>> b = Bar(n1, n2, cross, mat)
+        >>> b.shear_stiffness
+        5814900.000000001
+        >>> b = Bar(n1, n2, cross, mat, deformations=['moment', 'shear'])
+        >>> b.shear_stiffness
+        390581.97463079996
         """
         GA = self.material.shear_mod * self.cross_section.area
         GA_s = GA * self.cross_section.shear_cor
@@ -436,6 +505,20 @@ class Bar:
         -----
             .. math::
                 \phi = \dfrac{12 \cdot E \cdot I}{GA_s \cdot \ell^2}
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> n1 = Node(0, 0, u='fixed', w='fixed')
+        >>> n2 = Node(4, 0, w='fixed')
+        >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> mat = Material(210000000, 0.1, 81000000, 0.1)
+        >>> b = Bar(n1, n2, cross, mat)
+        >>> b.phi
+        0.0007499999999999999
+        >>> b = Bar(n1, n2, cross, mat, deformations=['moment', 'shear'])
+        >>> b.phi
+        0.011165837860598733
         """
         return 12 * self.EI / (self.GA_s * self.length ** 2)
 
@@ -582,6 +665,7 @@ class Bar:
             matrix:
 
             .. math::
+                f^{0'}=
                \begin{bmatrix}
                    \cos(\alpha- \beta_i) & \sin(\alpha - \beta_i) & 0 & 0 & 0
                    & 0\\
@@ -594,7 +678,7 @@ class Bar:
                    & 0\\
                    0 & 0 & 0 & 0 & 0 & 1
                \end{bmatrix}^{T} \cdot
-               f^{0}
+               f^{0}_{load}
         """
         m = np.transpose(self.transformation_matrix())
         return m @ self.point_load
@@ -621,6 +705,19 @@ class Bar:
                 - \alpha_T \cdot T \cdot E \cdot A \\ 0 \\
                 - \dfrac{\alpha_T \cdot \Delta T \cdot E \cdot I}{h}
                 \end{array}\right\rbrace
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, BarTemp, CrossSection, Material
+        >>> from sstatics.core import Node
+        >>> n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+        >>> n2 = Node(4, 0, u='fixed', w='fixed', phi='fixed')
+        >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> mat = Material(210000000, 0.1, 81000000, 1.2e-5)
+        >>> temp = BarTemp(15, 30)
+        >>> b = Bar(n1, n2, cross, mat, temp=temp)
+        >>> b.f0_temp
+        array([[435.6828], [0], [5.23341], [-435.6828], [0], [-5.23341]])
         """
         factor = self.material.therm_exp_coeff * self.material.young_mod
         f0_x = factor * self.temp.temp_s * self.cross_section.area
@@ -661,6 +758,20 @@ class Bar:
                 f^{0'} = k^{'} \cdot T \cdot \left\lbrace\begin{array}{c}
                 u_i \\ w_i \\ \varphi_i \\ u_j \\ w_j \\ \varphi_j
                 \end{array}\right\rbrace
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core import Node, NodeDisplacement
+        >>> displace = NodeDisplacement(0, 0.005, 0)
+        >>> n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+        >>> n2 = Node(4, 0, w='fixed', displacements=displace)
+        >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> mat = Material(210000000, 0.1, 81000000, 1.2e-5)
+        >>> b = Bar(n1, n2, cross, mat)
+        >>> b.f0_displacement
+        array([[0], [-5.45146875], [10.9029375], [0], [5.45146875],
+        [10.9029375]])
         """
         f0_displacement = np.vstack(
             (self.node_i.displacement, self.node_j.displacement)
@@ -735,12 +846,12 @@ class Bar:
 
         To calculate the internal forces for the second-order theory, this
         function considers the particular solution while taking into account
-        the axial force (f_axial, :math:`L`) in the beam element.
+        the axial force :math:`L` in the beam element.
 
         Parameters
         ----------
         f_axial : :any:`float`
-            The axial force (:math:`L`) applied to the beam element, which is
+            The axial force :math:`L` applied to the beam element, which is
             obtained from the internal force results of the first-order theory.
 
         Returns
@@ -868,7 +979,6 @@ class Bar:
         .. math::
             c_4 = \bigg[ \dfrac{B_s \mu}{G A_s \ell} - \dfrac{\ell}{\mu} \bigg]
              \cdot c_2 + \dfrac{EI \ell^2 ( p_j - p_i)}{B_s GA_s \mu^3}
-
         """
         self._validate_f_axial(f_axial)
         p_vec = self.line_load
@@ -961,7 +1071,7 @@ class Bar:
                         self.EI / (self.GA_s * self.length))) * (p_j - p_i)
 
             f0_z_j = (B_s * mu ** 2 / self.length ** 2) * c_2 - (
-                    (p_sum + p_diff) * self.length / 2) + (
+                    (p_j + p_i) * self.length / 2) + (
                     (self.length / mu ** 2) - (
                         self.EI / (self.GA_s * self.length))) * (p_j - p_i)
 
@@ -991,12 +1101,12 @@ class Bar:
 
         To calculate the internal forces for the second-order theory, this
         function considers the Taylor series expansion while taking into
-        account the axial force (f_axial, :math:`L`) in the beam element.
+        account the axial force :math:`L` in the beam element.
 
         Parameters
         ----------
         f_axial : :any:`float`
-            The axial force (:math:`L`) applied to the beam element, which is
+            The axial force :math:`L` applied to the beam element, which is
             obtained from the internal force results of the first-order theory.
 
         Returns
@@ -1155,6 +1265,23 @@ class Bar:
                 (1 + \phi)} & 0 & \dfrac{6EI}{\ell^2(1 + \phi)} & \dfrac{EI(4 +
                  \phi)}{\ell(1 + \phi)} \\
                 \end{array}\right]
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, BarLineLoad, CrossSection, Material
+        >>> from sstatics.core import Node
+        >>> n1, n2 = Node(0, 0), Node(0, -4)
+        >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> material = Material(210000000, 0.1, 81000000, 0.1)
+        >>> deform = ['moment', 'normal', 'shear']
+        >>> b = Bar(n1, n2, cross, material, deformations=deform)
+        >>> b.stiffness_shear_force
+        array([[1, 0, 0, 1, 0, 0],
+             [0, 0.9889574613, 0.9889574613, 0, 0.9889574613, 0.9889574613],
+             [0, 0.9889574613, 0.991718096,  0, 0.9889574613, 0.983436192],
+             [1, 0, 0, 1, 0, 0],
+             [0, 0.9889574613, 0.9889574613, 0, 0.9889574613, 0.9889574613],
+             [0, 0.9889574613, 0.983436192,  0, 0.9889574613, 0.991718096]])
     """
         return np.array([
             [1 + self.phi, 0, 0, 1 + self.phi, 0, 0],
@@ -1268,6 +1395,26 @@ class Bar:
                 0 & -\dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{2EI}{\ell}\cdot f_4
                 & 0 & \dfrac{6EI}{\ell^2}\cdot f_2 & \dfrac{4EI}{\ell}\cdot f_3
                 \end{array}\right]
+
+        Examples
+        --------
+        >>> from sstatics.core import Bar, BarLineLoad, CrossSection, Material
+        >>> from sstatics.core import Node
+        >>> n_load = NodePointLoad(0, 182, 0, rotation=0)
+        >>> n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+        >>> n2 = Node(0, -4, loads=n_load)
+        >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        >>> material = Material(210000000, 0.1, 81000000, 0.1)
+        >>> line_load = BarLineLoad(1, 1.5, 'z', 'bar', 'exact')
+        >>> force = -181.99971053936605
+        >>> b = Bar(n1, n2, cross, material, line_loads=line_load)
+        >>> b.stiffness_second_order_analytic(f_axial=force)
+        array([[1, 0, 0, 1, 0, 0],
+             [0, 0.9491546296, 0.9908554233, 0, 0.9491546296, 0.9908554233],
+             [0, 0.9908554233, 0.9826126598,  0, 0.9908554233, 1.0073409503],
+             [1, 0, 0, 1, 0, 0],
+             [0, 0.9491546296, 0.9908554233, 0, 0.9491546296, 0.9908554233],
+             [0, 0.9908554233, 1.0073409503,  0, 0.9908554233, 0.9826126598]])
         """
         self._validate_f_axial(f_axial)
         mu = self.characteristic_number(f_axial)
@@ -1295,10 +1442,11 @@ class Bar:
             f_1 = (B_s / (12 * self.EI)) * (mu ** 3 * sinh_mu) / denominator
             f_2 = (B_s / (6 * self.EI)) * (
                     (cosh_mu - 1) * mu ** 2) / denominator
-            f_3 = (B_s / (4 * self.EI)) * (
-                    factor * mu ** 2 - 1) * sinh_mu * mu / denominator
-            f_4 = -(B_s / (2 * self.EI)) * (
-                    factor * mu ** 2 - 1) * sinh_mu * mu / denominator
+            f_3 = ((B_s / (4 * self.EI)) * ((
+                    factor * mu ** 2 - 1) * sinh_mu + mu * cosh_mu) * mu /
+                   denominator)
+            f_4 = -(B_s / (2 * self.EI)) * ((
+                    factor * mu ** 2 - 1) * sinh_mu + mu) * mu / denominator
 
         return np.array([[1, 0, 0, 1, 0, 0],
                          [0, f_1, f_2, 0, f_1, f_2],
@@ -1521,8 +1669,10 @@ class Bar:
                 'approach has to be either "analytic", "taylor", "p_delta", '
                 '"iterativ" or ''None.'
             )
-        if approach == 'first' and approach is not None:
+        if order == 'first' and approach is not None:
             raise ValueError('In first order the approach has to be None.')
+        if order == 'second' and approach is None:
+            raise ValueError('In second order the approach cannot be None.')
 
     # TODO: Ludwigs Kriterium verwenden, wann man die analytische Lösung
     # TODO: verwenden kann?
@@ -1539,7 +1689,7 @@ class Bar:
 
         Due to external loads acting on the beam element, internal forces
         develop at the element ends. These internal forces are assembled in
-        the vector :math:`f^{(0)'}.
+        the vector :math:`f^{(0)'}`.
 
         Parameters
         ----------
@@ -1554,7 +1704,7 @@ class Bar:
         to_node_coord : :any:`bool`, default=True
             Transforms the load vector into the nodal coordinate system.
         f_axial : :any:`float`, default=0
-            The axial force (:math:`L`) applied to the beam element, which is
+            The axial force :math:`L` applied to the beam element, which is
             obtained from the internal force results of the first-order theory.
 
         Returns
