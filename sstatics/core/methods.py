@@ -1,11 +1,13 @@
 
+from copy import deepcopy
 from dataclasses import dataclass, replace
-from functools import cached_property, cache
+from functools import cached_property
 from typing import Literal
 
 import numpy as np
 
-from sstatics.core import Bar, BarTemp, Node, System, SystemModifier
+from sstatics.core import (Bar, BarTemp, Node, System, SystemModifier,
+                           transformation_matrix)
 
 
 @dataclass(eq=False)
@@ -31,152 +33,154 @@ class FirstOrder:
             return self.averaged_longitudinal_force[index]
         return 0
 
-    @cache
+    @cached_property
     def stiffness_matrix(self):
         k_system = self._get_zero_matrix()
         nodes = self.system.nodes()
+        dof = self.dof
         for index, bar in enumerate(self.system.segmented_bars):
-            i = nodes.index(bar.node_i) * self.dof
-            j = nodes.index(bar.node_j) * self.dof
+            i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
+            k = bar.stiffness_matrix(self.order, self.approach,
+                                     f_axial=self._get_f_axial(index))
 
-            f_axial = self._get_f_axial(index)
-
-            k = bar.stiffness_matrix(
-                self.order, self.approach, f_axial=f_axial)
-
-            k_system[i:i + self.dof, i:i + self.dof] += k[:self.dof, :self.dof]
-            k_system[i:i + self.dof, j:j + self.dof] += (
-                k[:self.dof, self.dof:2 * self.dof])
-            k_system[j:j + self.dof, i:i + self.dof] += (
-                k[self.dof:2 * self.dof, :self.dof])
-            k_system[j:j + self.dof, j:j + self.dof] += (
-                k[self.dof:2 * self.dof, self.dof:2 * self.dof])
+            k_system[i:i + dof, i:i + dof] += k[:dof, :dof]
+            k_system[i:i + dof, j:j + dof] += k[:dof, dof:2 * dof]
+            k_system[j:j + dof, i:i + dof] += k[dof:2 * dof, :dof]
+            k_system[j:j + dof, j:j + dof] += k[dof:2 * dof, dof:2 * dof]
         return k_system
 
-    @cache
+    @cached_property
     def elastic_matrix(self):
         elastic = self._get_zero_matrix()
         nodes = self.system.nodes()
+        dof = self.dof
         for bar in self.system.segmented_bars:
-            i = nodes.index(bar.node_i) * self.dof
-            j = nodes.index(bar.node_j) * self.dof
+            i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
 
-            el_bar = np.vstack((
-                np.hstack((bar.node_i.elastic_support, np.zeros((3, 3)))),
-                np.hstack((np.zeros((3, 3)), bar.node_j.elastic_support))
-            ))
+            el_bar = np.block([
+                [bar.node_i.elastic_support, np.zeros((dof, dof))],
+                [np.zeros((dof, dof)), bar.node_j.elastic_support]
+            ])
 
-            elastic[i:i + self.dof, i:i + self.dof] = (
-                el_bar)[:self.dof, :self.dof]
-            elastic[i:i + self.dof, j:j + self.dof] = (
-                el_bar[:self.dof, self.dof:2 * self.dof])
-            elastic[j:j + self.dof, i:i + self.dof] = (
-                el_bar[self.dof:2 * self.dof, :self.dof])
-            elastic[j:j + self.dof, j:j + self.dof] = (
-                el_bar[self.dof:2 * self.dof, self.dof:2 * self.dof])
+            elastic[i:i + dof, i:i + dof] = el_bar[:dof, :dof]
+            elastic[i:i + dof, j:j + dof] = el_bar[:dof, dof:2 * dof]
+            elastic[j:j + dof, i:i + dof] = el_bar[dof:2 * dof, :dof]
+            elastic[j:j + dof, j:j + dof] = el_bar[dof:2 * dof, dof:2 * dof]
         return elastic
 
-    @cache
+    @cached_property
     def system_matrix(self):
-        return self.stiffness_matrix() + self.elastic_matrix()
+        return self.stiffness_matrix + self.elastic_matrix
 
-    @cache
+    @cached_property
     def f0(self):
         f0_system = self._get_zero_vec()
         nodes = self.system.nodes()
+        dof = self.dof
         for index, bar in enumerate(self.system.segmented_bars):
-            i = nodes.index(bar.node_i) * self.dof
-            j = nodes.index(bar.node_j) * self.dof
+            i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
+            f0 = bar.f0(self.order, self.approach,
+                        f_axial=self._get_f_axial(index))
 
-            f_axial = self._get_f_axial(index)
-
-            f0 = bar.f0(self.order, self.approach, f_axial=f_axial)
-
-            f0_system[i:i + self.dof, :] += f0[:self.dof, :]
-            f0_system[j:j + self.dof, :] += f0[self.dof:2 * self.dof, :]
+            f0_system[i:i + dof, :] += f0[:dof, :]
+            f0_system[j:j + dof, :] += f0[dof:2 * dof, :]
         return f0_system
 
-    @cache
+    @cached_property
     def p0(self):
         p0 = self._get_zero_vec()
         for i, node in enumerate(self.system.nodes()):
-            p0[i * self.dof:i * self.dof + self.dof, :] = (
-                node.load)
+            p0[i * self.dof:i * self.dof + self.dof, :] = node.load
         return p0
 
-    @cache
+    @cached_property
     def p(self):
-        return self.p0() - self.f0()
+        return self.p0 - self.f0
 
-    @cache
-    def apply_boundary_conditions(self):
-        k = self.system_matrix()
-        p = self.p()
+    @cached_property
+    def boundary_conditions(self):
+        k = deepcopy(self.system_matrix)
+        p = deepcopy(self.p)
         for idx, node in enumerate(self.system.nodes()):
             node_offset = idx * self.dof
             for dof_nr, attribute in enumerate(['u', 'w', 'phi']):
-                condition = getattr(node, attribute, 'free')
-                if condition == 'fixed':
+                if getattr(node, attribute, 'free') == 'fixed':
                     k[node_offset + dof_nr, :] = 0
                     k[:, node_offset + dof_nr] = 0
                     k[node_offset + dof_nr, node_offset + dof_nr] = 1
                     p[node_offset + dof_nr] = 0
         return k, p
 
-    @cache
-    def node_deformation(self):
-        modified_stiffness_matrix, modified_p = (
-            self.apply_boundary_conditions())
+    @cached_property
+    def node_deform(self):
+        modified_stiffness_matrix, modified_p = self.boundary_conditions
         return np.linalg.solve(modified_stiffness_matrix, modified_p)
 
-    def create_list_node_deformation(self):
-        node_deform = self.node_deformation()
+    @cached_property
+    def node_deform_list(self):
+        deform = self.node_deform
         nodes = self.system.nodes()
+        dof = self.dof
         return [
             np.vstack([
-                node_deform[nodes.index(bar.node_i) *
-                            self.dof: nodes.index(bar.node_i) * self.dof +
-                            self.dof, :],
-                node_deform[nodes.index(bar.node_j) *
-                            self.dof: nodes.index(bar.node_j) * self.dof +
-                            self.dof, :]
+                deform[nodes.index(bar.node_i) * dof:
+                       nodes.index(bar.node_i) * dof + dof],
+                deform[nodes.index(bar.node_j) * dof:
+                       nodes.index(bar.node_j) * dof + dof]
             ])
             for bar in self.system.segmented_bars
         ]
 
-    @cache
+    @cached_property
     def bar_deform(self):
-        node_deform = self.node_deformation()
+        deform = self.node_deform
         nodes = self.system.nodes()
+        dof = self.dof
         return [
-            np.transpose(bar.transformation_matrix())
-            @ np.vstack([
-                node_deform[nodes.index(bar.node_i) *
-                            self.dof: nodes.index(bar.node_i) * self.dof +
-                            self.dof, :],
-                node_deform[nodes.index(bar.node_j) *
-                            self.dof: nodes.index(bar.node_j) * self.dof +
-                            self.dof, :]
+            np.transpose(bar.transformation_matrix()) @ np.vstack([
+                deform[nodes.index(bar.node_i) * dof:
+                       nodes.index(bar.node_i) * dof + dof],
+                deform[nodes.index(bar.node_j) * dof:
+                       nodes.index(bar.node_j) * dof + dof]
             ])
             for bar in self.system.segmented_bars
         ]
 
-    @cache
-    def create_list_of_bar_forces(self):
-        bar_deform = self.bar_deform()
+    @cached_property
+    def internal_forces(self):
+        bar_deform = self.bar_deform
         return [
-            bar.stiffness_matrix(to_node_coord=False,
-                                 f_axial=self._get_f_axial(i)) @ deform +
-            bar.f0(to_node_coord=False,
-                   f_axial=self._get_f_axial(i)) + bar.f0_point
+            bar.stiffness_matrix(
+                to_node_coord=False, f_axial=self._get_f_axial(i)
+            ) @ deform +
+            bar.f0(
+                to_node_coord=False, f_axial=self._get_f_axial(i)
+            ) + bar.f0_point
             for i, (bar, deform) in
             enumerate(zip(self.system.segmented_bars, bar_deform))
         ]
 
-    @cache
-    def _apply_hinge_modification(self):
+    @cached_property
+    def node_support_forces(self):
+        elastic_vec = np.vstack(np.diag(self.elastic_matrix))
+        return (self.system_matrix @ self.node_deform + self.f0
+                - self.p0 - elastic_vec * self.node_deform)
+
+    @cached_property
+    def system_support_forces_new(self):
+        node_attribute = deepcopy(self.node_support_forces)
+        for idx, node in enumerate(self.system.nodes()):
+            if node.rotation != 0:
+                node_attribute[idx * self.dof: (idx + 1) * self.dof, :] = (
+                        transformation_matrix(-node.rotation) @
+                        node_attribute[idx * self.dof: (idx + 1) * self.dof, :]
+                )
+        return node_attribute
+
+    @cached_property
+    def hinge_modifier(self):
         deform_list = []
-        bar_deform_list = self.bar_deform()
+        bar_deform_list = self.bar_deform
         for i, bar in enumerate(self.system.segmented_bars):
             delta_rel = np.zeros((6, 1))
             if True in bar.hinge:
@@ -191,71 +195,62 @@ class FirstOrder:
 
                 idx = [i for i, value in enumerate(bar.hinge) if value]
                 if idx:
-                    rhs = (-np.dot(k[np.ix_(idx, range(6))], bar_deform)
-                           - f0[idx])
-                    delta_rel_reduced = (
-                        np.linalg.solve(k[np.ix_(idx, idx)], rhs)
-                    )
-                    delta_rel[idx] = delta_rel_reduced
+                    rhs = k[np.ix_(idx, range(6))] @ bar_deform + f0[idx]
+                    delta_rel[idx] = (
+                        np.linalg.solve(k[np.ix_(idx, idx)], -rhs))
             deform_list.append(delta_rel)
         return deform_list
 
-    @cache
-    def bar_deform_node_displacement(self):
+    @cached_property
+    def bar_deform_displacements(self):
         return [
             np.transpose(bar.transformation_matrix())
-            @ np.vstack(
-                (bar.node_i.displacement, bar.node_j.displacement))
+            @ np.vstack((bar.node_i.displacement, bar.node_j.displacement))
             for bar in self.system.segmented_bars
         ]
 
-    @cache
-    def create_bar_deform_list(self):
-        hinge_modifications = self._apply_hinge_modification()
-        bar_deforms = self.bar_deform()
-        bar_deform_node_displacement = self.bar_deform_node_displacement()
+    @cached_property
+    def bar_deform_list(self):
         combined_results = []
-        for i in range(len(hinge_modifications)):
-            result = (hinge_modifications[i] + bar_deforms[i] +
-                      bar_deform_node_displacement[i])
+        for i in range(len(self.hinge_modifier)):
+            result = (self.hinge_modifier[i] + self.bar_deform[i] +
+                      self.bar_deform_displacements[i])
             combined_results.append(result)
         return combined_results
 
-    @cache
+    @cached_property
     def solvable(self):
-        k, p = self.apply_boundary_conditions()
+        k, p = self.boundary_conditions
         if np.linalg.matrix_rank(k) < k.shape[0]:
             print("Stiffness matrix is singular.")
             return False
         return True
 
-    @cache
+    @cached_property
     def calc(self):
-        if self.solvable():
+        if self.solvable:
             return (
-                self.create_bar_deform_list(),
-                self.create_list_of_bar_forces())
+                self.bar_deform_list,
+                self.internal_forces)
 
     @cached_property
     def averaged_longitudinal_force(self):
-        l_averaged_list = []
         original_order = self.order
         self.order = 'first'
 
-        for deform, force in zip(
-                self.create_bar_deform_list(),
-                self.create_list_of_bar_forces()):
-            phi_i, phi_j = deform[2, 0], deform[5, 0]
-            n_i, n_j = -force[0, 0], force[3, 0]
-            v_i, v_j = -force[1, 0], force[4, 0]
-
-            l_i = n_i * np.cos(phi_i) + v_i * np.sin(phi_i)
-            l_j = n_j * np.cos(phi_j) + v_j * np.sin(phi_j)
-            l_averaged = (l_i + l_j) / 2
-            l_averaged_list.append(l_averaged)
+        l_avg = [
+            (
+                    -force[0, 0] * np.cos(deform[2, 0]) +
+                    -force[1, 0] * np.sin(deform[2, 0]) +
+                    force[3, 0] * np.cos(deform[5, 0]) +
+                    force[4, 0] * np.sin(deform[5, 0])
+            ) / 2
+            for deform, force in
+            zip(self.bar_deform_list, self.internal_forces)
+        ]
 
         self.order = original_order
-        return l_averaged_list
+        return l_avg
 
 
 # TODO: Idee besprechen
@@ -275,7 +270,7 @@ class SecondOrder(FirstOrder):
         self.approach = self.calc_approach
 
     def calc_second(self):
-        if self.solvable():
+        if self.solvable:
             if self.approach == 'iterativ':
                 iteration_data = []
                 iteration_data.append(self.recursive_iteration(
@@ -292,15 +287,15 @@ class SecondOrder(FirstOrder):
                         len(self.system.segmented_bars))]))
                 return iteration_data
             else:
-                return (self.create_bar_deform_list(),
+                return (self.bar_deform_list,
                         self._conversion_transversial_in_iternal_force)
 
     @cached_property
     def _conversion_transversial_in_iternal_force(self):
         forces_list = []
         for deform, force in zip(
-                self.create_bar_deform_list(),
-                self.create_list_of_bar_forces()):
+                self.bar_deform_list,
+                self.internal_forces):
             phi_i, phi_j = deform[2, 0], deform[5, 0]
             l_i, l_j = -force[0, 0], force[3, 0]
             t_i, t_j = -force[1, 0], force[4, 0]
@@ -342,9 +337,9 @@ class SecondOrder(FirstOrder):
         current_system = replace(input_system)
 
         node_deform_current = FirstOrder(
-            input_system).create_list_node_deformation()
+            input_system).node_deform_list
         node_deform_previous = FirstOrder(
-            previous_system).create_list_node_deformation()
+            previous_system).node_deform_list
 
         max_displacements = {'i': 0, 'j': 0}
         updated_bars = []
@@ -379,9 +374,9 @@ class SecondOrder(FirstOrder):
 
         if calculation_type == 'incremental':
             bar_deform_current = FirstOrder(
-                input_system).create_bar_deform_list()
+                input_system).bar_deform_list
             bar_forces_current = FirstOrder(
-                input_system).create_list_of_bar_forces()
+                input_system).internal_forces
 
             for idx, (bar, bar_deform, node_deform, bar_forces) in enumerate(
                     zip(current_system.bars, bar_deform_current,
@@ -406,10 +401,10 @@ class SecondOrder(FirstOrder):
         else:
             result_dic = {
                 'bar_displacement': FirstOrder(
-                    input_system).create_bar_deform_list(),
+                    input_system).node_deform_list,
                 'node_displacement': node_deform_current,
                 'internal_forces': FirstOrder(
-                    input_system).create_list_of_bar_forces()
+                    input_system).internal_forces
             }
             iteration_results.append((iteration, result_dic))
 
@@ -453,7 +448,7 @@ class InfluenceLine:
 
         calc_system = FirstOrder(self.modified_system)
 
-        if calc_system.solvable():
+        if calc_system.solvable:
             norm_force = self.calc_norm_force(force, obj)
             if isinstance(obj, Bar):
                 self.modified_system = self.modifier.modify_bar_force(
@@ -462,7 +457,7 @@ class InfluenceLine:
                 self.modified_system = self.modifier.modify_node_force(
                     obj, force, virt_force=norm_force)
             calc_system = FirstOrder(self.modified_system)
-            return calc_system.calc()
+            return calc_system.calc
         else:
             # TODO: Hier wird die Verschiebungsfigur zurückgegeben und
             #       nicht deform, force wie bei calc_system.calc()
@@ -478,7 +473,7 @@ class InfluenceLine:
         calc_system = FirstOrder(self.modified_system)
         if isinstance(obj, Bar):
             # calc bar deformations
-            deform = calc_system.create_bar_deform_list()
+            deform = calc_system.bar_deform_list
 
             # Get the index of the bar in the system
             bars = list(self.system.bars)
@@ -494,7 +489,7 @@ class InfluenceLine:
             # Calculate the difference in deformation between the two bars
             delta = deform_bar_j[idx_j][0] - deform_bar_i[idx_i][0]
         elif isinstance(obj, Node):
-            node_deformation = calc_system.node_deformation()
+            node_deformation = calc_system.node_deform
             for i, node in enumerate(self.system.nodes()):
                 if node == obj:
                     node_deform = node_deformation[
@@ -525,5 +520,5 @@ class InfluenceLine:
 
             calc_system = FirstOrder(self.modified_system)
 
-            return calc_system.calc()
+            return calc_system.calc
         raise ValueError("obj must be an instance of Bar")
