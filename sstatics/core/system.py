@@ -136,6 +136,36 @@ class Chain:
 
 @dataclass(eq=False)
 class System:
+    """Represents a statical system composed of interconnected bars.
+
+    This class models a mechanical system made up of interconnected bars, where
+    each bar connects two nodes.
+
+    Parameters
+    ----------
+    bars : tuple[Bar, ...] | list[Bar]
+        A list or tuple of bars that define the structure of the statical
+        system. The bars must be provided in a consecutive order, as they
+        represent a connected structure.
+
+    Raises
+    ------
+    ValueError
+        Raised if any of the following conditions are met:
+
+        * The list of bars is empty.
+        * Two or more bars share the same geometric location.
+        * Two distinct node instances occupy the same spatial position.
+        * The system's connectivity graph is not fully connected.
+
+    Attributes
+    ----------
+    segmented_bars : tuple[Bar, ...]
+        The bars of the system after segmentation.
+
+    dof : int
+        Degrees of freedom for the system (fixed at 3).
+    """
 
     bars: tuple[Bar, ...] | list[Bar]
 
