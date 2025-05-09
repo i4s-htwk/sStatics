@@ -283,12 +283,12 @@ class Bar:
         -------
         tuple
             A 6-tuple containing the hinge parameters in the following order:
-            - :py:attr:`hinge_u_i` (bool): Normal hinge at node *i*.
-            - :py:attr:`hinge_w_i` (bool): Shear hinge at node *i*.
-            - :py:attr:`hinge_phi_i` (bool): Moment hinge at node *i*.
-            - :py:attr:`hinge_u_j` (bool): Normal at node *j*.
-            - :py:attr:`hinge_w_j` (bool): Shear hinge at node *j*.
-            - :py:attr:`hinge_phi_j` (bool): Moment at node *j*.
+                * :py:attr:`hinge_u_i` (bool): Normal hinge at node *i*.
+                * :py:attr:`hinge_w_i` (bool): Shear hinge at node *i*.
+                * :py:attr:`hinge_phi_i` (bool): Moment hinge at node *i*.
+                * :py:attr:`hinge_u_j` (bool): Normal at node *j*.
+                * :py:attr:`hinge_w_j` (bool): Shear hinge at node *j*.
+                * :py:attr:`hinge_phi_j` (bool): Moment at node *j*.
 
         Notes
         -----
@@ -347,7 +347,7 @@ class Bar:
         >>> n2 = Node(4, 0, w='fixed')
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
         >>> mat = Material(210000000, 0.1, 81000000, 0.1)
-        >>> b = Bar(n1, n2, cross, mat)
+        >>> b = Bar(n1, n2, cross, mat, deformations=['moment', 'normal'])
         >>> b.flexural_stiffness
         5814.900000000001
         >>> b = Bar(n1, n2, cross, mat, deformations=['normal'])
@@ -427,7 +427,7 @@ class Bar:
         >>> n2 = Node(4, 0, w='fixed')
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
         >>> mat = Material(210000000, 0.1, 81000000, 0.1)
-        >>> b = Bar(n1, n2, cross, mat)
+        >>> b = Bar(n1, n2, cross, mat, deformations=['moment', 'normal'])
         >>> b.axial_rigidity
         1613640.0
         >>> b = Bar(n1, n2, cross, mat, deformations=['moment'])
@@ -477,7 +477,7 @@ class Bar:
         >>> n2 = Node(4, 0, w='fixed')
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
         >>> mat = Material(210000000, 0.1, 81000000, 0.1)
-        >>> b = Bar(n1, n2, cross, mat)
+        >>> b = Bar(n1, n2, cross, mat, deformations=['moment', 'normal'])
         >>> b.shear_stiffness
         5814900.000000001
         >>> b = Bar(n1, n2, cross, mat, deformations=['moment', 'shear'])
@@ -782,9 +782,8 @@ class Bar:
 
     @cached_property
     def f0_line(self):
-        r"""Calculates the internal forces due to external loads related to
-        the local bar coordinate system.
-
+        r"""Calculates the internal forces due to external line loads related
+        to the local bar coordinate system.
 
         Returns
         -------
@@ -809,17 +808,17 @@ class Bar:
             .. math::
                 f^{0'} =
                 \left\lbrace\begin{array}{c}
-                f_{x,i}^{(0)'} \\ f_{z,i}^{(0)'} \\ f_{M,i}^{(0)'} \\
-                f_{x,j}^{(0)'} \\ f_{z,j}^{(0)'} \\ f_{M,j}^{(0)'}
+                f_{x,i}^{(0)'} \\\\ f_{z,i}^{(0)'} \\\\ f_{M,i}^{(0)'} \\\\
+                f_{x,j}^{(0)'} \\\\ f_{z,j}^{(0)'} \\\\ f_{M,j}^{(0)'}
                 \end{array}\right\rbrace = \left\lbrace\begin{array}{c}
-                \dfrac{(7n_i + 3 n_j) \ell}{20} \\
+                \dfrac{(7n_i + 3 n_j) \ell}{20} \\\\
                 \dfrac{(40EIp_j + 80EIp_i + 3GA_s \ell^2 p_j + 7 G A_s \ell^2
-                p_i) \ell}{240 EI + 20 GA_s \ell^2} \\
+                p_i) \ell}{240 EI + 20 GA_s \ell^2} \\\\
                 -\dfrac{(30 EI p_j + 30 EI p_i + 2 GA_s \ell p_j + 3 GA_s
-                \ell^2 p_i) \ell^2}{720EI + 60 GA_s \ell^2} \\
-                -\dfrac{(3n_i + 7 n_j) \ell}{20} \\
+                \ell^2 p_i) \ell^2}{720EI + 60 GA_s \ell^2} \\\\
+                -\dfrac{(3n_i + 7 n_j) \ell}{20} \\\\
                 -\dfrac{(80EIp_j + 40EIp_i + 7GA_s \ell^2 p_j + 3 G A_s \ell^2
-                p_i) \ell}{240 EI + 20 GA_s \ell^2} \\
+                p_i) \ell}{240 EI + 20 GA_s \ell^2} \\\\
                 -\dfrac{(30 EI p_j + 30 EI p_i + 3 GA_s \ell p_j + 2 GA_s
                 \ell^2 p_i) \ell^2}{720EI + 60 GA_s \ell^2}
                 \end{array}\right\rbrace
@@ -840,8 +839,8 @@ class Bar:
         return f0 * np.array([[-1], [-1], [1], [-1], [-1], [-1]])
 
     def f0_line_analytic(self, f_axial):
-        r"""Calculates the internal forces due to external loads related to
-        the local bar coordinate system for the analytical solution of the
+        r"""Calculates the internal forces due to external line loads related
+        to the local bar coordinate system for the analytical solution of the
         second-order theory.
 
         To calculate the internal forces for the second-order theory, this
@@ -899,10 +898,10 @@ class Bar:
                 GA_s \ell^4 + 2 B_s \ell^2 \mu^2 + \frac{B_{s}^2}{GA_s} \mu^4
                 \big] \sinh (\mu) (p_i + p_j)}
                 {GA_s \ell^2 \mu \sin (\mu) + 2 [GA_s \ell^2 + B_s \mu^2] (\cos
-                 ( \mu) - 1)}\\
+                 ( \mu) - 1)}\\\\
                  & + \dfrac{6 EI \ell^2 \mu (1- \cos ( \mu)) (p_i - p_j)}{GA_s
                   \ell^2 \mu \sin (\mu) + 2 [GA_s \ell^2 + B_s \mu^2] (\cos (
-                  \mu) - 1)} \\
+                  \mu) - 1)} \\\\
                  & + \dfrac{[B_s \ell^2 \mu^3 + GA_s \ell^4 \mu] [p_i + 2 p_j +
                   (2 p_i + p_j) \cos (\mu)]}{GA_s \ell^2 \mu \sin (\mu) + 2
                   [GA_s \ell^2 + B_s \mu^2] (\cos ( \mu) - 1)}\bigg)
@@ -914,7 +913,7 @@ class Bar:
                 ( 1- \cos ( \mu)) (p_i - p_j) + GA_s \ell^2 \mu \sin (\mu)
                 (2 p_i + p_j)}
                 {GA_s \ell^2 \mu \sin (\mu) + 2 [GA_s \ell^2 + B_s \mu^2]
-                (\cos ( \mu) - 1)}\\
+                (\cos ( \mu) - 1)}\\\\
                  & - \dfrac{3 (GA_s \ell^2 + B_s \mu^2) (1 - \cos ( \mu))
                  (p_i + p_j)}{GA_s \ell^2 \mu \sin (\mu) + 2 [GA_s \ell^2 + B_s
                   \mu^2] (\cos ( \mu) - 1))}\bigg)
@@ -953,10 +952,10 @@ class Bar:
             c_1 = \dfrac{\ell^2}{6 B_s \mu^3} \cdot &  \bigg(\dfrac{3 \big[GA_s
             \ell^4 - 2 B_s \ell^2 \mu^2 + \frac{B_{s}^2}{GA_s} \mu^4 \big]
             \sinh (\mu) (p_i + p_j)}{2 [GA_s \ell^2 - B_s \mu^2] (1- \cosh
-            (\mu)) + GA_s \ell^2 \mu \sinh(\mu)}\\
+            (\mu)) + GA_s \ell^2 \mu \sinh(\mu)}\\\\
              & + \dfrac{6 EI \ell^2 \mu (1- \cosh ( \mu)) (p_i - p_j)}{2 [GA_s
               \ell^2 - B_s \mu^2] (1- \cosh (\mu)) + GA_s \ell^2 \mu
-              \sinh(\mu)} \\
+              \sinh(\mu)} \\\\
              & + \dfrac{[B_s \ell^2 \mu^3 - GA_s \ell^4 \mu] [p_i + 2 p_j +
              (2 p_i + p_j) \cosh (\mu)]}{2 [GA_s \ell^2 - B_s \mu^2] (1- \cosh
              (\mu)) + GA_s \ell^2 \mu \sinh(\mu)}\bigg)
@@ -967,7 +966,7 @@ class Bar:
              \cosh ( \mu)) (p_i - p_j) - GA_s \ell^2 \mu \sinh (\mu) (2 p_i +
              p_j)}
             {2 [GA_s \ell^2 - B_s \mu^2] (1- \cosh (\mu)) + GA_s \ell^2 \mu
-            \sinh(\mu)}\\
+            \sinh(\mu)}\\\\
              & - \dfrac{3 (GA_s \ell^2 - B_s \mu^2) (1 - \cosh ( \mu)) (p_i +
              p_j)}{2 [GA_s \ell^2 - B_s \mu^2] (1- \cosh (\mu)) + GA_s \ell^2
              \mu \sinh(\mu)}\bigg)
@@ -1095,9 +1094,9 @@ class Bar:
         )
 
     def f0_line_taylor(self, f_axial):
-        r"""Calculates the internal forces due to external loads related to
-        the local bar coordinate system for the Taylor series expansion of the
-        second-order theory.
+        r"""Calculates the internal forces due to external line loads related
+        to the local bar coordinate system for the Taylor series expansion of
+        the second-order theory.
 
         To calculate the internal forces for the second-order theory, this
         function considers the Taylor series expansion while taking into
@@ -1133,7 +1132,8 @@ class Bar:
                 \begin{array}{ll}
                     f_{z,i}^{(0)'} = \dfrac{\ell}{20} \cdot &  \bigg(\dfrac{720
                      B_{s}^2 (p_j + p_i) - 4 EIGA_s \ell^2 (p_j - p_i) + 20 B_s
-                      GA_s \ell^2 ( 5 p_j + 7 p_i)}{(12 B_s + GA_s \ell^2)^2}\\
+                      GA_s \ell^2 ( 5 p_j + 7 p_i)}{(12 B_s + GA_s
+                      \ell^2)^2}\\\\
                      & \dfrac{(GA_s)^2 \ell^4 (3 p_j + 7 p_i)}{(12 B_s + GA_s
                      \ell^2)^2} - \dfrac{EI (p_j - p_i)}{GA_s \ell} -
                      \dfrac{12 B_s}{L \ell} \cdot \dfrac{(EI - B_s)
@@ -1144,7 +1144,7 @@ class Bar:
                 \begin{array}{ll}
                     f_{M,i}^{(0)'} = & \dfrac{4320 B_{s}^3(p_j + p_i) + 6 EI
                     (GA_s)^2 \ell^4 (p_j- p_i) + 60 B_s GA_s \ell^2 (12B_s p_i
-                     - GA_s \ell^2 p_j)}{60 GA_s (12 B_s + GA_s \ell^2)^2}\\
+                     - GA_s \ell^2 p_j)}{60 GA_s (12 B_s + GA_s \ell^2)^2}\\\\
                      & - \dfrac{(GA_s)^3 \ell^6 (2p_j + 3 p_i)}{60 GA_s (12 B_s
                       + GA_s \ell^2)^2} - \dfrac{EI}{GA_s} \cdot p_i +
                       \dfrac{6 B_s}{L} \cdot \dfrac{(EI - B_s) ( p_j - p_i)}
@@ -1159,7 +1159,7 @@ class Bar:
                 \begin{array}{ll}
                 f_{M,j}^{(0)'} = & \dfrac{4320 B_{s}^3(p_j + p_i) - 6 EI
                 (GA_s)^2 \ell^4 (p_j- p_i) + 60 B_s GA_s \ell^2 (12B_s p_j -
-                GA_s \ell^2 p_i)}{60 GA_s (12 B_s + GA_s \ell^2)^2}\\
+                GA_s \ell^2 p_i)}{60 GA_s (12 B_s + GA_s \ell^2)^2}\\\\
                  & - \dfrac{(GA_s)^3 \ell^6 (3p_j + 2 p_i)}{60 GA_s (12 B_s +
                  GA_s \ell^2)^2} - \dfrac{EI}{GA_s} \cdot p_j - \dfrac{6 B_s}
                  {L} \cdot \dfrac{(EI - B_s) ( p_j - p_i)}{(12 B_s + GA_s
@@ -1168,11 +1168,11 @@ class Bar:
 
             .. math::
                 f^{0'} = \left\lbrace\begin{array}{c}
-                -\dfrac{(7n_i + 3 n_j) \ell}{20} \\
-                -f_{z,i}^{(0)'} \\
-                -f_{M,i}^{(0)'} \\
-                -\dfrac{(3n_i + 7 n_j) \ell}{20}\\
-                f_{z,j}^{(0)'}\\
+                -\dfrac{(7n_i + 3 n_j) \ell}{20} \\\\
+                -f_{z,i}^{(0)'} \\\\
+                -f_{M,i}^{(0)'} \\\\
+                -\dfrac{(3n_i + 7 n_j) \ell}{20}\\\\
+                f_{z,j}^{(0)'}\\\\
                 f_{M,j}^{(0)'}
                 \end{array}\right\rbrace
 
@@ -1706,6 +1706,9 @@ class Bar:
         f_axial : :any:`float`, default=0
             The axial force :math:`L` applied to the beam element, which is
             obtained from the internal force results of the first-order theory.
+            This force is needed if the second-order theory :py:attr:`approach`
+            is set to :python:`analytic`, :python:`taylor` or
+            :python:`p_delta`.
 
         Returns
         -------

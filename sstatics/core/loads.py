@@ -99,30 +99,31 @@ class BarLineLoad:
         The force at the end of the bar element.
     direction : {'x', 'z'}, default='z'
         The direction in which the load acts. Can be either:
-        - `'x'` : Load acts in the global/local x-direction.
-        - `'z'` : Load acts in the global/local z-direction.
+            * :python:`'x'` : Load acts in the global/local x-direction.
+            * :python:`'z'` : Load acts in the global/local z-direction.
     coord : {'bar', 'system'}, default='bar'
         Specifies the coordinate system in which the load is defined.
         Can be either:
-        - `'bar'` : The load is applied in the local coordinate system of
-        the bar.
-        - `'system'` : The load is applied in the global coordinate system.
+            * :python:`'bar'` : The load is applied in the local coordinate \
+            system of the bar.
+            * :python:`'system'` : The load is applied in the global \
+            coordinate system.
     length : {'exact', 'proj'}, default='exact'
         Defines how the length of the load is considered. Can be either:
-        - `'exact'` : The exact length of the bar is used.
-        - `'proj'` : The projection of the bar length onto the global
-        coordinate system is used.
+            * :python:`'exact'` : The exact length of the bar is used.
+            * :python:`'proj'` : The projection of the bar length onto the \
+            global coordinate system is used.
 
     Raises
     ------
     ValueError
-        :py:attr: `direction` has to be either :python:`'x'` or
+        :py:attr:`direction` has to be either :python:`'x'` or \
         :python:`'z'`
     ValueError
-        :py:attr: `coord` has to be either :python:`'bar'` or
+        :py:attr:`coord` has to be either :python:`'bar'` or \
         :python:`'system'`
     ValueError
-        :py:attr: `length` has to be either :python:`'exact'` or
+        :py:attr:`length` has to be either :python:`'exact'` or \
         :python:`'proj'`
     """
 
@@ -156,11 +157,11 @@ class BarLineLoad:
 
         Notes
         -----
-            - The force at the start of the bar (`pi`) is assigned to index 0
+            * The force at the start of the bar (`pi`) is assigned to index 0 \
             (x) or 1 (z).
-            - The force at the end of the bar (`pj`) is assigned to index 3 (x)
-            or 4 (z).
-            - If :py:attr:`pi` and :py:attr:`pj` are zero, then a 6x1 zero
+            * The force at the end of the bar (`pj`) is assigned to index 3 \
+            (x) or 4 (z).
+            * If :py:attr:`pi` and :py:attr:`pj` are zero, then a 6x1 zero \
             vector is returned.
         """
         vec = np.zeros((6, 1))
@@ -267,11 +268,14 @@ class BarPointLoad(PointLoad):
 
         Notes
         -----
-        - If `position == 0`, the load is placed at the start of the bar.
-        - If `position == 1`, the load is placed at the end of the bar.
-        - For intermediate positions (`0 < position < 1`), the load
-          contribution is considered elsewhere in the calculation and does not
-          appear directly in this vector. A 6x1 zero vector is returned.
+            * If :py:attr:`position` == 0, the load is placed at the start of\
+             the bar.
+            * If :py:attr:`position` == 1, the load is placed at the end of\
+             the bar.
+            * For intermediate positions (0 < :py:attr:`position` < 1), the\
+             load contribution is considered elsewhere in the calculation and\
+              does not appear directly in this vector. A 6x1 zero vector is \
+              returned.
 
         Examples
         --------

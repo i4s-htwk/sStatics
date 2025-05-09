@@ -276,22 +276,22 @@ class FirstOrder:
 
         Returns
         -------
-        :any: `numpy.array`
+        :any:`numpy.array`
             The global load vector of the system.
 
         Notes
         -----
             The global load vector `P` can be expressed as the product of the
             global stiffness matrix `k` and the nodal displacement vector
-            `\Delta`:
+            :math:`\Delta`:
 
             .. math::
                 P = k \cdot \Delta
 
-            In displacement-based methods, the nodal displacements `\Delta` are
-            the unknowns to be solved for. The global load vector is computed
-            from known loads, while the stiffness matrix `k` is also a known
-            quantity.
+            In displacement-based methods, the nodal displacements
+            :math:`\Delta` are the unknowns to be solved for. The global load
+            vector is computed from known loads, while the stiffness matrix `k`
+            is also a known quantity.
         """
         return self.p0 - self.f0
 
@@ -322,14 +322,14 @@ class FirstOrder:
             conditions.
             When a deformation is restricted (i.e., if the attributes
             :py:attr:`u`, :py:attr:`w`, or :py:attr:`phi` are set to 'fixed'),
-            the corresponding entry in the nodal displacement vector `Delta` is
-            set to zero.
+            the corresponding entry in the nodal displacement vector
+            :math:`\\Delta` is set to zero.
 
             Instead of removing rows and columns, which would require
             restructuring the system, this algorithm zeroes out the
             corresponding rows and columns in the stiffness matrix `k` and sets
             the diagonal entry to one. This maintains the shape of the result
-            vector :math:`Delta` . The same positions in the load vector
+            vector :math:`\\Delta` . The same positions in the load vector
             :py:attr:`p` are set to zero.
 
         Examples
@@ -342,7 +342,7 @@ class FirstOrder:
         >>> load = BarLineLoad(1, 1, 'z', 'bar', 'exact')
         >>> bar1 = Bar(node1, node2, cross_section, material, line_loads=load)
         >>> system = System([bar1])
-        >>> FirstOrder(system).system_matrix()
+        >>> FirstOrder(system).system_matrix
         array([
         [199500, 0, 0, -199500, 0, 0],
         [0, 1810.67, -2716, 0, -1810.67, -2716],
@@ -526,7 +526,7 @@ class FirstOrder:
                 - self.p0 - elastic_vec * self.node_deform)
 
     @cached_property
-    def system_support_forces_new(self):
+    def system_support_forces(self):
         r"""Calculation of the support reaction of the node element in the
         global coordinate system :math:`\tilde{P}^{supp}_{n}`.
 
@@ -658,7 +658,7 @@ class FirstOrder:
 
         Returns
         -------
-        list of numpy.ndarray
+        :any:`list` of numpy.ndarray
             A list of (6×1) vectors representing the local end displacements
             of each bar in the system resulting from nodal displacement inputs.
 
@@ -679,9 +679,11 @@ class FirstOrder:
         the total deformation at the bar ends in the local coordinate system.
 
         This method adds the deformations from three different sources:
-            * Deformation due to hinges
-            * Internal deformation from structural analysis
-            * Displacement-induced deformation from nodal support movements
+            * Deformation due to hinges (:py:attr:`hinge_modifier`)
+            * Internal deformation from structural analysis \
+            (:py:attr:`bar_deform`)
+            * Displacement-induced deformation from nodal support movements \
+            (:py:attr:`bar_deform_displacements`)
 
         Returns
         -------
@@ -723,7 +725,7 @@ class FirstOrder:
 
     @cached_property
     def averaged_longitudinal_force(self):
-        r"""Transformation of Normal and Shear Forces to Longitudinal Force.
+        r"""Transformation of normal and shear forces to longitudinal force.
 
         The calculation of the longitudinal force is necessary for the system
         analysis based on second-order theory.

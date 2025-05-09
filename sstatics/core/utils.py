@@ -29,8 +29,8 @@ def transformation_matrix(alpha: float):
     Examples
     --------
     >>> import numpy
-    >>> import sstatics
-    >>> m = sstatics.transformation_matrix(numpy.pi)
+    >>> import sstatics.core
+    >>> m = sstatics.core.transformation_matrix(numpy.pi)
     >>> m
     array([[-1, 0, 0],
            [0, -1, 0],

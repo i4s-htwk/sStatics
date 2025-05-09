@@ -15,15 +15,21 @@ class Node:
     Parameters
     ----------
     x, z : :any:`float`
-        description
+        Coordinates of the node in the x and z directions.
     rotation : :any:`float`, default=0.0
-        description
+        Initial rotation of the node.
     u, w, phi : {'free', 'fixed'} or :any:`float`, default='free'
-        Specify the fixtures of a node. Real numbers refer to nib widths.
+        Boundary conditions (supports) for the node:
+            * :python:`'free'`: no constraint
+            * :python:`'fixed'`: fully constrained
+            * :any:`float`: represents a spring support with a specific \
+            stiffness value (nib width).
     displacements : :any:`tuple`, default=()
-        description
+        Prescribed displacements acting on the node. hese should be instances
+        of the :py:class:`NodeDisplacement`.
     loads : :any:`tuple`, default=()
-        description
+        Point loads acting on the node. These should be instances of the
+        :py:class:`NodePointLoad`.
 
     Raises
     ------
@@ -102,7 +108,6 @@ class Node:
             return np.array([[0], [0], [0]])
         return np.sum([d.vector for d in self.displacements], axis=0)
 
-    # TODO: docu
     @cached_property
     def load(self):
         r"""Rotate the node loads.
