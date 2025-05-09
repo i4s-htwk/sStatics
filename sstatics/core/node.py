@@ -17,7 +17,7 @@ class Node:
     x, z : :any:`float`
         Coordinates of the node in the x and z directions.
     rotation : :any:`float`, default=0.0
-        Initial rotation of the node.
+        Initial rotation of the node in radiant.
     u, w, phi : {'free', 'fixed'} or :any:`float`, default='free'
         Boundary conditions (supports) for the node:
             * :python:`'free'`: no constraint

@@ -210,7 +210,7 @@ class Bar:
         Returns
         -------
         :any:`float`
-            Angle of inclination in radiant.
+            Angle of inclination in rad.
 
         Notes
         -----

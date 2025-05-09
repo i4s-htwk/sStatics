@@ -31,7 +31,7 @@ class PointLoad(DegreesOfFreedom):
         represent a torque at a node or a rotational component along a bar.
     rotation : :any:`float`, default=0.0
         The rotation of the load components, default is 0.0. This value
-        specifies the initial angle of the load's vector relative to a
+        specifies the initial angle (in rad) of the load's vector relative to a
         reference orientation.
 
     See Also
@@ -175,7 +175,7 @@ class BarLineLoad:
         Parameters
         ----------
         rotation : :any:`float`
-            The rotation angle in radians.
+            The rotation angle in rad.
 
         Returns
         -------
@@ -226,7 +226,7 @@ class BarPointLoad(PointLoad):
     phi : :any:`float`
         The moment applied along the beam.
     rotation : :any:`float`, default=0.0
-        The rotation of the load components.
+        The rotation of the load components in rad.
     position : :any:`float`, default=0.0
         Describes the relative position of the load along the bar. A value of
         `0` indicates the start of the bar, and `1` indicates the end of the

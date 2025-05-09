@@ -8,7 +8,7 @@ def transformation_matrix(alpha: float):
     Parameters
     ----------
     alpha : :any:`float`
-        Rotation angle.
+        Rotation angle in rad.
 
     Returns
     -------
