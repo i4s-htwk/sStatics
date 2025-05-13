@@ -147,14 +147,14 @@ class Bar:
             The resulting matrix has the form
 
             .. math::
-                \left(\begin{array}{c}
+                \left[\begin{array}{cccccc}
                 \cos(\alpha_i) & \sin(\alpha_i) & 0 & 0 & 0 & 0\\
                 -\sin(\alpha_i) & \cos(\alpha_i) & 0 & 0 & 0 & 0\\
                 0 & 0 & 1 & 0 & 0 & 0 \\
                 0 & 0 & 0 & \cos(\alpha_j) & \sin(\alpha_j) & 0 \\
                 0 & 0 & 0 & -\sin(\alpha_j) & \cos(\alpha_j) & 0 \\
                 0 & 0 & 0 & 0 & 0 & 1
-                \end{array}\right)
+                \end{array}\right]
 
         Examples
         --------

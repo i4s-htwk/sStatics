@@ -102,7 +102,7 @@ class BarLineLoad:
             * :python:`'x'` : Load acts in the global/local x-direction.
             * :python:`'z'` : Load acts in the global/local z-direction.
     coord : {'bar', 'system'}, default='bar'
-        Specifies the coordinate system in which the load is defined.
+        Specifies the coordinate system in which the load is defined. \
         Can be either:
             * :python:`'bar'` : The load is applied in the local coordinate \
             system of the bar.
@@ -157,12 +157,12 @@ class BarLineLoad:
 
         Notes
         -----
-            * The force at the start of the bar (`pi`) is assigned to index 0 \
-            (x) or 1 (z).
-            * The force at the end of the bar (`pj`) is assigned to index 3 \
-            (x) or 4 (z).
-            * If :py:attr:`pi` and :py:attr:`pj` are zero, then a 6x1 zero \
-            vector is returned.
+        * The force at the start of the bar (`pi`) is assigned to index 0 \
+        (x) or 1 (z).
+        * The force at the end of the bar (`pj`) is assigned to index 3 \
+        (x) or 4 (z).
+        * If :py:attr:`pi` and :py:attr:`pj` are zero, then a 6x1 zero \
+        vector is returned.
         """
         vec = np.zeros((6, 1))
         vec[0 if self.direction == 'x' else 1] = self.pi
@@ -184,11 +184,11 @@ class BarLineLoad:
 
         Notes
         -----
-            - If the load is defined in the local bar coordinate system,
-              no rotation is applied.
-            - If the load is defined in the global coordinate system, the
-              transformation matrix accounts for rotation and projection
-              effects.
+        * If the load is defined in the local bar coordinate system,
+          no rotation is applied.
+        * If the load is defined in the global coordinate system, the
+          transformation matrix accounts for rotation and projection
+          effects.
 
         Examples
         --------
@@ -268,14 +268,14 @@ class BarPointLoad(PointLoad):
 
         Notes
         -----
-            * If :py:attr:`position` == 0, the load is placed at the start of\
-             the bar.
-            * If :py:attr:`position` == 1, the load is placed at the end of\
-             the bar.
-            * For intermediate positions (0 < :py:attr:`position` < 1), the\
-             load contribution is considered elsewhere in the calculation and\
-              does not appear directly in this vector. A 6x1 zero vector is \
-              returned.
+        * If :py:attr:`position` == 0, the load is placed at the start of\
+         the bar.
+        * If :py:attr:`position` == 1, the load is placed at the end of\
+         the bar.
+        * For intermediate positions (0 < :py:attr:`position` < 1), the\
+         load contribution is considered elsewhere in the calculation and\
+          does not appear directly in this vector. A 6x1 zero vector is \
+          returned.
 
         Examples
         --------
