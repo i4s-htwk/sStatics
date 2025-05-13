@@ -20,7 +20,7 @@ def transformation_matrix(alpha: float):
     The resulting matrix has the form
 
     .. math::
-        \left(\begin{array}{c}
+        \left(\begin{array}{ccc}
         \cos(\alpha) & \sin(\alpha) & 0 \\
         -\sin(\alpha) & \cos(\alpha) & 0 \\
         0 & 0 & 1
