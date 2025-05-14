@@ -580,31 +580,32 @@ class FirstOrder:
             The algorithm iterates through all bars in the system and checks
             for the presence of hinges. If a hinge is found, the corresponding
             modified stiffness matrix :math:`k^{'}` and modified initial force
-            vector :math:`f^{(0)'}` are used to calculate the deformation
-            :math:`\delta^{'}` of that bar. This is necessary to compute the
-            relative deformations caused by the hinges.
+            vector :math:`f^{(0)'}` are used to calculate the bar's deformation
+            :math:`\delta^{'}`. This step is essential for determining the
+            relative deformations introduced by the hinges.
 
-            The internal bar forces are related by:
+            The internal bar forces are given by:
 
             .. math:: f^{'} = k^{'} \cdot \delta^{'} + f^{(0)'}
 
             When a hinge is present, the deformation at the node is no longer
-            identical to the bar deformation. For example, for a moment
-            hinge at the end of a bar, the total rotation is composed of the
-            known nodal rotation :math:`\varphi_{j}^{n}` and the relative
+            equal to the bar deformation. For instance, in the case of a
+            rotational hinge at the end of a bar, the total rotation is the sum
+            of the known nodal rotation :math:\varphi_{j}^{n} and the relative
             rotation :math:`\Delta \varphi_{j}`:
 
             .. math:: \varphi_{j} = \varphi_{j}^{n} + \Delta \varphi_{j}
 
             The nodal deformation :math:`\delta^{(n)'}` is already known via
-            :py:attr:`bar_deform`. The algorithm then computes the relative
-            deformation. For this purpose, the stiffness matrix and force
-            vector are reduced such that only the degrees of freedom associated
-            with hinges are retained. This allows the relative displacement at
-            each hinge location to be computed.
+            the attribute :py:attr:`bar_deform`. The algorithm then calculates
+            the relative deformation introduced by the hinge. To achieve this,
+            the stiffness matrix and force vector are reduced to retain only
+            the degrees of freedom associated with the hinge. This reduction
+            allows the computation of the relative displacement at each
+            hinge location.
 
-            The calculation of internal bar forces is extended using the
-            relative displacement as follows:
+            The calculation of internal forces is then extended to incorporate
+            both known nodal and relative deformations:
 
             .. math::
 
@@ -612,17 +613,18 @@ class FirstOrder:
                         + f^{(0)'}
 
 
-            From this equation, a linear system of equations is derived:
+            From this relationship, a linear system of equations is derived:
 
-            .. math:: A \cdot x = b
+            .. math::
+            A \cdot x = b
 
-            with:
+            where:
 
-            .. math:: A = k^{'}_{red_n}
+            .. math::
+            A = k'{red_n}
+            b = -k'{red} \cdot \delta^{(n)'} - f^{(0)'}
 
-            .. math:: b = - k^{'}_{red} \cdot \delta^{(n)'} - f^{(0)'}
-
-            The vector :math:`x` therefore represents the total relative
+            The solution vector :math:x represents the total relative
             deformations caused by the hinges.
         """
         deform_list = []
