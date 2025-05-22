@@ -6,8 +6,8 @@ import numpy as np
 from numpy.testing import assert_allclose as numpy_allclose
 
 from sstatics.core import (
-    Bar, BarLineLoad, BarPointLoad, BarTemp, CrossSection, Material, Node,
-    NodeDisplacement, NodePointLoad
+    Bar, BarLineLoad, BarPointLoad, BarTemp, CrossSection, FirstOrder,
+    Material, Node, NodeDisplacement, NodePointLoad, System
 )
 
 
@@ -732,6 +732,144 @@ class TestBar(TestCase):
                             " (hinge_phi_i=True)"
                 )
 
+    def test_stiffness_matrix(self):
+        kwargs_combs = [
+            {'order': order, 'approach': approach}
+            for order, approach
+            in product(('first', 'second'), ('analytic', 'taylor', 'p_delta',
+                                             'iterativ', None))
+            if not (order == 'first' and approach is not None) and not (
+                    order == 'second' and approach is None)
+        ]
+        common_solutions = (
+            np.array([
+                [1090.29375, 0, -2180.5875, -1090.29375, 0, -2180.5875],
+                [0, 403410, 0, 0, -403410, 0],
+                [-2180.5875, 0, 5814.9, 2180.5875, 0, 2907.45],
+                [-1090.29375, 0, 2180.5875, 1090.29375, 0, 2180.5875],
+                [0, -403410, 0, 0, 403410, 0],
+                [-2180.5875, 0, 2907.45, 2180.5875, 0, 5814.9]
+            ]),
+            np.array([
+                [1078.25413911018, 0, -2156.50827822035, -1078.25413911018, 0,
+                 -2156.50827822035],
+                [0, 403410, 0, 0, -403410, 0],
+                [-2156.50827822035, 0, 5766.74155644071, 2156.50827822035, 0,
+                 2859.29155644071],
+                [-1078.25413911018, 0, 2156.50827822035, 1078.25413911018, 0,
+                 2156.50827822035],
+                [0, -403410, 0, 0, 403410, 0],
+                [-2156.50827822035, 0, 2859.29155644071, 2156.50827822035, 0,
+                 5766.74155644071]
+            ])
+        )
+
+        solutions = {
+            ('first', None): common_solutions,
+            ('second', 'analytic'): (
+                np.array([
+                    [1034.85736043275, 0, -2160.6469503601, -1034.85736043275,
+                     0, -2160.6469503601],
+                    [0, 403410, 0, 0, -403410, 0],
+                    [-2160.6469503601, 0, 5713.79435537279, 2160.6469503601, 0,
+                     2928.79344606761],
+                    [-1034.85736043275, 0, 2160.6469503601, 1034.85736043275,
+                     0, 2160.6469503601],
+                    [0, -403410, 0, 0, 403410, 0],
+                    [-2160.6469503601, 0, 2928.79344606761, 2160.6469503601, 0,
+                     5713.79435537279]
+                ]),
+                np.array([
+                    [1023.82229444851, 0, -2137.64836291218, -1023.82229444851,
+                     0, -2137.64836291218],
+                    [0, 403410, 0, 0, -403410, 0],
+                    [-2137.64836291218, 0, 5667.1650617622, 2137.64836291218,
+                     0, 2883.42838988652],
+                    [-1023.82229444851, 0, 2137.64836291218, 1023.82229444851,
+                     0, 2137.64836291218],
+                    [0, -403410, 0, 0, 403410, 0],
+                    [-2137.64836291218, 0, 2883.42838988652, 2137.64836291218,
+                     0, 5667.1650617622]
+                ])
+            ),
+            ('second', 'taylor'): (
+                np.array([
+                    [1034.89038805553, 0, -2160.71243477129, -1034.89038805553,
+                     0, -2160.71243477129],
+                    [0, 403410, 0, 0, -403410, 0],
+                    [-2160.71243477129, 0, 5714.43779943516, 2160.71243477129,
+                     0, 2928.41193965001],
+                    [-1034.89038805553, 0, 2160.71243477129, 1034.89038805553,
+                     0, 2160.71243477129],
+                    [0, -403410, 0, 0, 403410, 0],
+                    [-2160.71243477129, 0, 2928.41193965001, 2160.71243477129,
+                     0, 5714.43779943516]
+                ]),
+                np.array([
+                    [1023.85931267192, 0, -2137.71407426467, -1023.85931267192,
+                     0, -2137.71407426467],
+                    [0, 403410, 0, 0, -403410, 0],
+                    [-2137.71407426467, 0, 5667.80918526337, 2137.71407426467,
+                     0, 2883.04711179532],
+                    [-1023.85931267192, 0, 2137.71407426467, 1023.85931267192,
+                     0, 2137.71407426467],
+                    [0, -403410, 0, 0, 403410, 0],
+                    [-2137.71407426467, 0, 2883.04711179532, 2137.71407426467,
+                     0, 5667.80918526337]
+                ])
+            ),
+            ('second', 'p_delta'): (
+                np.array([
+                    [1044.79382236516, 0, -2180.5875, -1044.79382236516, 0,
+                     -2180.5875],
+                    [0, 403410, 0, 0, -403410, 0],
+                    [-2180.5875, 0, 5814.9, 2180.5875, 0, 2907.45],
+                    [-1044.79382236516, 0, 2180.5875, 1044.79382236516, 0,
+                     2180.5875],
+                    [0, -403410, 0, 0, 403410, 0],
+                    [-2180.5875, 0, 2907.45, 2180.5875, 0, 5814.9]
+                ]),
+                np.array([
+                    [1032.75421147533, 0, -2156.50827822035, -1032.75421147533,
+                     0, -2156.50827822035],
+                    [0, 403410, 0, 0, -403410, 0],
+                    [-2156.50827822035, 0, 5766.74155644071, 2156.50827822035,
+                     0, 2859.29155644071],
+                    [-1032.75421147533, 0, 2156.50827822035, 1032.75421147533,
+                     0, 2156.50827822035],
+                    [0, -403410, 0, 0, 403410, 0],
+                    [-2156.50827822035, 0, 2859.29155644071, 2156.50827822035,
+                     0, 5766.74155644071]
+                ])),
+            ('second', 'iterativ'): common_solutions,
+        }
+        for kwargs in kwargs_combs:
+            cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+            material = Material(210000000, 0.1, 81000000, 0.1)
+            n_load = NodePointLoad(0, 182, 0, rotation=0)
+            line_load = BarLineLoad(1, 1.5, 'z', 'bar', 'exact')
+            n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+            n2 = Node(0, -4, loads=n_load)
+            force = -181.99971053936605
+            key = (kwargs['order'], kwargs['approach'])
+            b = Bar(n1, n2, cross, material, line_loads=line_load,
+                    deformations=['moment', 'normal'])
+            assert_allclose(
+                b.stiffness_matrix(kwargs['order'], kwargs['approach'], True,
+                                   True, force),
+                solutions[key][0],
+                err_msg=f"Failed for {key} "
+            )
+            b = Bar(n1, n2, cross, material, line_loads=line_load,
+                    deformations=['moment', 'normal', 'shear'])
+            assert_allclose(
+                b.stiffness_matrix(kwargs['order'], kwargs['approach'], True,
+                                   True, force),
+                solutions[key][1],
+                err_msg=f"Failed for shear {key}"
+            )
+            # hier noch Fehler bei 'second' 'analytic'
+
     def test_segment(self):
         """TODO"""
 
@@ -760,46 +898,288 @@ class TestSystem(TestCase):
 class TestFirstOrder(TestCase):
 
     def test_get_zero_matrix(self):
-        """TODO"""
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        n1, n2, n3, n4 = Node(0, 0), Node(0, 2), Node(0, 4), Node(6, 0)
+        b1 = Bar(n1, n2, cross, material)
+        b2 = Bar(n2, n3, cross, material)
+        b3 = Bar(n3, n4, cross, material)
+        system1 = System([b1])
+        system2 = System([b1, b2, b3])
+        assert_allclose(
+            FirstOrder(system1)._get_zero_matrix(),
+            np.zeros((6, 6)),
+            err_msg='If a system has one bar without it being segmented, the '
+                    'matrix must be a 6x6 zero matrix.')
+        assert_allclose(
+            FirstOrder(system2)._get_zero_matrix(),
+            np.zeros((12, 12)),
+            'If a system has three bars without it being segmented, the '
+            'matrix must be a 12x12 zero matrix.'
+        )
 
     def test_get_zero_vec(self):
-        """TODO"""
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        n1, n2, n3, n4 = Node(0, 0), Node(0, 2), Node(0, 4), Node(6, 0)
+        b1 = Bar(n1, n2, cross, material)
+        b2 = Bar(n2, n3, cross, material)
+        b3 = Bar(n3, n4, cross, material)
+        system1 = System([b1])
+        system2 = System([b1, b2, b3])
+        assert_allclose(
+            FirstOrder(system1)._get_zero_vec(),
+            np.zeros((6, 1)),
+            err_msg='If a system has one bar without it being segmented, the '
+                    'vector must be a 6x1 zero vector.')
+        assert_allclose(
+            FirstOrder(system2)._get_zero_vec(),
+            np.zeros((12, 1)),
+            err_msg='If a system has three bars without it being segmented, '
+                    'the vector must be a 12x1 zero vector.')
 
     def test_get_f_axial(self):
         """TODO"""
 
     def test_stiffness_matrix(self):
-        """TODO"""
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        cross2 = CrossSection(349e-8, 21.2e-4, 0.096, 0.1, 0.1)
+        n1, n2, n3, n4 = Node(0, 0), Node(4, 0), Node(6, 0), Node(4, 4)
+        b1 = Bar(n1, n2, cross1, material)
+        b2 = Bar(n2, n3, cross2, material)
+        b3 = Bar(n2, n4, cross1, material)
+        system1 = System([b1, b2])
+        system2 = System([b1, b2, b3])
+        assert_allclose(
+            FirstOrder(system1).stiffness_matrix,
+            np.array([
+                [149625, 0, 0, -149625, 0, 0, 0, 0, 0],
+                [0, 763.875, -1527.75, 0, -763.875, -1527.75, 0, 0, 0],
+                [0, -1527.75, 4074, 0, 1527.75, 2037, 0, 0, 0],
+                [-149625, 0, 0, 372225, 0, 0, -222600, 0, 0],
+                [0, -763.875, 1527.75, 0, 1863.225, 428.4, 0, -1099.35,
+                 -1099.35],
+                [0, -1527.75, 2037, 0, 428.4, 5539.8, 0, 1099.35, 732.9],
+                [0, 0, 0, -222600, 0, 0, 222600, 0, 0],
+                [0, 0, 0, 0, -1099.35, 1099.35, 0, 1099.35, 1099.35],
+                [0, 0, 0, 0, -1099.35, 732.9, 0, 1099.35, 1465.8]]))
+        assert_allclose(
+            FirstOrder(system2).stiffness_matrix,
+            np.array([
+                [149625, 0, 0, -149625, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 763.875, -1527.75, 0, -763.875, -1527.75, 0, 0, 0, 0, 0,
+                 0],
+                [0, -1527.75, 4074, 0, 1527.75, 2037, 0, 0, 0, 0, 0, 0],
+                [-149625, 0, 0, 372988.875, 0, 1527.75, -222600, 0, 0,
+                 -763.875, 0, 1527.75],
+                [0, -763.875, 1527.75, 0, 151488.225, 428.4, 0, -1099.35,
+                 -1099.35, 0, -149625, 0],
+                [0, -1527.75, 2037, 1527.75, 428.4, 9613.8, 0, 1099.35, 732.9,
+                 -1527.75, 0, 2037],
+                [0, 0, 0, -222600, 0, 0, 222600, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, -1099.35, 1099.35, 0, 1099.35, 1099.35, 0, 0, 0],
+                [0, 0, 0, 0, -1099.35, 732.9, 0, 1099.35, 1465.8, 0, 0, 0],
+                [0, 0, 0, -763.875, 0, -1527.75, 0, 0, 0, 763.875, 0,
+                 -1527.75],
+                [0, 0, 0, 0, -149625, 0, 0, 0, 0, 0, 149625, 0],
+                [0, 0, 0, 1527.75, 0, 2037, 0, 0, 0, -1527.75, 0, 4074]]))
 
     def test_elastic_matrix(self):
-        """TODO"""
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        n1, n2 = Node(0, 0), Node(4, 0)
+        b1 = Bar(n1, n2, cross1, material)
+        system1 = System([b1])
+        assert_allclose(
+            FirstOrder(system1).elastic_matrix,
+            np.zeros((6, 6)),
+            err_msg='If the nodes are not elasticly supported a zero matrix is'
+                    'returned.')
+        n3 = Node(4, 0, u=100, phi=1000)
+        b1 = Bar(n1, n3, cross1, material)
+        system1 = System([b1])
+        assert_allclose(FirstOrder(system1).elastic_matrix,
+                        np.array([
+                            [0, 0, 0, 0, 0, 0],
+                            [0, 0, 0, 0, 0, 0],
+                            [0, 0, 0, 0, 0, 0],
+                            [0, 0, 0, 100, 0, 0],
+                            [0, 0, 0, 0, 0, 0],
+                            [0, 0, 0, 0, 0, 1000]]),
+                        err_msg='If the nodes are elasticly supported the'
+                                'elastic values are on the diagonal of the '
+                                'matrix')
 
     def test_system_matrix(self):
-        """TODO"""
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        cross2 = CrossSection(349e-8, 21.2e-4, 0.096, 0.1, 0.1)
+        n1, n2, n3 = Node(0, 0, phi=800), Node(4, 0), Node(6, 0, u=100)
+        b1 = Bar(n1, n2, cross1, material)
+        b2 = Bar(n2, n3, cross2, material)
+        system1 = System([b1, b2])
+        assert_allclose(
+            FirstOrder(system1).system_matrix,
+            np.array([
+                [149625, 0, 0, -149625, 0, 0, 0, 0, 0],
+                [0, 763.875, -1527.75, 0, -763.875, -1527.75, 0, 0, 0],
+                [0, -1527.75, 4874, 0, 1527.75, 2037, 0, 0, 0],
+                [-149625, 0, 0, 372225, 0, 0, -222600, 0, 0],
+                [0, -763.875, 1527.75, 0, 1863.225, 428.4, 0, -1099.35,
+                 -1099.35],
+                [0, -1527.75, 2037, 0, 428.4, 5539.8, 0, 1099.35, 732.9],
+                [0, 0, 0, -222600, 0, 0, 222700, 0, 0],
+                [0, 0, 0, 0, -1099.35, 1099.35, 0, 1099.35, 1099.35],
+                [0, 0, 0, 0, -1099.35, 732.9, 0, 1099.35, 1465.8]]),
+            err_msg='The system matrix is the sum of the stiffness and the '
+                    'elastic matrix')
 
     def test_f0_1_order(self):
-        """TODO"""
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        n1, n2 = Node(0, 0), Node(4, 0)
+        n3, n4 = Node(4, 4, u='fixed', w='fixed', phi='fixed'), Node(6, 0)
+        l_load1, l_load2 = BarLineLoad(1, 1), BarLineLoad(2, 2)
+        l_load3 = BarLineLoad(3, 4)
+        b1 = Bar(n1, n2, cross1, material, line_loads=l_load1)
+        b2 = Bar(n2, n3, cross1, material, line_loads=l_load2)
+        b3 = Bar(n2, n4, cross1, material, line_loads=l_load3)
+        assert_allclose(
+            FirstOrder(System([b1, b2, b3])).f0,
+            np.array([[0], [-2], [1.3333333333], [4], [-5.3000997009],
+                      [2.4667663676], [4], [0], [-2.6666666667],
+                      [0], [-3.6999002991], [-1.1999002991]]))
+        b1 = Bar(n1, n2, cross1, material)
+        b2 = Bar(n2, n3, cross1, material)
+        b3 = Bar(n2, n4, cross1, material)
+        assert_allclose(
+            FirstOrder(System([b1, b2, b3])).f0,
+            np.zeros((12, 1)),
+            err_msg='If the system is not subjected to loads, a zero vector is'
+                    'returned.')
+        n_load1, n_load2 = NodePointLoad(1, 20, 0), NodePointLoad(5, 0, 3)
+        n1, n2 = Node(0, 0, loads=[n_load1, n_load2]), Node(4, 0,
+                                                            loads=n_load2)
+        b_load = BarPointLoad(10, 0, 0, 0, 0.5)
+        bar1 = Bar(n1, n2, cross1, material, line_loads=l_load1,
+                   point_loads=b_load)
+        n5 = Node(2, 0)
+        bar2 = Bar(n1, n5, cross1, material, line_loads=l_load1)
+        bar3 = Bar(n5, n2, cross1, material, line_loads=l_load1)
+        assert_allclose(
+            FirstOrder(System([bar1])).f0,
+            FirstOrder(System([bar2, bar3])).f0,
+            err_msg='The f0 vector to be the same wheather the bar is '
+                    'seperated by the bar_segment function or implmeneted '
+                    'mannually')
 
     def test_p0(self):
-        """TODO"""
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        n_load1, n_load2 = NodePointLoad(1, 20, 0), NodePointLoad(5, 0, 3)
+        b_load1 = BarPointLoad(-50, 0, 10, position=0.5)
+        n1 = Node(0, 0, loads=[n_load1, n_load2])
+        n2 = Node(4, 0, loads=n_load2)
+        l_load1 = BarLineLoad(1, 1)
+        b1 = Bar(n1, n2, cross1, material, line_loads=l_load1,
+                 point_loads=b_load1)
+        assert_allclose(
+            FirstOrder(System([b1])).p0,
+            np.array([[6], [20], [3], [-50], [0], [10], [5], [0], [3]]),
+            err_msg='If a BarPointLoad is applied to a bar at a position '
+                    'between 0 and 1, the load is assigned to the p0 vector.')
+        b1 = Bar(n1, n2, cross1, material)
+        assert_allclose(
+            FirstOrder(System([b1])).p0,
+            np.array([[6], [20], [3], [5], [0], [3]]))
 
     def test_p(self):
-        """TODO"""
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        n_load1, n_load2 = NodePointLoad(1, 20, 0), NodePointLoad(5, 0, 3)
+        b_load1 = BarPointLoad(-50, 0, 10, position=0.5)
+        n1 = Node(0, 0, loads=[n_load1, n_load2])
+        n2 = Node(4, 0, loads=n_load2)
+        l_load1 = BarLineLoad(1, 1)
+        b1 = Bar(n1, n2, cross1, material, line_loads=l_load1,
+                 point_loads=b_load1)
+        assert_allclose(
+            FirstOrder(System([b1])).p,
+            np.array([[6], [21], [2.6666666667], [-50], [2],
+                      [10], [5], [1], [3.3333333]]))
 
-    def test_apply_boundary_conditions(self):
-        """TODO"""
+    def test_boundary_conditions(self):
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        n1 = Node(0, 0, u='fixed', w='fixed')
+        n2 = Node(np.random.rand(), np.random.rand(), w='fixed')
+        load = BarLineLoad(1, 1)
+        b1 = Bar(n1, n2, cross, mat, line_loads=load)
+        diagonal = np.diag(FirstOrder(System([b1])).boundary_conditions[0])
+        self.assertTrue(
+            np.all(diagonal != 0),
+            'All values on the diagonal have to be greater than zero.')
+        # More cases
 
-    def test_node_deformation(self):
-        """TODO"""
+    def test_node_deform(self):
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        n1, n2 = Node(0, 0, u='fixed', w='fixed'), Node(3, 0, w='fixed')
+        b1 = Bar(n1, n2, cross, mat,
+                 point_loads=BarPointLoad(0, 10, 0, position=0.5))
+        system = System([b1])
+        n2 = Node(10, 0, w='fixed')
+        load = BarLineLoad(1, 1)
+        b1 = Bar(n1, n2, cross, mat, line_loads=load)
+        system1 = System([b1])
+        self.assertEqual(
+            (FirstOrder(system).node_deform.shape), (9, 1),
+            'The length of the vector is equal to the number of nodes'
+            'times the dof.')
+        assert_allclose(FirstOrder(system1).node_deform,
+                        np.array([[0], [0], [-0.010227458681026], [0], [0],
+                                  [0.010227458681026]]))
 
-    def test_create_list_node_deformation(self):
-        """TODO"""
+    def test_list_delta_node(self):
+        cross1 = CrossSection(0.3 * 0.5 ** 3/12, 0.3 * 0.5, 0.5, 0.3, 0.1)
+        cross2 = CrossSection(0.3 * 0.3 ** 3 / 12, 0.3 * 0.3, 0.3, 0.3, 0.1)
+        mat1 = Material(3000e3, 1.2, 60e3, 0.1)
+        n1, n2 = Node(0, 0, w='fixed'), Node(2, 0)
+        n3 = Node(5, 0, w='fixed')
+        n4 = Node(2, 2.5, u='fixed', w='fixed', phi='fixed')
+        b1 = Bar(n1, n2, cross1, mat1, line_loads=BarLineLoad(30, 30),
+                 deformations=['moment'])
+        b2 = Bar(n2, n3, cross1, mat1, deformations=['moment'])
+        b3 = Bar(n4, n2, cross2, mat1,
+                 point_loads=BarPointLoad(60, 0, 0, 0, 0.6),
+                 deformations=['moment'])
+        system = System([b1, b2, b3])
+        assert_allclose(
+            FirstOrder(system).node_deform_list,
+            [np.array([[0.025618694], [0], [-0.0002861296],
+                       [0.025618694], [0.0000003651], [-0.0004949552]]),
+             np.array([[0.025618694], [0.0000003651], [-0.0004949552],
+                       [0.025618694], [0], [0.0002476602]]),
+             np.array([[0], [0], [0], [0.0185560632], [0.0000002191],
+                       [-0.0136303065]]),
+             np.array([[0.0185560632], [0.0000002191], [-0.0136303065],
+                       [0.025618694], [0.0000003651], [-0.0004949552]])])
 
     def test_bar_deform(self):
         """TODO"""
 
-    def create_list_of_bar_forces(self):
-        """TODO"""
+    def test_internal_forces(self):
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        n1, n2 = Node(0, 0, u='fixed', w='fixed'), Node(3, 0, w='fixed')
+        b1 = Bar(n1, n2, cross, mat,
+                 point_loads=BarPointLoad(0, 10, 0, position=0.5))
+        system = System([b1])
+        self.assertEqual(
+            len(FirstOrder(system).internal_forces),
+            len(system.segmented_bars))
+        # More cases
 
     def test_apply_hinge_modification(self):
         """TODO"""
@@ -811,7 +1191,14 @@ class TestFirstOrder(TestCase):
         """TODO"""
 
     def test_solveable(self):
-        """TODO"""
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        n1, n2 = Node(0, 0), Node(3, 0)
+        b1 = Bar(n1, n2, cross, mat,
+                 point_loads=BarPointLoad(0, 10, 0, position=0.5))
+        self.assertFalse(
+            FirstOrder(System([b1])).solvable,
+            'The system can not be solved if no supports are defined.')
 
     def test_averaged_longitudinal_force(self):
         """TODO"""
