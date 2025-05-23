@@ -18,7 +18,6 @@ class Point(SingleGraphicObject):
     def __init__(self, x, z, **kwargs):
         super().__init__(x, z, **kwargs)
 
-    def __init__(self, x, z, length=4/3, **kwargs):
     @property
     def traces(self):
         x, z = transform(
@@ -61,6 +60,23 @@ class Line(MultiGraphicObject):
         x, z = np.array(list(zip(*self.points)))
         x, z = transform(self.x, self.z, x, z, self.rotation, self.scale)
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
+
+    # TODO: new names for parameters
+    def stretching(self, start=0.0, end=0.0):
+        if len(self.points) != 2:
+            raise ValueError(
+                '"stretching()" only can be used for lines with two points.'
+            )
+        p1, p2 = np.array(self.points[0]), np.array(self.points[1])
+        direction = p2 - p1
+        length = np.linalg.norm(direction)
+        if length == 0:
+            raise ValueError("Cannot stretch a line of zero length.")
+        unit = direction / length
+        new_p1 = p1 - start * unit
+        new_p2 = p2 + end * unit
+        self.points = [tuple(new_p1), tuple(new_p2)]
+        return self
 
 
 class Polygon(MultiGraphicObject):
