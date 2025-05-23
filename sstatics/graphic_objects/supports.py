@@ -70,6 +70,11 @@ class BaseDoubleLineHatchSupport(Support):
         return *line_traces, *base_support_traces
 
 
+FreeNode = Point
+""" Alias of :py:class:`Point` to make the use case of
+this class more clear. """
+
+
 class RollerSupport(Support):
 
     def __init__(self, x, z, width=11/10, **kwargs):
