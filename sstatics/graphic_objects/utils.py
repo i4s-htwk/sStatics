@@ -4,6 +4,7 @@ import abc
 import numpy as np
 import plotly.graph_objs as go
 
+
 def translate(ox, oz, x, z, translation=(0, 0)):
     x_shift = ox + (x - ox) + translation[0]
     z_shift = oz + (z - oz) + translation[1]
@@ -40,7 +41,7 @@ class Figure(go.Figure):
         super().__init__(**kwargs)
 
 
-class GraphicObject(abc.ABC):
+class MultiGraphicObject(abc.ABC):
 
     # TODO: find a better solution to pass down options to customize an object
     # TODO: each instance should be customizable
@@ -52,11 +53,19 @@ class GraphicObject(abc.ABC):
         'hoverinfo': 'skip',
     }
 
-    def __init__(self, x, z, rotation=0, scale=1, **scatter_kwargs):
+    def __init__(self, points, rotation=0, scale=1, **scatter_kwargs):
         if scale <= 0:
             raise ValueError('"scale" has to be a number greater than zero.')
-        self.x = x
-        self.z = z
+        if not (
+            isinstance(points, list) and
+            all(
+                isinstance(p, (list, tuple)) and len(p) == 2 for p in points
+            )
+        ):
+            raise ValueError(
+                '"points" has to be a list of (x, z) tuples or [x, z] lists.'
+            )
+        self.points = points
         self.rotation = rotation
         self.scale = scale
         self.scatter_kwargs = self.scatter_options | scatter_kwargs
@@ -86,3 +95,19 @@ class GraphicObject(abc.ABC):
         for annotation in self.annotations:
             fig.add_annotation(annotation)
         fig.show(*args, **kwargs)
+
+
+class SingleGraphicObject(MultiGraphicObject):
+    def __init__(self, x, z, **kwargs):
+        super().__init__([(x, z)], **kwargs)
+        self.x = x
+        self.z = z
+
+
+class EmptyGraphicObject(SingleGraphicObject):
+    def __init__(self):
+        super().__init__(0, 0)
+
+    @property
+    def traces(self):
+        return []
