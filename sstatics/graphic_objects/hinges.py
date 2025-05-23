@@ -8,8 +8,11 @@ from sstatics.graphic_objects import (
 )
 
 
-class Hinge(GraphicObject):
 class Hinge(SingleGraphicObject, ABC):
+
+    scatter_options = SingleGraphicObject.scatter_options | {
+        'line': dict(width=3),
+    }
 
     def __init__(self, x, z, width, **kwargs):
         if width <= 0:
@@ -64,6 +67,11 @@ class ShearForceHinge(Hinge):
 
 
 class MomentHinge(Hinge, Ellipse):
+
+    scatter_options = Hinge.scatter_options | {
+        'fill': 'toself',
+        'fillcolor': 'white',
+    }
 
     def __init__(self, x, z, width=11/40, **kwargs):
         super().__init__(x, z, a=width / 2, width=width, **kwargs)
