@@ -2,6 +2,13 @@
 import numpy as np
 import plotly.graph_objs as go
 from sstatics.graphic_objects import rotate, GraphicObject
+from functools import cached_property
+
+from sstatics.graphic_objects import (
+    transform, MultiGraphicObject, SingleGraphicObject
+)
+
+
 
 
 class Line(GraphicObject):
@@ -23,7 +30,22 @@ class Line(GraphicObject):
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
-class Rectangle(GraphicObject):
+class Polygon(MultiGraphicObject):
+
+    def __init__(self, points, **kwargs):
+        if points[0] != points[-1]:
+            points += [points[0]]
+        super().__init__(points, **kwargs)
+
+    @property
+    def traces(self):
+        return Line.from_points(
+            self.points, rotation=self.rotation, scale=self.scale,
+            **self.scatter_kwargs
+        ).traces
+
+
+class Rectangle(SingleGraphicObject):
 
     def __init__(self, x, z, a, b=None, **kwargs):
         if b is None:
@@ -33,24 +55,23 @@ class Rectangle(GraphicObject):
                 '"a" and "b" have to be a numbers greater than zero.'
             )
         super().__init__(x, z, **kwargs)
-        self.a = a * self.scale
-        self.b = b * self.scale
+        self.a = a
+        self.b = b
+
+    @cached_property
+    def corner_points(self):
+        x_off, z_off = self.a / 2, self.b / 2
+        return [
+            (self.x - x_off, self.z - z_off), (self.x + x_off, self.z - z_off),
+            (self.x + x_off, self.z + z_off), (self.x - x_off, self.z + z_off)
+        ]
 
     @property
     def traces(self):
-        x_offset, z_offset = self.a / 2, self.b / 2
-        x = np.array([
-            self.x - x_offset, self.x + x_offset,
-            self.x + x_offset, self.x - x_offset,
-            self.x - x_offset
-        ])
-        z = np.array([
-            self.z - z_offset, self.z - z_offset,
-            self.z + z_offset, self.z + z_offset,
-            self.z - z_offset
-        ])
-        x, z = rotate(self.x, self.z, x, z, self.rotation)
-        return go.Scatter(x=x, y=z, **self.scatter_kwargs),
+        polygon = Polygon(self.corner_points, **self.scatter_kwargs)
+        return polygon.transform_traces(
+            self.x, self.z, rotation=self.rotation, scale=self.scale
+        )
 
 
 class IsoscelesTriangle(GraphicObject):
@@ -112,7 +133,7 @@ class Polygon(GraphicObject):
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
-class Ellipse(GraphicObject):
+class Ellipse(SingleGraphicObject):
 
     def __init__(
         self, x, z, a, b=None, angle_range=(0, 2 * np.pi), n_points=100,
@@ -150,7 +171,7 @@ class Ellipse(GraphicObject):
         angles = np.linspace(
             self.angle_range[0], self.angle_range[1], self.n_points
         )
-        x = self.x + self.a * np.cos(angles) * self.scale
-        z = self.z + self.b * np.sin(angles) * self.scale
-        x, z = rotate(self.x, self.z, x, z, rotation=self.rotation)
+        x = self.x + self.a * np.cos(angles)
+        z = self.z + self.b * np.sin(angles)
+        x, z = transform(self.x, self.z, x, z, self.rotation, self.scale)
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
