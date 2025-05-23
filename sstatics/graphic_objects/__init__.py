@@ -1,16 +1,21 @@
 
-from sstatics.graphic_objects.utils import rotate, GraphicObject
+from sstatics.graphic_objects.utils import (
+    rotate, transform, MultiGraphicObject, SingleGraphicObject
+)
 from sstatics.graphic_objects.geometry import (
-    Line, Rectangle, IsoscelesTriangle, Polygon, Ellipse
+    Point, Line, Rectangle, IsoscelesTriangle, Polygon, Ellipse
 )
 from sstatics.graphic_objects.diagram import Arrow, CoordinateSystem, Hatching
 from sstatics.graphic_objects.supports import (
-    RollerSupport, PinnedSupport, FixedSupportUW, FixedSupportUPhi,
+    FreeNode, RollerSupport, PinnedSupport, FixedSupportUW, FixedSupportUPhi,
     FixedSupportWPhi, ChampedSupport
 )
 from sstatics.graphic_objects.hinges import (
-    ShearForceHinge, NormalForceHinge, MomentHinge
+    NormalForceHinge, ShearForceHinge, MomentHinge
 )
+from sstatics.graphic_objects.node import GraphicNode
+from sstatics.graphic_objects.bar import GraphicBar
+from sstatics.graphic_objects.system import GraphicSystem
 
 
 __all__ = [
@@ -21,16 +26,23 @@ __all__ = [
     'FixedSupportUPhi',
     'FixedSupportUW',
     'FixedSupportWPhi',
-    'GraphicObject',
+    'FreeNode',
+    'GraphicBar',
+    'GraphicNode',
+    'GraphicSystem',
     'Hatching',
     'IsoscelesTriangle',
     'Line',
     'MomentHinge',
+    'MultiGraphicObject',
     'NormalForceHinge',
+    'Point',
     'PinnedSupport',
     'Polygon',
     'Rectangle',
     'RollerSupport',
     'rotate',
-    'ShearForceHinge'
+    'ShearForceHinge',
+    'SingleGraphicObject',
+    'transform'
 ]
