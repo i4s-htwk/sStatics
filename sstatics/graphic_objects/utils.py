@@ -13,8 +13,9 @@ def translate(ox, oz, x, z, translation=(0, 0)):
 
 # TODO: 3 functions but only one used?
 def rotate(ox, oz, x, z, rotation=0):
-    x_rot = ox + np.cos(rotation) * (x - ox) - np.sin(rotation) * (z - oz)
-    z_rot = oz + np.sin(rotation) * (x - ox) + np.cos(rotation) * (z - oz)
+    # always used for annotations in CoordinateSystem
+    x_rot = ox + np.cos(rotation) * (x - ox) + np.sin(rotation) * (z - oz)
+    z_rot = oz - np.sin(rotation) * (x - ox) + np.cos(rotation) * (z - oz)
     return x_rot, z_rot
 
 
