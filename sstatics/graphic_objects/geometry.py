@@ -28,19 +28,38 @@ class Point(SingleGraphicObject):
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
+class Line(MultiGraphicObject):
+
+    def __init__(self, x, z, points, **kwargs):
+        super().__init__(points, **kwargs)
+        self.x = x
+        self.z = z
+
+    @classmethod
+    def from_center(cls, x, z, length=4/3, **kwargs):
         if length <= 0:
-            raise ValueError('"length" has to be a number greater than zero.')
-        super().__init__(x, z, **kwargs)
-        self.length = length * self.scale
+            raise ValueError('"length" must be greater than zero.')
+        points = [(x + length / 2, z), (x - length / 2, z)]
+        return cls(x, z, points, **kwargs)
+
+    @classmethod
+    def from_points(cls, points, **kwargs):
+        if not (
+            isinstance(points, list) and len(points) > 1 and
+            all(
+                isinstance(p, (list, tuple)) and len(p) == 2 for p in points
+            )
+        ):
+            raise ValueError(
+                '"points" has to be a list of (x, z) tuples or [x, z] lists.'
+            )
+        x, z = points[0]
+        return cls(x, z, points, **kwargs)
 
     @property
     def traces(self):
-        x, z = rotate(
-            self.x, self.z,
-            np.array([self.x + self.length / 2, self.x - self.length / 2]),
-            np.array([self.z, self.z]),
-            rotation=self.rotation
-        )
+        x, z = np.array(list(zip(*self.points)))
+        x, z = transform(self.x, self.z, x, z, self.rotation, self.scale)
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
