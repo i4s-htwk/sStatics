@@ -1,7 +1,6 @@
 
 import numpy as np
 import plotly.graph_objs as go
-from sstatics.graphic_objects import rotate, GraphicObject
 from functools import cached_property
 
 from sstatics.graphic_objects import (
@@ -9,11 +8,26 @@ from sstatics.graphic_objects import (
 )
 
 
+class Point(SingleGraphicObject):
 
+    scatter_options = SingleGraphicObject.scatter_options | {
+        'mode': 'markers',
+        'marker': dict(size=2),
+    }
 
-class Line(GraphicObject):
+    def __init__(self, x, z, **kwargs):
+        super().__init__(x, z, **kwargs)
 
     def __init__(self, x, z, length=4/3, **kwargs):
+    @property
+    def traces(self):
+        x, z = transform(
+            self.x, self.z, np.array([self.x]), np.array([self.z]),
+            self.rotation, self.scale
+        )
+        return go.Scatter(x=x, y=z, **self.scatter_kwargs),
+
+
         if length <= 0:
             raise ValueError('"length" has to be a number greater than zero.')
         super().__init__(x, z, **kwargs)
