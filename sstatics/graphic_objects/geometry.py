@@ -123,63 +123,42 @@ class Rectangle(SingleGraphicObject):
         )
 
 
-class IsoscelesTriangle(GraphicObject):
+class IsoscelesTriangle(SingleGraphicObject):
 
-    def __init__(self, x, z, angle=np.pi / 4, width=None, **kwargs):
+    def __init__(self, x, z, angle, width, **kwargs):
         super().__init__(x, z, **kwargs)
-        if width is None:
-            if not 0 < angle < np.pi:
-                raise ValueError(
-                    '"angle" has to be a number from the interval [0, pi].'
-                )
-            self.angle = angle
-            self.width = 2 * np.sin(self.angle / 2) * self.scale
-        else:
-            if width <= 0 or width >= 2 * self.scale:
-                raise ValueError(
-                    '"width" has to be a number from the interval (0, 2).'
-                )
-            self.width = width
-            self.angle = 2 * np.arcsin(self.width / (2 * self.scale))
+        self.angle = angle
+        self.width = width
+
+    @classmethod
+    def from_angle(cls, x, z, angle=np.pi / 4, **kwargs):
+        if not 0 < angle < np.pi:
+            raise ValueError('"angle" must be in the interval (0, π).')
+        width = 2 * np.sin(angle / 2)
+        return cls(x, z, angle, width, **kwargs)
+
+    @classmethod
+    def from_width(cls, x, z, width=11 / 10, **kwargs):
+        if not 0 < width < 2:
+            raise ValueError('"width" must be in the interval (0, 2).')
+        angle = 2 * np.arcsin(width / 2)
+        return cls(x, z, angle, width, **kwargs)
+
+    @cached_property
+    def corner_points(self):
+        x_off = np.sin(self.angle / 2)
+        z_off = np.cos(self.angle / 2)
+        return [
+            (self.x, self.z),
+            (self.x + x_off, self.z + z_off), (self.x - x_off, self.z + z_off)
+        ]
 
     @property
     def traces(self):
-        x_offset = np.sin(self.angle / 2) * self.scale
-        z_offset = np.cos(self.angle / 2) * self.scale
-        x = np.array([
-            self.x - x_offset, self.x, self.x + x_offset, self.x - x_offset
-        ])
-        z = np.array([
-            self.z + z_offset, self.z, self.z + z_offset,
-            self.z + z_offset
-        ])
-        x, z = rotate(self.x, self.z, x, z, self.rotation)
-        return go.Scatter(x=x, y=z, **self.scatter_kwargs),
-
-
-class Polygon(GraphicObject):
-
-    def __init__(self, x, z, vertices, **kwargs):
-        if len(vertices) < 3:
-            raise ValueError(
-                'a polygon needs at least three points'
-            )
-        if not all(
-                isinstance(v, (tuple, list)) and len(v) == 2 for v in vertices
-        ):
-            raise TypeError(
-                '"vertices" must be a list of (x, y) tuples or [x, y] lists'
-            )
-        super().__init__(x, z, **kwargs)
-        self.vertices = np.array(vertices)
-
-    @property
-    def traces(self):
-        center = np.mean(self.vertices, axis=0)
-        self.vertices = self.vertices - center + np.array([self.x, self.z])
-        x, z = self.vertices[:, 0], self.vertices[:, 1]
-        x, z = np.append(x, x[0]), np.append(z, z[0])
-        return go.Scatter(x=x, y=z, **self.scatter_kwargs),
+        return Polygon(
+            self.corner_points, rotation=self.rotation, scale=self.scale,
+            **self.scatter_kwargs
+        ).traces
 
 
 class Ellipse(SingleGraphicObject):
