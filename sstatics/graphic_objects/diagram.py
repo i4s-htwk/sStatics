@@ -76,16 +76,16 @@ class CoordinateSystem(SingleGraphicObject):
     def traces(self):
         x_axis = Arrow(
             self.x + self.scale, self.z, tail_length=6, scale=self.scale,
-            rotation=-np.pi / 2
+            rotation=np.pi / 2
         )
         z_axis = Arrow(
             self.x, self.z + self.scale, tail_length=6, scale=self.scale
         )
         x_axis_traces = x_axis.transform_traces(
-            self.x, self.z, self.rotation, self.scale
+            self.x, self.z, self.rotation
         )
         z_axis_traces = z_axis.transform_traces(
-            self.x, self.z, self.rotation, self.scale
+            self.x, self.z, self.rotation
         )
         return *x_axis_traces, *z_axis_traces
 
