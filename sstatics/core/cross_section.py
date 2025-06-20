@@ -113,7 +113,8 @@ class CrossSection:
 
         if circ:
             poly, circ = SectorToPolygonHandler(poly, circ)()
-            self.circular_sector = circ
+
+        self.circular_sector = circ
 
         if len(poly) == 1 and not self.circular_sector:
             if not poly[0].positive:
