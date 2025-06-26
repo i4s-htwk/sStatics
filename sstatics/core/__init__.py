@@ -11,12 +11,13 @@ from sstatics.core.node import Node
 from sstatics.core.bar import Bar
 from sstatics.core.system import System, Polplan, SystemModifier
 from sstatics.core.methods import FirstOrder, SecondOrder, InfluenceLine
-
+from sstatics.core.results import SystemResult, BarResult
 
 __all__ = [
     'Bar',
     'BarLineLoad',
     'BarPointLoad',
+    'BarResult',
     'BarTemp',
     'CrossSection',
     'DegreesOfFreedom',
@@ -31,5 +32,6 @@ __all__ = [
     'System',
     'transformation_matrix',
     'InfluenceLine',
-    'SystemModifier'
+    'SystemModifier',
+    'SystemResult'
 ]

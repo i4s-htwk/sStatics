@@ -31,6 +31,10 @@ class SystemResult:
         ]
 
     @cached_property
+    def length_discrete(self):
+        return [result.length_discrete for result in self.bar_results_discrete]
+
+    @cached_property
     def bar_deformations_discrete(self):
         return [
             result.bar_deformations_discrete
