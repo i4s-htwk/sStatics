@@ -26,7 +26,7 @@ class SystemResult:
                 'the number of entries in "bar_forces".'
             )
         self.bar_results_discrete = [
-            BarResult(bar, self.bar_forces[i], self.bar_deformations[i])
+            BarResult(bar, self.bar_deformations[i], self.bar_forces[i])
             for i, bar in enumerate(self.system.segmented_bars)
         ]
 
@@ -94,11 +94,11 @@ class BarResult:
         dp0_z = p0_jz - p0_iz
         return np.array([
             [p0_iz, -v, -m, phi, w],
-            [dp0_z / l, -p0_iz, v, -m / EI, -phi],
-            [0, -dp0_z / (2 * l), -p0_iz / 2, v / (2 * EI), m / (2 * EI)],
-            [0, 0, -dp0_z / (6 * l), -p0_iz / (6 * EI), -v / (6 * EI)],
+            [dp0_z / l, -p0_iz, -v, -m / EI, -phi],
+            [0, -dp0_z / (2 * l), -p0_iz / 2, -v / (2 * EI), m / (2 * EI)],
+            [0, 0, -dp0_z / (6 * l), -p0_iz / (6 * EI), v / (6 * EI)],
             [0, 0, 0, -dp0_z / (24 * l * EI), p0_iz / (24 * EI)],
-            [0, 0, 0, 0,  -dp0_z / (120 * l * EI)]
+            [0, 0, 0, 0,  dp0_z / (120 * l * EI)]
         ])
 
     def get_ax(self, i: int):
