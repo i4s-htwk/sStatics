@@ -10,7 +10,7 @@ from sstatics.core.temperature import BarTemp
 from sstatics.core.node import Node
 from sstatics.core.bar import Bar
 from sstatics.core.system import System, Polplan, SystemModifier
-from sstatics.core.methods import FirstOrder, InfluenceLine
+from sstatics.core.methods import FirstOrder, SecondOrder, InfluenceLine
 
 
 __all__ = [
@@ -27,6 +27,7 @@ __all__ = [
     'NodePointLoad',
     'PointLoad',
     'Polplan',
+    'SecondOrder',
     'System',
     'transformation_matrix',
     'InfluenceLine',

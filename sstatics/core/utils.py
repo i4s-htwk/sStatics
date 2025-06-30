@@ -8,7 +8,7 @@ def transformation_matrix(alpha: float):
     Parameters
     ----------
     alpha : :any:`float`
-        Rotation angle.
+        Rotation angle in rad.
 
     Returns
     -------
@@ -20,7 +20,7 @@ def transformation_matrix(alpha: float):
     The resulting matrix has the form
 
     .. math::
-        \left(\begin{array}{c}
+        \left(\begin{array}{ccc}
         \cos(\alpha) & \sin(\alpha) & 0 \\
         -\sin(\alpha) & \cos(\alpha) & 0 \\
         0 & 0 & 1
@@ -29,8 +29,8 @@ def transformation_matrix(alpha: float):
     Examples
     --------
     >>> import numpy
-    >>> import sstatics
-    >>> m = sstatics.transformation_matrix(numpy.pi)
+    >>> import sstatics.core
+    >>> m = sstatics.core.transformation_matrix(numpy.pi)
     >>> m
     array([[-1, 0, 0],
            [0, -1, 0],

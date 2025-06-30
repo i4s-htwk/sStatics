@@ -5,7 +5,7 @@ from functools import cached_property
 
 @dataclass(eq=False)
 class BarTemp:
-    """Create a temperature load case for a statical system.
+    r"""Create a temperature load case for a statical system.
 
     Parameters
     ----------
@@ -38,7 +38,7 @@ class BarTemp:
 
     @cached_property
     def temp_s(self):
-        """Calculates the uniform temperature change in the unit Kelvin.
+        r"""Calculates the uniform temperature change in the unit Kelvin.
 
         Returns
         -------
@@ -46,9 +46,16 @@ class BarTemp:
             Averaged value of temperature changes above and below the neutral
             axis in Kelvin.
 
+        Notes
+        -----
+            The uniform temperature change is given by:
+
+            .. math::
+                T = \dfrac{(T_o + T_u)}{2}
+
         Examples
         --------
-        >>> from sstatics import BarTemp
+        >>> from sstatics.core import BarTemp
         >>> temp = BarTemp(15, 30).temp_s
         22.5
         """
@@ -65,9 +72,16 @@ class BarTemp:
             neutral axis, indicating the non-uniform temperature change in
             Kelvin.
 
+        Notes
+        -----
+            The non-uniform temperature change is given by:
+
+            .. math::
+                \\Delta T = T_u - T_o
+
         Examples
         --------
-        >>> from sstatics import BarTemp
+        >>> from sstatics.core import BarTemp
         >>> temp_diff = BarTemp(10, 20).temp_delta
         10.0
         """
