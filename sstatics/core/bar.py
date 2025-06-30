@@ -1941,7 +1941,8 @@ class Bar:
 
             bars.append(replace(
                 self, node_i=node_i, node_j=node_j, line_loads=line_loads,
-                point_loads=point_loads
+                point_loads=point_loads, hinge_u_j=False, hinge_w_j=False,
+                hinge_phi_j=False
             ))
 
         # calculate bar line loads
