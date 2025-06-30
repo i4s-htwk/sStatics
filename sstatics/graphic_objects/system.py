@@ -1,5 +1,5 @@
 
-from sstatics.core.system import System
+from sstatics.core.preprocessing.system import System
 
 from sstatics.graphic_objects.utils import SingleGraphicObject
 from sstatics.graphic_objects.node import GraphicNode

@@ -5,7 +5,8 @@ from typing import Literal
 
 import numpy as np
 
-from sstatics.core import NodeDisplacement, NodePointLoad
+from sstatics.core.preprocessing.dof import NodeDisplacement
+from sstatics.core.preprocessing.loads import NodePointLoad
 
 
 @dataclass(eq=False)

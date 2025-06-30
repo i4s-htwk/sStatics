@@ -1,7 +1,7 @@
 
 import numpy as np
 
-from sstatics.core.node import Node
+from sstatics.core.preprocessing.node import Node
 
 from sstatics.graphic_objects.utils import SingleGraphicObject
 from sstatics.graphic_objects.supports import (

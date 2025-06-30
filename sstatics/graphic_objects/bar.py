@@ -2,7 +2,7 @@
 import numpy as np
 from functools import cached_property
 
-from sstatics.core.bar import Bar
+from sstatics.core.preprocessing.bar import Bar
 from sstatics.graphic_objects.utils import (
     MultiGraphicObject, EmptyGraphicObject
 )

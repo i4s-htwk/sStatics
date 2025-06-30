@@ -6,10 +6,11 @@ from typing import Literal
 
 import numpy as np
 
-from sstatics.core import (Bar, BarTemp, Node, System, SystemModifier,
-                           transformation_matrix)
+from sstatics.core.preprocessing import (
+    Bar, BarTemp, Node, System, SystemModifier,
+)
 
-from sstatics.core.utils import get_angle
+from sstatics.core.utils import get_angle, transformation_matrix
 
 
 @dataclass(eq=False)

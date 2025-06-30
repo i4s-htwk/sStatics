@@ -4,8 +4,8 @@ from functools import cached_property
 from typing import Literal
 
 import numpy as np
-
-from sstatics.core import DegreesOfFreedom, transformation_matrix
+from sstatics.core.preprocessing.dof import DegreesOfFreedom
+from sstatics.core.utils import transformation_matrix
 
 
 @dataclass(eq=False)
@@ -192,7 +192,7 @@ class BarLineLoad:
 
         Examples
         --------
-        >>> from sstatics.core import BarLineLoad
+        >>> from sstatics.core.preprocessing import BarLineLoad
         >>> BarLineLoad(1, 1, 'z', 'bar', 'exact').rotate(0)
         array([[0], [1], [0], [0], [1], [0]])
 

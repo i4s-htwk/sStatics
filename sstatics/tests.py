@@ -5,10 +5,11 @@ from unittest import TestCase
 import numpy as np
 from numpy.testing import assert_allclose as numpy_allclose
 
-from sstatics.core import (
-    Bar, BarLineLoad, BarPointLoad, BarTemp, CrossSection, FirstOrder,
+from sstatics.core.preprocessing import (
+    Bar, BarLineLoad, BarPointLoad, BarTemp, CrossSection,
     Material, Node, NodeDisplacement, NodePointLoad, System
 )
+from sstatics.core.solution import FirstOrder
 
 
 def assert_allclose(actual, desired, err_msg=''):

@@ -2,9 +2,12 @@
 from dataclasses import dataclass
 from typing import List, Optional, Union
 
-from sstatics.core.geometry.objects import CircularSector, Polygon
-from sstatics.core.geometry.operation import (PolygonMerge,
-                                              SectorToPolygonHandler)
+from sstatics.core.preprocessing.geometry.objects import (
+    CircularSector, Polygon
+)
+from sstatics.core.preprocessing.geometry.operation import (
+    PolygonMerge, SectorToPolygonHandler
+)
 
 
 @dataclass(eq=False)

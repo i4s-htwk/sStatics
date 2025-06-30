@@ -5,7 +5,9 @@ from shapely.geometry import MultiPolygon, Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 from shapely.set_operations import difference
 
-from sstatics.core.geometry.objects import CircularSector, Polygon
+from sstatics.core.preprocessing.geometry.objects import (
+    CircularSector, Polygon
+)
 
 
 class PolygonMerge:

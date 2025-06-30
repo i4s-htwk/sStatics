@@ -8,10 +8,14 @@ import numpy as np
 from numpy.typing import ArrayLike
 import sympy
 
-from sstatics.core import (
-    BarLineLoad, BarPointLoad, BarTemp, CrossSection, Node, NodePointLoad,
-    Material, transformation_matrix
+from sstatics.core.preprocessing.cross_section import CrossSection
+from sstatics.core.preprocessing.material import Material
+from sstatics.core.preprocessing.node import Node
+from sstatics.core.preprocessing.loads import (
+    BarLineLoad, BarPointLoad, NodePointLoad
 )
+from sstatics.core.preprocessing.temperature import BarTemp
+from sstatics.core.utils import transformation_matrix
 
 
 # muss dringend zusammengefasst werden :$

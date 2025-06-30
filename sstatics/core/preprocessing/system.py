@@ -5,11 +5,15 @@ from typing import Literal, Dict, Callable, List
 from itertools import combinations
 
 import numpy as np
-
-from sstatics.core import (
-    Bar, BarTemp, BarPointLoad, Node, NodePointLoad
+from sstatics.core.preprocessing.bar import Bar
+from sstatics.core.preprocessing.loads import (
+    BarPointLoad, NodePointLoad
 )
-from sstatics.core.utils import get_intersection_point, validate_point_on_line
+from sstatics.core.preprocessing.node import Node
+from sstatics.core.preprocessing.temperature import BarTemp
+from sstatics.core.utils import (
+    get_intersection_point, validate_point_on_line
+)
 
 
 @dataclass(eq=False)
