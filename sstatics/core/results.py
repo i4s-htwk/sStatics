@@ -11,72 +11,68 @@ from sstatics.core import System, Bar
 class SystemResult:
 
     system: System
-    bar_deformations: list[np.ndarray]
-    bar_forces: list[np.ndarray]
+    deforms: list[np.ndarray]
+    forces: list[np.ndarray]
+    n_disc: int = 10
 
     def __post_init__(self):
-        if len(self.system.segmented_bars) != len(self.bar_deformations):
+        if len(self.system.segmented_bars) != len(self.deforms):
             raise ValueError(
                 'The number of bars in "system.segmented_bars" does not match '
-                'the number of entries in "bar_deformations".'
+                'the number of entries in "deforms".'
             )
-        if len(self.system.segmented_bars) != len(self.bar_forces):
+        if len(self.system.segmented_bars) != len(self.forces):
             raise ValueError(
                 'The number of bars in "system.segmented_bars" does not match '
-                'the number of entries in "bar_forces".'
+                'the number of entries in "forces".'
             )
-        self.bar_results_discrete = [
-            BarResult(bar, self.bar_deformations[i], self.bar_forces[i])
+        self.results_disc = [
+            BarResult(bar, self.deforms[i], self.forces[i], self.n_disc)
             for i, bar in enumerate(self.system.segmented_bars)
         ]
 
     @cached_property
-    def length_discrete(self):
-        return [result.length_discrete for result in self.bar_results_discrete]
+    def length_disc(self):
+        return [result.length_disc for result in self.results_disc]
 
     @cached_property
-    def bar_deformations_discrete(self):
-        return [
-            result.bar_deformations_discrete
-            for result in self.bar_results_discrete
-        ]
+    def deforms_disc(self):
+        return [result.bar_deforms_disc for result in self.results_disc]
 
     @cached_property
-    def bar_forces_discrete(self):
-        return [
-            result.bar_forces_discrete for result in self.bar_results_discrete
-        ]
+    def forces_disc(self):
+        return [result.bar_forces_disc for result in self.results_disc]
 
     @cached_property
-    def system_results_discrete(self):
-        return self.bar_deformations_discrete, self.bar_forces_discrete
+    def system_results_disc(self):
+        return self.deforms_disc, self.forces_disc
 
 
 @dataclass
 class BarResult:
 
     bar: Bar
-    bar_deformations: np.ndarray
+    bar_deforms: np.ndarray
     bar_forces: np.ndarray
-    discrete: int = 10
+    n_disc: int = 10
 
     def __post_init__(self):
-        if self.bar_deformations.shape != (6, 1):
-            raise ValueError('"bar_deformations" must have shape (6, 1).')
+        if self.bar_deforms.shape != (6, 1):
+            raise ValueError('"bar_deforms" must have shape (6, 1).')
         if self.bar_forces.shape != (6, 1):
             raise ValueError('"bar_forces" must have shape (6, 1).')
+        if self.n_disc < 1:
+            raise ValueError('"n_disc" has to be greater than 0')
 
     @cached_property
-    def length_discrete(self):
-        return (
-            self.bar.length * np.linspace(0, 1, self.discrete + 1)
-        )
+    def length_disc(self):
+        return np.linspace(0, self.bar.length, self.n_disc + 1)
 
     @cached_property
-    def x_coef(self):
+    def _x_coef(self):
         l, EA = self.bar.length, self.bar.EA
         p0_ix, p0_jx = self.bar.line_load[0][0], self.bar.line_load[3][0]
-        n, u = self.bar_forces[0][0], self.bar_deformations[0][0]
+        n, u = self.bar_forces[0][0], self.bar_deforms[0][0]
         dp0_x = p0_jx - p0_ix
         return np.array([
             [p0_ix, -n, u],
@@ -86,11 +82,11 @@ class BarResult:
         ])
 
     @cached_property
-    def z_coef(self):
+    def _z_coef(self):
         l, EI = self.bar.length, self.bar.EI
         p0_iz, p0_jz = self.bar.line_load[1][0], self.bar.line_load[4][0]
         v, m = self.bar_forces[1][0], self.bar_forces[2][0]
-        w, phi = self.bar_deformations[1][0], self.bar_deformations[2][0]
+        w, phi = self.bar_deforms[1][0], self.bar_deforms[2][0]
         dp0_z = p0_jz - p0_iz
         return np.array([
             [p0_iz, -v, -m, phi, w],
@@ -101,22 +97,16 @@ class BarResult:
             [0, 0, 0, 0,  dp0_z / (120 * l * EI)]
         ])
 
-    def get_ax(self, i: int):
-        return self.x_coef[:, i]
-
-    def get_az(self, i: int):
-        return self.z_coef[:, i]
-
-    def compute_discrete_polynomial(self, coef: np.ndarray):
-        powers = np.vander(self.length_discrete, N=len(coef), increasing=True)
+    def _eval_poly(self, coef: np.ndarray):
+        powers = np.vander(self.length_disc, N=len(coef), increasing=True)
         return powers @ coef
 
     @cached_property
-    def bar_deformations_discrete(self):
-        coef = [self.get_ax(2), self.get_az(4), self.get_az(3)]
-        return np.vstack([self.compute_discrete_polynomial(c) for c in coef]).T
+    def bar_deforms_disc(self):
+        coef = [self._x_coef[:, 2], self._z_coef[:, 4], self._z_coef[:, 3]]
+        return np.vstack([self._eval_poly(c) for c in coef]).T
 
     @cached_property
-    def bar_forces_discrete(self):
-        coef = [self.get_ax(1), self.get_az(1), self.get_az(2)]
-        return np.vstack([self.compute_discrete_polynomial(c) for c in coef]).T
+    def bar_forces_disc(self):
+        coef = [self._x_coef[:, 1], self._z_coef[:, 1], self._z_coef[:, 2]]
+        return np.vstack([self._eval_poly(c) for c in coef]).T
