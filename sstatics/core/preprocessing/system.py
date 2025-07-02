@@ -1,7 +1,7 @@
 
 from dataclasses import dataclass, replace, field
 from functools import cache, cached_property
-from typing import Literal, Dict, Callable, List
+from typing import Literal, Dict, Callable, List, Union
 from itertools import combinations
 
 import numpy as np
@@ -1364,22 +1364,31 @@ class SystemModifier:
 
     system: System
 
-    def delete_load(self):
-        bars = []
-        for bar in self.system.bars:
-            updated_bar = replace(
-                bar,
-                node_i=replace(bar.node_i, displacements=(), loads=()),
-                node_j=replace(bar.node_j, displacements=(), loads=()),
-                line_loads=(),
-                point_loads=(),
-                temp=BarTemp(temp_o=0, temp_u=0),
-            )
-            bars.append(updated_bar)
-            return System(bars)
+    def __post_init__(self):
+        self.bar_map = {bar: bar for bar in self.system.bars}
+        self.node_map = {node: node for node in self.system.nodes()}
+        self.memory_modification: list[tuple[Union[Bar, Node], str]] = []
+        self.memory_hinge: list[tuple[Bar, str]] = []
+        self.memory_support: list[tuple[Node, str]] = []
+        self.memory_bar_point_load: dict[Bar, list[float]] = {}
+        self._initialize_bar_point_positions()
 
-    def modify_bar_force(self, obj: Bar, force: Literal['fx', 'fz', 'fm'],
-                         position: float, virt_force: float = 1) -> System:
+    def _initialize_bar_point_positions(self):
+        for bar in self.system.bars:
+            if not bar:
+                continue
+            loads = bar.point_loads or []
+            if not isinstance(loads, (list, tuple)):
+                loads = [loads]
+            positions = [pl.position for pl in loads if
+                         isinstance(pl, BarPointLoad) and 0 < pl.position < 1]
+            if positions:
+                self.memory_bar_point_load[bar] = positions
+
+    def modify_bar_force_influ(self, obj: Bar,
+                               force: Literal['fx', 'fz', 'fm'],
+                               position: float, virt_force: float = 1
+                               ) -> System:
         for bar in self.system.bars:
             if bar == obj:
                 # find list index of the bar
@@ -1427,8 +1436,9 @@ class SystemModifier:
                 return System(bars)
         raise ValueError("Bar not found in system")
 
-    def modify_bar_deform(self, obj: Bar, deform: Literal['u', 'w', 'phi'],
-                          position: float = 0) -> System:
+    def modify_bar_deform_influ(
+            self, obj: Bar, deform: Literal['u', 'w', 'phi'],
+            position: float = 0) -> System:
         if deform not in ['u', 'w', 'phi']:
             raise ValueError(f"Invalid deform type: {deform}")
         for bar in self.system.bars:
@@ -1462,8 +1472,9 @@ class SystemModifier:
                 return System(bars)
         raise ValueError("Bar not found in system")
 
-    def modify_node_force(self, obj: Node, force: Literal['fx', 'fz', 'fm'],
-                          virt_force: float = 1):
+    def modify_node_force_influ(
+            self, obj: Node, force: Literal['fx', 'fz', 'fm'],
+            virt_force: float = 1):
         nodes = self.system.nodes()
         for node in nodes:
             if node == obj:
@@ -1567,15 +1578,261 @@ class SystemModifier:
     def get_deform_mapping(self) -> Dict:
         return {
             'u': [
-                    BarPointLoad(-1, 0, 0, 0, 0),
-                    BarPointLoad(1, 0, 0, 0, 1)
-                ],
+                BarPointLoad(-1, 0, 0, 0, 0),
+                BarPointLoad(1, 0, 0, 0, 1)
+            ],
             'w': [
-                    BarPointLoad(0, -1, 0, 0, 0),
-                    BarPointLoad(0, 1, 0, 0, 1)
-                ],
+                BarPointLoad(0, -1, 0, 0, 0),
+                BarPointLoad(0, 1, 0, 0, 1)
+            ],
             'phi': [
-                    BarPointLoad(0, 0, -1, 0, 0),
-                    BarPointLoad(0, 0, 1, 0, 1)
-                ]
+                BarPointLoad(0, 0, -1, 0, 0),
+                BarPointLoad(0, 0, 1, 0, 1)
+            ]
         }
+
+    def _update_bar(self, original_bar: Bar, new_bar: Bar):
+        for orig, current in self.bar_map.items():
+            if current == original_bar:
+                self.bar_map[orig] = new_bar
+                return
+        self.bar_map[original_bar] = new_bar
+
+    def _get_current_bar(self, original_bar: Bar):
+        current = self.bar_map.get(original_bar, original_bar)
+        if current is None:
+            raise ValueError("This bar has been deleted from the system.")
+        return current
+
+    def _get_current_node(self, original_node):
+        return self.node_map.get(original_node, original_node)
+
+    def _find_bar_index(self, bars: list[Bar], target: Bar):
+        for i, bar in enumerate(bars):
+            if (
+                    bar.node_i.x == target.node_i.x and
+                    bar.node_i.z == target.node_i.z and
+                    bar.node_j.x == target.node_j.x and
+                    bar.node_j.z == target.node_j.z
+            ):
+                return i
+        raise ValueError("Matching bar not found in system.")
+
+    def delete_loads(self):
+        bars = list(self.system.bars)
+        cleared_nodes = {}
+
+        for i, bar in enumerate(bars):
+            if bar is None:
+                continue
+
+            orig_bar = next((orig for orig, mod in self.bar_map.items()
+                             if mod == bar), bar)
+
+            node_i = self.node_map.get(bar.node_i, bar.node_i)
+            if bar.node_i in cleared_nodes:
+                cleared_node_i = cleared_nodes[bar.node_i]
+            else:
+                cleared_node_i = replace(node_i, displacements=(), loads=())
+                cleared_nodes[bar.node_i] = cleared_node_i
+                self.node_map[bar.node_i] = cleared_node_i
+
+            node_j = self.node_map.get(bar.node_j, bar.node_j)
+            if bar.node_j in cleared_nodes:
+                cleared_node_j = cleared_nodes[bar.node_j]
+            else:
+                cleared_node_j = replace(node_j, displacements=(), loads=())
+                cleared_nodes[bar.node_j] = cleared_node_j
+                self.node_map[bar.node_j] = cleared_node_j
+
+            cleared_bar = replace(
+                bar,
+                node_i=cleared_node_i,
+                node_j=cleared_node_j,
+                line_loads=(),
+                point_loads=(),
+                temp=BarTemp(temp_o=0, temp_u=0),
+            )
+
+            self.bar_map[orig_bar] = cleared_bar
+            bars[i] = cleared_bar
+
+        self.system = System(bars)
+        return self.system
+
+    def insert_hinge(
+            self,
+            bar_obj: Bar,
+            hinge: Literal[
+                'hinge_u_i', 'hinge_w_i', 'hinge_phi_i',
+                'hinge_u_j', 'hinge_w_j', 'hinge_phi_j'
+            ]
+    ):
+        current_bar = self._get_current_bar(bar_obj)
+
+        if getattr(current_bar, hinge):
+            raise ValueError(f"{hinge} is already present on the bar.")
+
+        node_i = self._get_current_node(current_bar.node_i)
+        node_j = self._get_current_node(current_bar.node_j)
+
+        modified_bar = replace(
+            current_bar,
+            node_i=node_i,
+            node_j=node_j,
+            **{hinge: True}
+        )
+
+        bars = list(self.system.bars)
+        idx = self._find_bar_index(bars, current_bar)
+        bars[idx] = modified_bar
+        self.system = System(bars)
+
+        self._update_bar(bar_obj, modified_bar)
+        self.memory_modification.append((bar_obj, hinge))
+
+        return self.system
+
+    def modify_support(
+            self,
+            node_obj: Node,
+            support: Literal['u', 'w', 'phi']
+    ):
+        node = self._get_current_node(node_obj)
+
+        if getattr(node, support) == 'free':
+            raise ValueError(f"Support '{support}' is already free.")
+
+        modified_node = replace(node, **{support: 'free'})
+        bars = list(self.system.bars)
+
+        for bar in bars:
+            updated_bar = None
+
+            if bar.node_i.x == node.x and bar.node_i.z == node.z:
+                updated_bar = replace(bar, node_i=modified_node)
+            elif bar.node_j.x == node.x and bar.node_j.z == node.z:
+                updated_bar = replace(bar, node_j=modified_node)
+
+            if updated_bar:
+                bars[bars.index(bar)] = updated_bar
+                self._update_bar(bar, updated_bar)
+
+        self.system = System(bars)
+        self.node_map[node_obj] = modified_node
+        self.memory_modification.append((node_obj, support))
+
+        return self.system
+
+    def modify_node_force_vir(
+            self, obj: Node, force: Literal['fx', 'fz', 'fm'],
+            virt_force: float = 1
+    ):
+        current_node = self.node_map.get(obj)
+        if current_node is None:
+            raise ValueError("Node not found in system")
+
+        load = NodePointLoad(
+            x=virt_force if force == 'fx' else 0.0,
+            z=virt_force if force == 'fz' else 0.0,
+            phi=virt_force if force == 'fm' else 0.0
+        )
+
+        modified_node = replace(current_node, loads=load)
+        bars = list(self.system.bars)
+        new_bars = []
+
+        for bar in bars:
+            if bar is None:
+                new_bars.append(None)
+            elif bar.node_i == current_node or bar.node_j == current_node:
+                new_bars.append(replace(
+                    bar,
+                    node_i=modified_node if bar.node_i == current_node
+                    else bar.node_i,
+                    node_j=modified_node if bar.node_j == current_node
+                    else bar.node_j
+                ))
+            else:
+                new_bars.append(bar)
+
+        self.node_map[obj] = modified_node
+        self.system = System(new_bars)
+        return self.system
+
+    def modify_bar_force_vir(
+            self, obj: Bar, force: Literal['fx', 'fz', 'fm'],
+            position: float = 0, virt_force: float = 1):
+        current_bar = self.bar_map.get(obj)
+        if current_bar is None:
+            raise ValueError("Bar not found in system")
+
+        load = BarPointLoad(
+            x=virt_force if force == 'fx' else 0.0,
+            z=virt_force if force == 'fz' else 0.0,
+            phi=virt_force if force == 'fm' else 0.0,
+            position=position
+        )
+
+        modified_bar = replace(current_bar, point_loads=[load])
+        bars = list(self.system.bars)
+        for i, bar in enumerate(bars):
+            if bar == current_bar:
+                bars[i] = modified_bar
+                break
+
+        self.bar_map[obj] = modified_bar
+        if 0 < position < 1:
+            self.memory_bar_point_load.setdefault(obj, []).append(position)
+
+        self.system = System(bars)
+        return self.system
+
+    def delete_bar(self, bar_obj: Bar):
+        if self.bar_map.get(bar_obj) is None:
+            raise ValueError("Bar has already been deleted.")
+
+        bars = list(self.system.bars)
+        try:
+            bars.remove(self._get_current_bar(bar_obj))
+        except ValueError:
+            raise ValueError("The specified bar was not found in the "
+                             "current system.")
+
+        self._update_bar(bar_obj, None)
+        self.system = System(bars)
+        return self.system
+
+    def create_node_load_systems(self):
+        systems = []
+
+        for obj, name in self.memory_modification:
+            if isinstance(obj, Bar):
+                node = obj.node_i if '_i' in name else obj.node_j
+                dof = 'x' if 'u' in name else 'z' if 'w' in name else 'phi'
+            elif isinstance(obj, Node):
+                node = obj
+                dof = 'x' if name == 'u' else 'z' if name == 'w' else 'phi'
+            else:
+                continue
+
+            current_node = self._get_current_node(node)
+
+            load = NodePointLoad(
+                x=1.0 if dof == 'x' else 0.0,
+                z=1.0 if dof == 'z' else 0.0,
+                phi=1.0 if dof == 'phi' else 0.0
+            )
+
+            new_node = replace(current_node, loads=load)
+
+            new_bars = [replace(b,
+                                node_i=new_node if b.node_i == current_node
+                                else b.node_i,
+                                node_j=new_node if b.node_j == current_node
+                                else b.node_j)
+                        for b in self.system.bars]
+
+            systems.append(System(new_bars))
+
+        return systems

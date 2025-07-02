@@ -6,6 +6,7 @@ from typing import Literal
 
 import numpy as np
 
+from sstatics.core.postprocessing.results import SystemResult
 from sstatics.core.preprocessing import (
     Bar, BarTemp, Node, System, SystemModifier,
 )
@@ -337,7 +338,8 @@ class FirstOrder:
 
         Examples
         --------
-        >>> from sstatics import Bar, BarLineLoad, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing import Bar, BarLineLoad, Node
+        >>> from sstatics.core.preprocessing import CrossSection, Material
         >>> cross_section = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         >>> material = Material(2.1e8, 0.1, 0.1, 0.1)
         >>> node1 = Node(0, 0, u='fixed', w='fixed')
@@ -967,14 +969,14 @@ class InfluenceLine:
             raise ValueError(f"Invalid force type: {force}")
 
         if isinstance(obj, Bar):
-            self.modified_system = self.modifier.modify_bar_force(
+            self.modified_system = self.modifier.modify_bar_force_influ(
                 obj, force, position, virt_force=1)
 
         elif isinstance(obj, Node):
             if position:
                 raise ValueError(
                     "If obj is an instance of Node, position must be None.")
-            self.modified_system = self.modifier.modify_node_force(
+            self.modified_system = self.modifier.modify_node_force_influ(
                 obj, force, virt_force=1)
         else:
             raise ValueError("obj must be an instance of Bar or Node")
@@ -1138,7 +1140,7 @@ class InfluenceLine:
                     f"Position {position} must be between 0 and 1.")
 
             self.modified_system = (
-                self.modifier.modify_bar_deform(obj, deform, position))
+                self.modifier.modify_bar_deform_influ(obj, deform, position))
 
         elif isinstance(obj, Node):
             if position:
@@ -1152,3 +1154,177 @@ class InfluenceLine:
         calc_system = FirstOrder(self.modified_system)
 
         return calc_system.calc
+
+
+@dataclass
+class Arbeitssatz:
+
+    result_system_1: SystemResult
+    result_system_2: SystemResult
+
+    def delta_s1_s2(self):
+        # gibt Verformung zurück
+        return
+
+    @cached_property
+    def moment_deformation(self):
+        return None
+
+    @cached_property
+    def shear_deformation(self):
+        return None
+
+    @cached_property
+    def normal_deformation(self):
+        return None
+
+    @cached_property
+    def elastic_support_deformation(self):
+        return None
+
+    @cached_property
+    def displacement_deformation(self):
+        return None
+
+    @cached_property
+    def temperature_deformation(self):
+        return None
+
+    # TODO: für jeden Anteil eine eigene Methode zur besseren lesbarkeit
+
+
+@dataclass
+class PVK:
+
+    system: System
+
+    def __post_init__(self):
+        self.modifier = SystemModifier(system=self.system)
+        # TODO: methode für wo werden stäbe geteilt, damit wir es am Ende
+        #  rechnen können
+
+    def add_virtuell_node_load(
+            self, obj: Node, force: Literal['fx', 'fz', 'fm'],
+            virt_force: float = 1):
+        self.modifier.delete_loads()
+        self.modifier.modify_node_force_vir(obj, force, virt_force)
+
+    def add_virtuell_bar_load(
+            self, obj: Bar, force: Literal['fx', 'fz', 'fm'],
+            virt_force: float = 1, position: float = 0):
+        self.modifier.delete_loads()
+        self.modifier.modify_bar_force_vir(obj, force, virt_force, position)
+        # self.system.mesh({obj: [position]})
+
+    def calc(self):
+        s1 = SystemResult(self.system, *FirstOrder(self.system).calc)
+        s2 = SystemResult(self.modifier.system,
+                          *FirstOrder(self.modifier.system).calc)
+        return Arbeitssatz(s1, s2).delta_s1_s2()
+
+    def show_original_bars(self, bar):
+        return
+
+
+class RED(PVK):
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.base_modified_system = None  # Modifiziertes System -> HS
+
+    def modify_node(self, obj: Node, support: Literal['u', 'w', 'phi']):
+        self.modifier.modify_support(obj, support)
+        self.base_modified_system = self.modifier.system
+
+    def modify_bar(
+            self, obj: Bar,
+            hinge: Literal[
+                'hinge_u_i', 'hinge_w_i', 'hinge_phi_i',
+                'hinge_u_j', 'hinge_w_j', 'hinge_phi_j'
+            ]
+    ):
+        self.modifier.insert_hinge(obj, hinge)
+        self.base_modified_system = self.modifier.system
+
+    def delete_bar(self, obj: Bar):
+        self.modifier.delete_bar(obj)
+        self.base_modified_system = self.modifier.system
+
+    def degree_of_static_indeterminacy(self):
+        support = sum((n.u != 'free') + (n.w != 'free') + (n.phi != 'free')
+                      for n in self.system.nodes())
+        hinge = sum(sum(h is True for h in b.hinge) for b in self.system.bars)
+        return support + 3 * len(self.system.bars) - (
+            3 * len(self.system.nodes(False)) + hinge)
+
+    def calc(self):
+        if self.degree_of_static_indeterminacy() != 0:
+            raise ValueError(f'The system is statically indeterminate \
+            (degree: {self.degree_of_static_indeterminacy()}).')
+
+        if not self.base_modified_system:
+            raise ValueError('There has to be a modified system.')
+
+        base_result = SystemResult(self.base_modified_system,
+                                   *FirstOrder(self.base_modified_system).calc)
+        virt_result = SystemResult(self.modifier.system,
+                                   *FirstOrder(self.modifier.system).calc)
+        return Arbeitssatz(base_result, virt_result).delta_s1_s2()
+
+
+class KGV(RED):
+
+    def ESZ(self):
+        self.eszresult_liste = []
+
+        # for i in self.memory:
+        #     self.ansatz_einzellast_knoten()
+        #     fo = FirstOrder(self.modifier.system)
+        #     deform, force = fo.calc
+        #     resultsystem = SystemResult(system=self.modifier.system,
+        #     deform, force)
+        #     self.eszresult_liste.append(resultsystem)
+
+        # for esz in self.modifier.esz_systems():
+        #
+        #     fo = FirstOrder(system=esz)
+        #     deform, force = fo.calc
+        #     resultsystem = SystemResult(system=esz, deform, force)
+        #     self.eszresult_liste.append(resultsystem)
+        return
+
+    def add_virtuell_node_load(
+            self, obj: Node, force: Literal['fx', 'fz', 'fm'],
+            virt_force: float = 1):
+        super().add_virtuell_node_load(obj, force, virt_force)
+        raise ValueError('With this calculation method, no virtual load can be'
+                         'applied.')
+
+    def add_virtuell_bar_load(
+            self, obj: Bar, force: Literal['fx', 'fz', 'fm'],
+            virt_force: float = 1, position: float = 0):
+        super().add_virtuell_bar_load(obj, force, virt_force, position)
+        raise ValueError('With this calculation method, no virtual load can be'
+                         'applied.')
+
+    def vorzahlen(self):
+        # combinations -> hier sinnvoll durch kombinieren
+        # delta_1_1 = Arbeitssatz(self.eszresult_liste[0],
+        # self.eszresult_liste[0]).delta_s1_s2()
+        #
+        # delta_1_2 = Arbeitssatz(self.eszresult_liste[0],
+        # self.eszresult_liste[1]).delta_s1_s2()
+        #
+        # return delta_1_1, delta_1_2 # rückgabe als matrix
+        return
+
+    def belastungszahlen(self):
+        # so wie self.vorzahlen
+        return  # als vektor
+
+    def ueberzaehlige(self):
+        # A = b * x
+        # x zurück geben
+        # return np.linalg.solve(self.vorzahlen, self.belastungszahlen())
+
+        return
