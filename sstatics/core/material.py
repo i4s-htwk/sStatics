@@ -17,8 +17,8 @@ class Material:
         Shear modulus (:math:`G`), a measure of the material's response
         to shear stress.
     therm_exp_coeff : :any:`float`
-        Thermal expansion coefficient (:math:`\alpha_T`), describing how the
-        material's dimensions change with temperature (in 1/K).
+        Thermal expansion coefficient (:math:`\alpha_T`), describing how much
+        the material's dimensions change with temperature change (in 1/K).
 
     Raises
     ------

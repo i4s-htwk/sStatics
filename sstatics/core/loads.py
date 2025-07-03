@@ -10,10 +10,10 @@ from sstatics.core import DegreesOfFreedom, transformation_matrix
 
 @dataclass(eq=False)
 class PointLoad(DegreesOfFreedom):
-    r"""Create a point load applied to a statical system.
+    r"""Creates a point load applied to a statical system.
 
     This class is used to model a point load at a specific location, which can
-    represent either a load applied at a node or along a bar. It includes
+    represent either a load applied at a node or on the bar. It includes
     force components in the x and z directions, as well as a rotational
     component (:math:`\phi`), which can represent a moment applied to either a
     node or a bar.

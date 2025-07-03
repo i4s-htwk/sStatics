@@ -15,7 +15,7 @@ class Node:
     Parameters
     ----------
     x, z : :any:`float`
-        Coordinates of the node in the x and z directions.
+        Coordinates of the node in the x,z - plane.
     rotation : :any:`float`, default=0.0
         Initial rotation of the node in radiant.
     u, w, phi : {'free', 'fixed'} or :any:`float`, default='free'
@@ -25,7 +25,7 @@ class Node:
             * :any:`float`: represents a spring support with a specific \
             stiffness value (nib width).
     displacements : :any:`tuple`, default=()
-        Prescribed displacements acting on the node. hese should be instances
+        Prescribed displacements acting on the node. These should be instances
         of the :py:class:`NodeDisplacement`.
     loads : :any:`tuple`, default=()
         Point loads acting on the node. These should be instances of the
@@ -110,7 +110,7 @@ class Node:
 
     @cached_property
     def load(self):
-        r"""Rotate the node loads.
+        r"""Rotates the node loads.
 
         Every load from :py:attr:`loads` is rotated by the node's rotation by
         calling :any:`PointLoad.rotate`. So the resulting rotation angle is
@@ -194,7 +194,7 @@ class Node:
         return np.diag([u, w, phi])
 
     def same_location(self, other):
-        """Determine if two nodes have exactly the same :py:attr:`x`- and
+        """Determines if two nodes have exactly the same :py:attr:`x`- and
         :py:attr:`z`-coordinates.
 
         Parameters

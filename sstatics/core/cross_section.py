@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 @dataclass(eq=False)
 class CrossSection:
-    r"""Create a cross-section for a statical system.
+    r"""Creates a cross-section for a statical system.
 
     Parameters
     ----------

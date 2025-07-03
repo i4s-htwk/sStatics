@@ -61,7 +61,7 @@ class Bar:
         There has to be at least one deformation component.
     ValueError
         Valid deformation keywords are "moment", "normal" and "shear".
-    More discription...
+    More description...
     """
     """ TODO """
 
@@ -651,7 +651,7 @@ class Bar:
 
         The method rotates the point load components from the system
         coordination system into the bar coordination system. Only point load
-        componants at the beginning (position = 0) and at the end
+        components at the beginning (position = 0) and at the end
         (position = 1) of the beam are included.
 
         Returns
