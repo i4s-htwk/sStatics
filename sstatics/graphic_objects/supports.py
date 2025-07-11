@@ -3,7 +3,8 @@ import numpy as np
 from abc import ABC
 
 from sstatics.graphic_objects import (
-    SingleGraphicObject, Point, Line, IsoscelesTriangle, Hatching
+    SingleGraphicObject, PointGraphic, LineGraphic, IsoscelesTriangleGraphic,
+    Hatching
 )
 
 
@@ -30,7 +31,7 @@ class BaseLineHatchSupport(Support):
 
     @property
     def traces(self):
-        line = Line.from_center(
+        line = LineGraphic.from_center(
             self.x, self.z, self.width, rotation=np.pi / 2,
             **self.scatter_kwargs
         )
@@ -54,7 +55,7 @@ class BaseDoubleLineHatchSupport(Support):
 
     @property
     def traces(self):
-        line = Line.from_center(
+        line = LineGraphic.from_center(
             self.x, self.z, self.width, rotation=np.pi / 2,
             **self.scatter_kwargs
         )
@@ -70,8 +71,8 @@ class BaseDoubleLineHatchSupport(Support):
         return *line_traces, *base_support_traces
 
 
-FreeNode = Point
-""" Alias of :py:class:`Point` to make the use case of
+FreeNode = PointGraphic
+""" Alias of :py:class:`PointGraphic` to make the use case of
 this class more clear. """
 
 
@@ -82,14 +83,14 @@ class RollerSupport(Support):
 
     @property
     def traces(self):
-        triangle = IsoscelesTriangle.from_width(
+        triangle = IsoscelesTriangleGraphic.from_width(
             self.x, self.z, self.width, **self.scatter_kwargs
         )
         triangle_traces = triangle.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
         z_off = 2 / 3 * np.sqrt(4 - self.width ** 2)
-        line = Line.from_center(
+        line = LineGraphic.from_center(
             self.x, self.z + z_off, self.width, **self.scatter_kwargs
         )
         line_traces = line.transform_traces(
@@ -105,14 +106,14 @@ class PinnedSupport(Support):
 
     @property
     def traces(self):
-        top_line = Line.from_center(
+        top_line = LineGraphic.from_center(
             self.x + 3 / 8 * self.offset, self.z - 3 / 8 * self.width,
             5 / 4 * self.offset, **self.scatter_kwargs
         )
         top_line_traces = top_line.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
-        bottom_line = Line.from_center(
+        bottom_line = LineGraphic.from_center(
             self.x + 3 / 8 * self.offset, self.z + 3 / 8 * self.width,
             5 / 4 * self.offset, **self.scatter_kwargs
         )
@@ -135,7 +136,7 @@ class FixedSupportUW(Support):
 
     @property
     def traces(self):
-        triangle = IsoscelesTriangle.from_width(
+        triangle = IsoscelesTriangleGraphic.from_width(
             self.x, self.z, self.width, **self.scatter_kwargs
         )
         triangle_traces = triangle.transform_traces(
@@ -164,14 +165,14 @@ class FixedSupportWPhi(Support):
 
     @property
     def traces(self):
-        top_line = Line.from_center(
+        top_line = LineGraphic.from_center(
             self.x + 3 / 8 * self.offset, self.z - 3 / 8 * self.width,
             5 / 4 * self.offset, **self.scatter_kwargs
         )
         top_line_traces = top_line.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
-        bottom_line = Line.from_center(
+        bottom_line = LineGraphic.from_center(
             self.x + 3 / 8 * self.offset, self.z + 3 / 8 * self.width,
             5 / 4 * self.offset, **self.scatter_kwargs
         )

@@ -4,7 +4,7 @@ from abc import ABC
 import plotly.graph_objs as go
 
 from sstatics.graphic_objects import (
-    transform, SingleGraphicObject, Line, Ellipse
+    transform, SingleGraphicObject, LineGraphic, EllipseGraphic
 )
 
 
@@ -49,14 +49,14 @@ class ShearForceHinge(Hinge):
     @property
     def traces(self):
         length, x_offset = 11 / 20, self.width / 2
-        left_line = Line.from_center(
+        left_line = LineGraphic.from_center(
             self.x - x_offset, self.z, length,
             rotation=np.pi / 2, **self.scatter_kwargs
         )
         left_line_traces = left_line.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
-        right_line = Line.from_center(
+        right_line = LineGraphic.from_center(
             self.x + x_offset, self.z, length,
             rotation=np.pi / 2, **self.scatter_kwargs
         )
@@ -66,7 +66,7 @@ class ShearForceHinge(Hinge):
         return *left_line_traces, *right_line_traces
 
 
-class MomentHinge(Hinge, Ellipse):
+class MomentHinge(Hinge, EllipseGraphic):
 
     scatter_options = Hinge.scatter_options | {
         'fill': 'toself',

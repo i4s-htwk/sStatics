@@ -3,7 +3,8 @@ import numpy as np
 import plotly.graph_objs as go
 
 from sstatics.graphic_objects import (
-    rotate, transform, SingleGraphicObject, Line, IsoscelesTriangle, Rectangle
+    rotate, transform, SingleGraphicObject, LineGraphic,
+    IsoscelesTriangleGraphic, RectangleGraphic
 )
 
 
@@ -26,13 +27,13 @@ class Arrow(SingleGraphicObject):
 
     @property
     def traces(self):
-        arrow = IsoscelesTriangle.from_angle(
+        arrow = IsoscelesTriangleGraphic.from_angle(
             self.x, self.z, rotation=np.pi,
             scale=self.scale / (1 + self.tail_length), **self.scatter_kwargs
         )
         arrow_traces = arrow.transform_traces(self.x, self.z, self.rotation)
         z_offset = np.cos(np.pi / 8) * self.scale / (1 + self.tail_length)
-        tail = Line.from_points(
+        tail = LineGraphic.from_points(
             [(self.x, self.z - z_offset), (self.x, self.z - self.scale)],
             **self.scatter_kwargs
         )
@@ -90,7 +91,7 @@ class CoordinateSystem(SingleGraphicObject):
         return *x_axis_traces, *z_axis_traces
 
 
-class Hatching(Rectangle):
+class Hatching(RectangleGraphic):
 
     def __init__(
             self, x, z, a, b=None, angle=np.pi / 4, spacing=0.2,

@@ -6,7 +6,7 @@ from sstatics.core.preprocessing.bar import Bar
 from sstatics.graphic_objects.utils import (
     MultiGraphicObject, EmptyGraphicObject
 )
-from sstatics.graphic_objects.geometry import Line
+from sstatics.graphic_objects.geometry import LineGraphic
 from sstatics.graphic_objects.hinges import (
     NormalForceHinge, ShearForceHinge, MomentHinge
 )
@@ -21,9 +21,9 @@ HINGE_FACTORS = {
 }
 
 
-class BaseBarLine(Line):
+class BaseBarLine(LineGraphic):
 
-    scatter_options = Line.scatter_options
+    scatter_options = LineGraphic.scatter_options
 
     @classmethod
     def from_two_points(cls, point1, point2, **kwargs):
@@ -33,19 +33,19 @@ class BaseBarLine(Line):
 
 class BarLine(BaseBarLine):
 
-    scatter_options = Line.scatter_options | {
+    scatter_options = LineGraphic.scatter_options | {
         'line': dict(width=4),
     }
 
 
 class TensileZone(BaseBarLine):
 
-    scatter_options = Line.scatter_options | {
+    scatter_options = LineGraphic.scatter_options | {
         'line': dict(dash='dash', width=1),
     }
 
 
-class GraphicBar(MultiGraphicObject):
+class BarGraphic(MultiGraphicObject):
 
     def __init__(self, bar: Bar, base_scale=None, **kwargs):
         if not isinstance(bar, Bar):
