@@ -267,11 +267,15 @@ class CrossSection:
         >>> sz, sy = cs.static_moment
         (np.float64(1.0), np.float64(2.0))
         """
-        sm = self.polygon.static_moment
-        if self.circular_sector:
-            for c in self.circular_sector:
-                sm = tuple(s + c_s for s, c_s in zip(sm, c.static_moment))
-        return sm
+        if self.polygon is None:
+            return (self._width * self._height ** 2 / 2,
+                    self._height * self._width ** 2 / 2)
+        else:
+            sm = self.polygon.static_moment
+            if self.circular_sector:
+                for c in self.circular_sector:
+                    sm = tuple(s + c_s for s, c_s in zip(sm, c.static_moment))
+            return sm
 
     @property
     def center_of_mass_y(self) -> float:
