@@ -1,5 +1,6 @@
 
 import numpy as np
+import plotly.graph_objs as go
 
 from sstatics.core.preprocessing.node import Node
 
@@ -10,12 +11,13 @@ from sstatics.graphic_objects.supports import (
 )
 
 
-class GraphicNode(SingleGraphicObject):
-    def __init__(self, node: Node, **kwargs):
+class NodeGraphic(SingleGraphicObject):
+    def __init__(self, node: Node, node_number=None, **kwargs):
         if not isinstance(node, Node):
             raise TypeError('"node" has to be an instance of Node')
         super().__init__(node.x, node.z, **kwargs)
         self.node = node
+        self.number = node_number
 
     @property
     def select_support(self):
@@ -38,6 +40,17 @@ class GraphicNode(SingleGraphicObject):
                 u == 'fixed' and w == 'free' and phi == 'free'):
             return support(x, z, rotation=-np.pi/2, **self.scatter_kwargs)
         return support(x, z, **self.scatter_kwargs)
+
+    @property
+    def annotations(self):
+        if self.number is not None:
+            d = 0.25 * self.scale
+            x, z = self.x, self.z - d
+            return (go.layout.Annotation(
+                x=x, y=z, text=self.number, showarrow=False,
+                font=dict(size=20, family='Times New Roman'), textangle=None
+            ),)
+        return ()
 
     @property
     def traces(self):
