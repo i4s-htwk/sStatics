@@ -3,12 +3,28 @@ import numpy as np
 import plotly.graph_objs as go
 from functools import cached_property
 
-from sstatics.graphic_objects import (
+from sstatics.core.preprocessing.geometry.objects import Polygon
+from sstatics.graphic_objects.utils import (
     transform, MultiGraphicObject, SingleGraphicObject
 )
 
 
-class Point(SingleGraphicObject):
+def set_alpha(rgba_string: str, alpha: float) -> str:
+    # Extrahiert rgba-Werte und ersetzt den letzten Wert durch das neue alpha
+    try:
+        rgba = rgba_string.strip().lower()
+        if not rgba.startswith("rgba"):
+            return rgba  # kein gültiger rgba-Wert
+        parts = rgba[5:-1].split(",")
+        if len(parts) != 4:
+            return rgba
+        r, g, b, _ = [p.strip() for p in parts]
+        return f'rgba({r}, {g}, {b}, {alpha})'
+    except Exception:
+        return rgba_string
+
+
+class PointGraphic(SingleGraphicObject):
 
     scatter_options = SingleGraphicObject.scatter_options | {
         'mode': 'markers',
@@ -27,7 +43,7 @@ class Point(SingleGraphicObject):
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
-class Line(MultiGraphicObject):
+class LineGraphic(MultiGraphicObject):
 
     def __init__(self, x, z, points, **kwargs):
         super().__init__(points, **kwargs)
@@ -79,22 +95,46 @@ class Line(MultiGraphicObject):
         return self
 
 
-class Polygon(MultiGraphicObject):
+class PolygonGraphic(MultiGraphicObject):
 
-    def __init__(self, points, **kwargs):
-        if points[0] != points[-1]:
-            points += [points[0]]
-        super().__init__(points, **kwargs)
+    scatter_options = MultiGraphicObject.scatter_options | {
+        'fill': 'toself',
+        'fillcolor': 'rgba(0, 0, 0, 0)',
+    }
+
+    def __init__(
+            self, polygon: Polygon, show_center_of_mass: bool = False, **kwargs
+    ):
+        super().__init__(polygon.points, **kwargs)
+        self.holes = polygon.holes
+        self.x = polygon.center_of_mass_y
+        self.z = polygon.center_of_mass_z
+        self.show_center_of_mass = show_center_of_mass
 
     @property
     def traces(self):
-        return Line.from_points(
-            self.points, rotation=self.rotation, scale=self.scale,
-            **self.scatter_kwargs
-        ).traces
+        ex, ez = np.array(list(zip(*self.points)))
+        x, z = transform(self.x, self.z, ex, ez, self.rotation, self.scale)
+        x, z = list(x), list(z)
+        for hole in self.holes:
+            ix, iz = np.array(list(zip(*hole)))
+            ix, iz = transform(
+                self.x, self.z, ix, iz, self.rotation, self.scale
+            )
+            x += [None] + list(ix)
+            z += [None] + list(iz)
+
+        fill_color = self.scatter_kwargs['fillcolor']
+        point = (
+            PointGraphic(
+                self.x, self.z, marker=dict(size=10),
+                line_color=",".join(fill_color.split(",")[:3]) + ", 1.0)"
+            ).traces if self.show_center_of_mass else ()
+        )
+        return (go.Scatter(x=x, y=z, **self.scatter_kwargs),) + point
 
 
-class Rectangle(SingleGraphicObject):
+class RectangleGraphic(SingleGraphicObject):
 
     def __init__(self, x, z, a, b=None, **kwargs):
         if b is None:
@@ -108,22 +148,23 @@ class Rectangle(SingleGraphicObject):
         self.b = b
 
     @cached_property
-    def corner_points(self):
+    def _points(self):
         x_off, z_off = self.a / 2, self.b / 2
         return [
             (self.x - x_off, self.z - z_off), (self.x + x_off, self.z - z_off),
-            (self.x + x_off, self.z + z_off), (self.x - x_off, self.z + z_off)
+            (self.x + x_off, self.z + z_off), (self.x - x_off, self.z + z_off),
+            (self.x - x_off, self.z - z_off)
         ]
 
     @property
     def traces(self):
-        polygon = Polygon(self.corner_points, **self.scatter_kwargs)
+        polygon = PolygonGraphic(Polygon(self._points), **self.scatter_kwargs)
         return polygon.transform_traces(
             self.x, self.z, rotation=self.rotation, scale=self.scale
         )
 
 
-class IsoscelesTriangle(SingleGraphicObject):
+class IsoscelesTriangleGraphic(SingleGraphicObject):
 
     def __init__(self, x, z, angle, width, **kwargs):
         super().__init__(x, z, **kwargs)
@@ -145,23 +186,24 @@ class IsoscelesTriangle(SingleGraphicObject):
         return cls(x, z, angle, width, **kwargs)
 
     @cached_property
-    def corner_points(self):
+    def _points(self):
         x_off = np.sin(self.angle / 2)
         z_off = np.cos(self.angle / 2)
         return [
             (self.x, self.z),
-            (self.x + x_off, self.z + z_off), (self.x - x_off, self.z + z_off)
+            (self.x + x_off, self.z + z_off), (self.x - x_off, self.z + z_off),
+            (self.x, self.z)
         ]
 
     @property
     def traces(self):
-        return Polygon(
-            self.corner_points, rotation=self.rotation, scale=self.scale,
+        return PolygonGraphic(
+            Polygon(self._points), rotation=self.rotation, scale=self.scale,
             **self.scatter_kwargs
         ).traces
 
 
-class Ellipse(SingleGraphicObject):
+class EllipseGraphic(SingleGraphicObject):
 
     def __init__(
         self, x, z, a, b=None, angle_range=(0, 2 * np.pi), n_points=100,
@@ -203,3 +245,31 @@ class Ellipse(SingleGraphicObject):
         z = self.z + self.b * np.sin(angles)
         x, z = transform(self.x, self.z, x, z, self.rotation, self.scale)
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
+
+
+class CircularSector(EllipseGraphic):
+
+    def __init__(
+        self, x, z, a, b=None, angle_range=(0, 2 * np.pi), n_points=100,
+        **kwargs
+    ):
+        super().__init__(x, z, a, b, angle_range, n_points, **kwargs)
+        self.sector = super().traces[0]
+
+    @property
+    def start_points(self):
+        return self.sector.x[0], self.sector.y[0]
+
+    @property
+    def end_points(self):
+        return self.sector.x[-1], self.sector.y[-1]
+
+    @property
+    def traces(self):
+        start_line = LineGraphic.from_points(
+            [(self.x, self.z), self.start_points], **self.scatter_kwargs
+        ).traces
+        end_line = LineGraphic.from_points(
+            [(self.x, self.z), self.end_points], **self.scatter_kwargs
+        ).traces
+        return self.sector, *start_line, *end_line
