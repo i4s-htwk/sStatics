@@ -33,10 +33,12 @@ def transform(ox, oz, x, z, rotation=0, scale=1):
 
 class Figure(go.Figure):
 
-    def __init__(self, **kwargs):
+    def __init__(self, show_grid=False, **kwargs):
         layout = go.Layout(
             template='simple_white', yaxis_autorange='reversed',
-            yaxis_scaleanchor='x', yaxis_scaleratio=1
+            yaxis_scaleanchor='x', yaxis_scaleratio=1,
+            xaxis=dict(showgrid=show_grid),
+            yaxis=dict(showgrid=show_grid),
         )
         kwargs['layout'] = kwargs.get('layout', layout)
         super().__init__(**kwargs)
@@ -91,8 +93,8 @@ class MultiGraphicObject(abc.ABC):
             traces.append(trace.update(x=x, y=z))
         return tuple(traces)
 
-    def show(self, *args, **kwargs):
-        fig = Figure(data=self.traces)
+    def show(self, show_grid=False, *args, **kwargs):
+        fig = Figure(data=self.traces, show_grid=show_grid)
         for annotation in self.annotations:
             fig.add_annotation(annotation)
         fig.show(*args, **kwargs)
