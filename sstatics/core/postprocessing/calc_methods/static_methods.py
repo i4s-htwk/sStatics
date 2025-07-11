@@ -189,10 +189,11 @@ class RED(PVK):
             The degree of static indeterminacy of the system.
         """
         support = sum((n.u != 'free') + (n.w != 'free') + (n.phi != 'free')
-                      for n in self.system.nodes())
-        hinge = sum(sum(h is True for h in b.hinge) for b in self.system.bars)
-        return support + 3 * len(self.system.bars) - (
-            3 * len(self.system.nodes(False)) + hinge)
+                      for n in self.modifier.system.nodes())
+        hinge = sum(sum(h is True for h in b.hinge)
+                    for b in self.modifier.system.bars)
+        return support + 3 * len(self.modifier.system.bars) - (
+            3 * len(self.modifier.system.nodes(False)) + hinge)
 
     def calc(self):
         """Performs the calculation using the reduction theorem.
