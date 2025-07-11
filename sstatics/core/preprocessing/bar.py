@@ -162,7 +162,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
             >>> import numpy
         >>> node_1 = Node(0, 0, rotation=numpy.pi/4)
         >>> node_2 = Node(4, -3)
@@ -225,7 +228,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> node_1 = Node(0, 0)
         >>> node_2 = Node(4, -2)
         >>> cross_sec = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -257,7 +263,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> node_1 = Node(2, 5)
         >>> node_2 = Node(10, 6)
         >>> cross_sec = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -301,7 +310,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
         >>> n2 = Node(4, 0, u='fixed', w='fixed', phi='fixed')
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -346,7 +358,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> n1 = Node(0, 0, u='fixed', w='fixed')
         >>> n2 = Node(4, 0, w='fixed')
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -426,7 +441,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> n1 = Node(0, 0, u='fixed', w='fixed')
         >>> n2 = Node(4, 0, w='fixed')
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -476,7 +494,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> n1 = Node(0, 0, u='fixed', w='fixed')
         >>> n2 = Node(4, 0, w='fixed')
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -512,7 +533,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> n1 = Node(0, 0, u='fixed', w='fixed')
         >>> n2 = Node(4, 0, w='fixed')
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -585,7 +609,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> node_1 = Node(0, 0)
         >>> node_2 = Node(3, -4)
         >>> cross_sec = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -593,7 +620,7 @@ class Bar:
         >>> Bar(node_1, node_2, cross_sec, material).line_load
         array([[0], [0], [0], [0], [0], [0]])
 
-        >>> from sstatics.core import BarLineLoad
+        >>> from sstatics.core.preprocessing.loads import BarLineLoad
         >>> line_loads = (BarLineLoad(1, 1, 'z', 'bar', 'exact'),
         >>>               BarLineLoad(2, 3, 'x', 'system', 'proj'))
         >>> Bar(node_1, node_2, cross_sec, material,
@@ -626,7 +653,10 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> node_1 = Node(0, 0)
         >>> node_2 = Node(3, 0)
         >>> cross_sec = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -634,7 +664,7 @@ class Bar:
         >>> Bar(node_1, node_2, cross_sec, material).point_load
         array([[0], [0], [0], [0], [0], [0]])
 
-        >>> from sstatics.core import BarPointLoad
+        >>> from sstatics.core.preprocessing.loads import BarPointLoad
             >>> import numpy
         >>> point_loads = (BarPointLoad(1, 0, 0),
         >>>                BarPointLoad(0, 2, numpy.pi/4, position=1))
@@ -712,8 +742,11 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, BarTemp, CrossSection, Material
-        >>> from sstatics.core import Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
+        >>> from sstatics.core.preprocessing.temperature import BarTemp
         >>> n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
         >>> n2 = Node(4, 0, u='fixed', w='fixed', phi='fixed')
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
@@ -765,8 +798,11 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
-        >>> from sstatics.core import Node, NodeDisplacement
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
+        >>> from sstatics.core.preprocessing.dof import NodeDisplacement
         >>> displace = NodeDisplacement(0, 0.005, 0)
         >>> n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
         >>> n2 = Node(4, 0, w='fixed', displacements=displace)
@@ -1272,8 +1308,11 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, BarLineLoad, CrossSection, Material
-        >>> from sstatics.core import Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
+        >>> from sstatics.core.preprocessing.loads import BarLineLoad
         >>> n1, n2 = Node(0, 0), Node(0, -4)
         >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
         >>> material = Material(210000000, 0.1, 81000000, 0.1)
@@ -1402,8 +1441,11 @@ class Bar:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, BarLineLoad, CrossSection, Material
-        >>> from sstatics.core import Node
+       >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
+        >>> from sstatics.core.preprocessing.loads import NodePointLoad
         >>> n_load = NodePointLoad(0, 182, 0, rotation=0)
         >>> n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
         >>> n2 = Node(0, -4, loads=n_load)

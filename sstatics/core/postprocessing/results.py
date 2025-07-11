@@ -4,7 +4,8 @@ from functools import cached_property
 
 import numpy as np
 
-from sstatics.core.preprocessing import System, Bar
+from sstatics.core.preprocessing.system import System
+from sstatics.core.preprocessing.bar import Bar
 
 
 @dataclass
