@@ -763,7 +763,7 @@ class SystemModifier:
 
     def modify_bar_force_vir(
             self, obj: Bar, force: Literal['fx', 'fz', 'fm'],
-            position: float = 0, virt_force: float = 1):
+            virt_force: float = 1, position: float = 0):
         """Applies a virtual point load to a bar.
 
         Useful for virtual force methods to calculate internal forces
