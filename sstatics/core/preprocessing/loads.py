@@ -192,11 +192,11 @@ class BarLineLoad:
 
         Examples
         --------
-        >>> from sstatics.core.preprocessing import BarLineLoad
+        >>> from sstatics.core.preprocessing.loads import BarLineLoad
         >>> BarLineLoad(1, 1, 'z', 'bar', 'exact').rotate(0)
         array([[0], [1], [0], [0], [1], [0]])
 
-        >>> from sstatics.core import BarLineLoad
+        >>> from sstatics.core.preprocessing.loads import BarLineLoad
         >>> import numpy as np
         >>> BarLineLoad(1, 1, 'z', 'system', 'proj').rotate(np.deg2rad(30))
         array([[-0.4330127], [0.75], [0], [-0.4330127], [0.75], [0]])
@@ -279,7 +279,7 @@ class BarPointLoad(PointLoad):
 
         Examples
         --------
-        >>> from sstatics.core import BarPointLoad
+        >>> from sstatics.core.preprocessing.loads import BarPointLoad
         >>> load = BarPointLoad(x=5.0, z=0.0, phi=0.0, position=0.0)
         >>> load.rotate()
         array([[5.], [0.], [0.], [0.], [0.], [0.]])

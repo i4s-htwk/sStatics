@@ -1,300 +1,18 @@
 
 from collections import defaultdict
-from dataclasses import dataclass, replace, field
+from dataclasses import dataclass, replace
 from functools import cache, cached_property
-from typing import Literal, Dict, Callable, List, Optional
 from itertools import combinations
+from typing import Callable, Dict, List, Literal, Optional, Union
 
 import numpy as np
+
 from sstatics.core.preprocessing.bar import Bar
-from sstatics.core.preprocessing.loads import (
-    BarPointLoad, NodePointLoad
-)
+from sstatics.core.preprocessing.loads import BarPointLoad, NodePointLoad
 from sstatics.core.preprocessing.node import Node
+from sstatics.core.preprocessing.poleplan import Chain, Pole
 from sstatics.core.preprocessing.temperature import BarTemp
-from sstatics.core.utils import (
-    get_intersection_point, validate_point_on_line
-)
-
-
-@dataclass(eq=False)
-class Pole:
-
-    node: Node
-    same_location: bool = False
-    direction: float = None
-    is_infinite: bool = False
-
-    def __post_init__(self):
-        if self.is_infinite:
-            if self.direction is None:
-                raise ValueError("A Pole at infinity must have a direction.")
-        elif not self.same_location:
-            if self.direction is None:
-                raise ValueError(
-                    "A Pole with unknown coordinates must have a direction.")
-        else:
-            if self.direction is not None:
-                raise ValueError(
-                    "A Pole with same_location=True cannot have a direction.")
-
-    def __eq__(self, other):
-        return (isinstance(other, Pole)
-                and self.x == other.x and self.z == other.z)
-
-    def __hash__(self):
-        return hash((self.x, self.z))
-
-    @property
-    def x(self):
-        return self.node.x if self.same_location else None
-
-    @property
-    def z(self):
-        return self.node.z if self.same_location else None
-
-    @property
-    def coords(self):
-        return np.array([[self.x], [self.z]])
-
-    def line(self, node: Node = None):
-        if self.same_location:
-            return False
-
-        if node is not None:
-            x, z = node.x, node.z
-        else:
-            x, z = self.node.x, self.node.z
-
-        # Prüfen, ob die Gerade vertikal ist (cos(direction) ≈ 0)
-        if np.isclose(np.cos(self.direction), 0, atol=1e-9):
-            return None, x  # Vertikale Gerade: x = x0
-        elif np.isclose(np.cos(self.direction), -1, atol=1e-9):
-            return 0, z
-
-        # Steigung m = tan(direction)
-        m = np.tan(self.direction)
-
-        # y-Achsenabschnitt n berechnen: z = m*x + n → n = z - m*x
-        n = z - m * x
-        return [m, n]
-
-
-@dataclass(eq=False)
-class Chain:
-
-    bars: set = field(default_factory=set)
-    relative_pole: set = field(default_factory=set)
-    absolute_pole: Pole = None
-    connection_nodes: set = field(default_factory=set)
-    stiff: bool = False
-    angle_factor: float = 0
-    angle: float = 0
-
-    def __post_init__(self):
-        if len(self.bars) == 0:
-            raise ValueError('There need to be at least one bar.')
-
-    @property
-    def solved(self) -> bool:
-        # if self.solved_absolute_pole:
-        #     self.solved_relation_aPole_rPole
-        if self.stiff:
-            return True
-        poles_valid = (
-                self.solved_absolute_pole
-                and self.solved_relative_pole
-        )
-        return (
-                self.bars is not None
-                and len(self.connection_nodes) > 0
-                and poles_valid
-        )
-
-    @property
-    def solved_absolute_pole(self) -> bool:
-        return (
-                self.absolute_pole is not None
-                and (
-                        self.absolute_pole.same_location
-                        or self.absolute_pole.is_infinite
-                )
-        )
-
-    @property
-    def solved_relative_pole(self) -> bool:
-        return all(pole.same_location or pole.is_infinite
-                   for pole in self.relative_pole)
-
-    # @property
-    # def solved_relation_aPole_rPole(self):
-    #     if self.absolute_pole.is_infinite:
-    #         for rPole in self.relative_pole:
-    #             print(rPole)
-    #             if rPole.same_location:
-    #                 if not validate_point_on_line(
-    #                         self.absolute_pole.line(), (rPole.x, rPole.z)):
-    #                     self.stiff = True
-    #                     return False
-    #     return True
-
-    def add_connection_node(self, node: Node | set[Node]):
-        if isinstance(node, Node):
-            self.connection_nodes.add(node)
-        elif isinstance(node, set):
-            self.connection_nodes.update(node)
-        else:
-            raise TypeError("Expected a Node or a list of Nodes")
-
-    def set_absolute_pole(self, pole: Pole, overwrite: bool = False):
-        if not isinstance(pole, Pole):
-            raise TypeError("absolute_pole must be an instance of Pole.")
-
-        if self.absolute_pole is not None:
-            if overwrite:
-                self.absolute_pole = pole
-            else:
-                if (self.absolute_pole.same_location and
-                        pole.same_location):
-                    # Fall 1: Vorhandener Pol hat Punkt, neuer Pol hat Punkt
-                    #  -> Vergleich der Punkte
-                    if self.absolute_pole.node != pole.node:
-                        self.stiff = True
-                    self.absolute_pole = Pole(pole.node,
-                                              same_location=True)
-                elif (self.absolute_pole.same_location and
-                      not pole.same_location):
-                    # Fall 2: Vorhandener Pol hat Punkt, neuer Pol hat Linie
-                    #  -> Punkt liegt auf Linie
-                    point = (self.absolute_pole.x, self.absolute_pole.z)
-                    if not validate_point_on_line(pole.line(), point):
-                        self.stiff = True
-                    self.absolute_pole = Pole(self.absolute_pole.node,
-                                              same_location=True)
-                elif (not self.absolute_pole.same_location and
-                      pole.same_location):
-                    # Fall 3: Vorhandener Pol hat Linie, neuer Pol hat Punkt
-                    #  -> Punkt liegt auf Linie
-                    point = [pole.x, pole.z]
-                    if not validate_point_on_line(self.absolute_pole.line(),
-                                                  point):
-                        self.stiff = True
-                    self.absolute_pole = Pole(pole.node,
-                                              same_location=True)
-                elif (not self.absolute_pole.same_location and
-                      not pole.same_location):
-                    # Fall 4: Vorhandener Pol hat Linie, neuer Pol hat Linie
-                    #  -> Schnittpunkt der Linien
-                    line_1 = self.absolute_pole.line()
-                    line_2 = pole.line()
-                    x, z = get_intersection_point(line_1, line_2)
-                    if x is not None:
-                        if x != float('inf'):
-                            if pole.node.x == x and pole.node.z == z:
-                                self.absolute_pole = Pole(
-                                    pole.node,
-                                    same_location=True)
-                            elif (self.absolute_pole.node.x == x and
-                                  self.absolute_pole.node.z == z):
-                                self.absolute_pole = Pole(
-                                    self.absolute_pole.node,
-                                    same_location=True)
-                            else:
-                                self.absolute_pole = Pole(
-                                    Node(x=x, z=z),
-                                    same_location=True)
-                    else:
-                        self.absolute_pole = Pole(
-                            Node(x=pole.node.x,
-                                 z=pole.node.z),
-                            same_location=False, is_infinite=True,
-                            direction=pole.direction)
-        else:
-            self.absolute_pole = pole
-
-    def add_relative_pole(self, pole: Pole | list[Pole]):
-        if isinstance(pole, Pole):
-            self.relative_pole.add(pole)
-        elif isinstance(pole, set):
-            if not all(isinstance(p, Pole) for p in pole):
-                raise TypeError(
-                    "All items in the list must be instances of Pole.")
-            self.relative_pole.update(pole)
-        else:
-            raise (
-                TypeError("Expected a Pole object or a list of Pole objects."))
-
-    def add_bars(self, bars: set[Bar]):
-        self.bars.update(bars)
-
-    @property
-    def absolute_pole_lines_dict(self):
-        # kann nur aufgestellt werden,
-        #   wenn die Koordinaten des Absolutpols bekannt sind
-        if self.absolute_pole.same_location:
-            # wenn eine Scheibe mehrere Relativepole besitzt hat sie Scheibe
-            # mehrere Absolutpollinien
-            #   -> Geradenparameter werden in einer Liste gespeichert
-            line_dict = {}
-            for rPol in self.relative_pole:
-                # Absolutpollinie kann aufgestellt werden,
-                #   1. wenn die Koordinaten des Relativpols bekannt sind
-                if rPol.same_location:
-                    # Vertikale Gerade x = n
-                    if rPol.x == self.absolute_pole.x:
-                        m, n = None, rPol.x
-                    # Allgemeine Gerade y = m * x + n
-                    #   (Sonderfall: horizontale Gerade y = n)
-                    else:
-                        m = ((rPol.z - self.absolute_pole.z) /
-                             (rPol.x - self.absolute_pole.x))
-                        n = self.absolute_pole.z - m * self.absolute_pole.x
-                    line_dict[rPol.node] = [m, n]
-                #   2. wenn die Koordinaten des Relativpols im Unendlichen
-                #      liegen
-                #      -> hierbei wird die Gerade in den Absolutpol verschoben
-                else:
-                    line_dict[rPol.node] = rPol.line(
-                        node=self.absolute_pole.node)
-            return line_dict
-        else:
-            line_dict = {}
-            for rPol in self.relative_pole:
-                if rPol.same_location:
-                    line_dict[rPol.node] = self.absolute_pole.line(node=rPol)
-                else:
-                    line_dict[rPol.node] = rPol.line(
-                        node=self.absolute_pole.node)
-            return line_dict
-
-    # Drehwinkel
-    @property
-    def vec_aPole_rPole_dict(self):
-        # Stellt einen Vektor zwischen aPole und rPole auf
-        #   -> kann nur aufgestellt werden, wenn der aPole nicht im
-        #      Unendlichen liegt
-        if self.absolute_pole.is_infinite:
-            return None
-        else:
-            aPole_coords = self.absolute_pole.coords
-            # wenn eine Scheibe mehrere Relativepole besitzt hat sie Scheibe
-            # mehrere Absolutpollinien und damit mehrere Vektoren
-            #   -> Vektoren werden in einer Liste gespeichert
-            vec_dict = {}
-
-            for rPole in self.relative_pole:
-                if rPole.is_infinite:
-                    rPole_coords = np.array([[rPole.node.x], [rPole.node.z]])
-                    vec_dict[rPole] = (rPole_coords - aPole_coords)
-                else:
-                    vec_dict[rPole] = (rPole.coords - aPole_coords)
-            return vec_dict
-
-    def set_angle_factor(self, factor):
-        self.angle_factor = factor
-
-    def set_angle(self, angle):
-        self.angle = angle
+from sstatics.core.utils import get_intersection_point
 
 
 @dataclass(eq=False)
@@ -607,6 +325,805 @@ class MeshGenerator:
     def __call__(self):
         self.generate()
         return self
+
+
+@dataclass(eq=False)
+class SystemModifier:
+    """
+    Modifies a given structural system by tracking and applying changes such as
+    support modifications, bar hinge insertions, load deletions, and more.
+
+    This class maintains a mapping between original and modified components
+    (bars and nodes), making it possible to incrementally update the system
+    while preserving references to the original configuration. It is especially
+    useful in structural mechanics for performing operations like virtual
+    force methods or stepwise modifications for influence line generation.
+
+    Parameters
+    ----------
+    system : :any:`System`
+        The structural system to be modified. This must include bars and nodes
+        as fundamental elements, potentially with loads, supports, and other
+        mechanical properties.
+
+    Attributes
+    ----------
+    bar_map : dict[:any:`Bar`, Optional[:any:`Bar`]]
+        A mapping from the original bars to their current (potentially
+        modified) versions.
+        This ensures that modifications can always refer back to the
+        original structure. If a bar has been deleted, it is mapped to `None`.
+
+        This is essential for managing modifications over time without losing
+        the relationship between system states.
+
+    node_map : dict[:any:`Node`, :any:`Node`]
+        Maps original nodes to the current (possibly modified) versions.
+        Used to consistently track changes in node-based properties like
+        displacements, loads, and support conditions. The original node always
+        remains the key.
+
+        This map ensures that new system configurations reflect changes such as
+        support removals or load applications, while maintaining link to the
+        original nodes.
+
+    memory_modification : list[tuple[Union[:any:`Bar`, :any:`Node`], str]]
+        Stores a log of all applied structural modifications. Each entry
+        consists of an object (either a `Bar` or `Node`) and a string that
+        describes what degree of freedom was modified (e.g., 'u', 'w', 'phi',
+        or 'hinge_phi_i').
+
+        This is especially useful when constructing related systems later, for
+        example when using the principle of virtual forces to create unit load
+        systems corresponding to removed constraints.
+
+    memory_bar_point_load : dict[:any:`Bar`, list[float]]
+        Records bars that have point loads acting at positions strictly between
+        0 and 1 (non-endpoint). The list of floats denotes the relative
+        position of each such load along the bar.
+
+        This is used to ensure that when systems are later subdivided or
+        aligned (e.g., for assembling superposition systems or plotting
+        influence lines), bars can be split consistently at these key
+        locations.
+
+        The positions are automatically collected in `__post_init__` and
+        updated when new point loads are added via modification methods.
+    """
+
+    system: System
+
+    def __post_init__(self):
+        self.bar_map = {bar: bar for bar in self.system.bars}
+        self.node_map = {node: node for node in self.system.nodes()}
+        self.memory_modification: list[tuple[Union[Bar, Node], str]] = []
+        self.memory_bar_point_load: dict[Bar, list[float]] = {}
+        self._initialize_bar_point_positions()
+
+    def _initialize_bar_point_positions(self):
+        """Initializes memory of internal point loads on bars.
+
+        Scans through all bars in the system and stores the position of any
+        internal point loads that are located strictly between the two bar ends
+        (i.e., 0 < position < 1). These stored positions are later used for
+        consistent bar splitting when systems are modified in parallel.
+
+        Called during post-initialization to ensure this data is available
+        immediately after instantiation.
+        """
+        for bar in self.system.bars:
+            if not bar:
+                continue
+            loads = bar.point_loads or []
+            if not isinstance(loads, (list, tuple)):
+                loads = [loads]
+            positions = [pl.position for pl in loads if
+                         isinstance(pl, BarPointLoad) and 0 < pl.position < 1]
+            if positions:
+                self.memory_bar_point_load[bar] = positions
+
+    def modify_bar_force_influ(self, obj: Bar,
+                               force: Literal['fx', 'fz', 'fm'],
+                               position: float, virt_force: float = 1
+                               ) -> System:
+        for bar in self.system.bars:
+            if bar == obj:
+                # find list index of the bar
+                bars = list(self.system.bars)
+                idx = bars.index(bar)
+
+                # set point_loads and hinge
+                force_mapping = self.get_force_mapping()
+                loads = force_mapping[force]['loads'](virt_force)
+                hinge = force_mapping[force]['hinge']
+
+                if 0 < position < 1:
+                    # divide bar at position and get 2 Bar-Instances
+                    bar_1, bar_2 = bar.segment([position])
+
+                    # replace point_loads and hinge
+                    bar_1 = replace(bar_1, hinge_phi_j=False, hinge_w_j=False,
+                                    hinge_u_j=False)
+
+                    modified_bar_1 = replace(bar_1, point_loads=loads[1],
+                                             **{hinge[1]: True})
+                    modified_bar_2 = replace(bar_2, point_loads=loads[0])
+
+                    # replace the 2 modified bars in list
+                    bars[idx:idx + 1] = [modified_bar_1, modified_bar_2]
+                else:
+                    # replace the modified bar in bars
+                    bars[idx] = replace(bar, point_loads=loads[position],
+                                        **{hinge[position]: True})
+
+                    if position in (0, 1):
+                        node = bar.node_i if position == 0 else bar.node_j
+                        connected_bars = self.system.node_to_bar_map()[node]
+
+                        if len(connected_bars) == 2:
+                            for conn_bar in connected_bars:
+                                if conn_bar != bar:
+                                    index = bars.index(conn_bar)
+                                    if conn_bar.node_i == node:
+                                        bars[index] = replace(
+                                            bars[index], point_loads=loads[0])
+                                    else:
+                                        bars[index] = replace(
+                                            bars[index], point_loads=loads[1])
+                return System(bars)
+        raise ValueError("Bar not found in system")
+
+    def modify_bar_deform_influ(
+            self, obj: Bar, deform: Literal['u', 'w', 'phi'],
+            position: float = 0) -> System:
+        if deform not in ['u', 'w', 'phi']:
+            raise ValueError(f"Invalid deform type: {deform}")
+        for bar in self.system.bars:
+            if bar == obj:
+                # find list index of the bar
+                bars = list(self.system.bars)
+                idx = bars.index(bar)
+
+                if position in (0, 1):
+                    # set point_loads
+                    force_mapping = self.get_deform_mapping()
+                    loads = force_mapping[deform]
+
+                    # replace the modified bar in bars
+                    bars[idx] = replace(bar, point_loads=loads[1])
+
+                    node = bar.node_i if position == 0 else bar.node_j
+                    conn = self.system.node_to_bar_map()[node]
+
+                    if len(conn) == 2:
+                        bars[idx + 1] = replace(bars[idx + 1],
+                                                point_loads=loads[0])
+                else:
+                    if deform == 'u':
+                        point_load = BarPointLoad(1, 0, 0, 0, position)
+                    elif deform == 'w':
+                        point_load = BarPointLoad(0, 1, 0, 0, position)
+                    else:
+                        point_load = BarPointLoad(0, 0, 1, 0, position)
+                    bars[idx] = replace(bar, point_loads=point_load)
+                return System(bars)
+        raise ValueError("Bar not found in system")
+
+    def modify_node_force_influ(
+            self, obj: Node, force: Literal['fx', 'fz', 'fm'],
+            virt_force: float = 1):
+        nodes = self.system.nodes()
+        for node in nodes:
+            if node == obj:
+                if force == 'fx':
+                    modified_node = (
+                        replace(node,
+                                u='free',
+                                loads=[NodePointLoad(-virt_force, 0, 0)])
+                    )
+                elif force == 'fz':
+                    modified_node = (
+                        replace(node,
+                                w='free',
+                                loads=[NodePointLoad(0, -virt_force, 0)])
+                    )
+                elif force == 'fm':
+                    modified_node = (
+                        replace(node,
+                                phi='free',
+                                loads=[NodePointLoad(0, 0, -virt_force)])
+                    )
+                else:
+                    raise ValueError(f"Invalid force type: {force}")
+
+                connected_bars = self.system.node_to_bar_map()[node]
+                bars = list(self.system.bars)
+
+                for bar in connected_bars:
+                    if node == bar.node_i:
+                        modified_bar = replace(bar, node_i=modified_node)
+                    else:
+                        modified_bar = replace(bar, node_j=modified_node)
+
+                    idx = bars.index(bar)
+                    bars[idx] = modified_bar
+                return System(bars)
+        raise ValueError("Node not found in system")
+
+    def modify_node_deform(self, obj: Node, deform: Literal['u', 'w', 'phi'],
+                           virt_force: float = 1):
+        nodes = self.system.nodes()
+        for node in nodes:
+            if node == obj:
+                if deform == 'u':
+                    modified_node = (
+                        replace(node,
+                                loads=[NodePointLoad(virt_force, 0, 0)])
+                    )
+                elif deform == 'w':
+                    modified_node = (
+                        replace(node,
+                                loads=[NodePointLoad(0, virt_force, 0)])
+                    )
+                elif deform == 'phi':
+                    modified_node = (
+                        replace(node,
+                                loads=[NodePointLoad(0, 0, -virt_force)])
+                    )
+                else:
+                    raise ValueError(f"Invalid deform type: {deform}")
+
+                connected_bars = self.system.node_to_bar_map()[node]
+                bars = list(self.system.bars)
+
+                for bar in connected_bars:
+                    if node == bar.node_i:
+                        modified_bar = replace(bar, node_i=modified_node)
+                    else:
+                        modified_bar = replace(bar, node_j=modified_node)
+
+                    idx = bars.index(bar)
+                    bars[idx] = modified_bar
+                return System(bars)
+        raise ValueError("Node not found in system")
+
+    def get_force_mapping(self) -> Dict[str, Dict[str, Callable]]:
+        return {
+            'fx': {
+                'loads': lambda virt_force: [
+                    BarPointLoad(-virt_force, 0, 0, 0, 0),
+                    BarPointLoad(virt_force, 0, 0, 0, 1)
+                ],
+                'hinge': ['hinge_u_i', 'hinge_u_j']
+            },
+            'fz': {
+                'loads': lambda virt_force: [
+                    BarPointLoad(0, -virt_force, 0, 0, 0),
+                    BarPointLoad(0, virt_force, 0, 0, 1)
+                ],
+                'hinge': ['hinge_w_i', 'hinge_w_j']
+            },
+            'fm': {
+                'loads': lambda virt_force: [
+                    BarPointLoad(0, 0, -virt_force, 0, 0),
+                    BarPointLoad(0, 0, virt_force, 0, 1)
+                ],
+                'hinge': ['hinge_phi_i', 'hinge_phi_j']
+            }
+        }
+
+    def get_deform_mapping(self) -> Dict:
+        return {
+            'u': [
+                BarPointLoad(-1, 0, 0, 0, 0),
+                BarPointLoad(1, 0, 0, 0, 1)
+            ],
+            'w': [
+                BarPointLoad(0, -1, 0, 0, 0),
+                BarPointLoad(0, 1, 0, 0, 1)
+            ],
+            'phi': [
+                BarPointLoad(0, 0, -1, 0, 0),
+                BarPointLoad(0, 0, 1, 0, 1)
+            ]
+        }
+
+    def _update_bar(self, original_bar: Bar, new_bar: Bar):
+        """Updates the internal bar mapping after a modification.
+
+        Replaces the mapped value in `bar_map` associated with a given
+        original bar by the newly modified version. If the original bar was
+        not previously mapped, it is added.
+
+        Parameters
+        ----------
+        original_bar : :any:`Bar`
+            The original unmodified bar used as a reference key.
+
+        new_bar : :any:`Bar`
+            The new version of the bar with modifications applied.
+        """
+        for orig, current in self.bar_map.items():
+            if current == original_bar:
+                self.bar_map[orig] = new_bar
+                return
+        self.bar_map[original_bar] = new_bar
+
+    def _get_current_bar(self, original_bar: Bar):
+        """Retrieves the current version of a bar after potential
+        modifications.
+
+        If the original bar was modified or deleted, returns the updated bar or
+        raises an error if the bar no longer exists.
+
+        Parameters
+        ----------
+        original_bar : :any:`Bar`
+            The original bar as a reference.
+
+        Returns
+        -------
+        :any:`Bar`
+            The currently valid version of the bar in the system.
+
+        Raises
+        ------
+        ValueError
+            If the bar has been deleted from the system.
+        """
+        current = self.bar_map.get(original_bar, original_bar)
+        if current is None:
+            raise ValueError("This bar has been deleted from the system.")
+        return current
+
+    def _get_current_node(self, original_node):
+        """Retrieves the current version of a node after modifications.
+
+        Looks up the original node in the internal node map and returns the
+        corresponding updated node if one exists.
+
+        Parameters
+        ----------
+        original_node : :any:`Node`
+            The original node used as a key in the map.
+
+        Returns
+        -------
+        :any:`Node`
+            The modified node if present, otherwise the original.
+        """
+        return self.node_map.get(original_node, original_node)
+
+    def _find_bar_index(self, bars: list[Bar], target: Bar):
+        """Finds the index of a target bar in a list based on its nodal
+        coordinates.
+
+        The method matches bars by comparing the coordinates of their start and
+        end nodes. Useful when a bar object has changed identity due to
+        mutation or reconstruction.
+
+        Parameters
+        ----------
+        bars : list[:any:`Bar`]
+            List of bars to search within.
+
+        target : :any:`Bar`
+            The bar whose index is being searched.
+
+        Returns
+        -------
+        int
+            Index of the target bar.
+
+        Raises
+        ------
+        ValueError
+            If the bar cannot be found in the list.
+        """
+        for i, bar in enumerate(bars):
+            if (
+                    bar.node_i.x == target.node_i.x and
+                    bar.node_i.z == target.node_i.z and
+                    bar.node_j.x == target.node_j.x and
+                    bar.node_j.z == target.node_j.z
+            ):
+                return i
+        raise ValueError("Matching bar not found in system.")
+
+    def delete_loads(self):
+        """Removes all loads from the current system.
+
+        This includes both nodal and bar loads (point and line loads) as well
+        as thermal effects. It preserves the topology and geometry of the
+        system, but clears external influences.
+
+        The system is reconstructed with the cleared nodes and bars. Also
+        updates the internal mappings accordingly.
+
+        Returns
+        -------
+        :any:`System`
+            The updated system with all loads removed.
+        """
+        bars = list(self.system.bars)
+        cleared_nodes = {}
+
+        for i, bar in enumerate(bars):
+            if bar is None:
+                continue
+
+            orig_bar = next((orig for orig, mod in self.bar_map.items()
+                             if mod == bar), bar)
+
+            node_i = self.node_map.get(bar.node_i, bar.node_i)
+            if bar.node_i in cleared_nodes:
+                cleared_node_i = cleared_nodes[bar.node_i]
+            else:
+                cleared_node_i = replace(node_i, displacements=(), loads=())
+                cleared_nodes[bar.node_i] = cleared_node_i
+                self.node_map[bar.node_i] = cleared_node_i
+
+            node_j = self.node_map.get(bar.node_j, bar.node_j)
+            if bar.node_j in cleared_nodes:
+                cleared_node_j = cleared_nodes[bar.node_j]
+            else:
+                cleared_node_j = replace(node_j, displacements=(), loads=())
+                cleared_nodes[bar.node_j] = cleared_node_j
+                self.node_map[bar.node_j] = cleared_node_j
+
+            cleared_bar = replace(
+                bar,
+                node_i=cleared_node_i,
+                node_j=cleared_node_j,
+                line_loads=(),
+                point_loads=(),
+                temp=BarTemp(temp_o=0, temp_u=0),
+            )
+
+            self.bar_map[orig_bar] = cleared_bar
+            bars[i] = cleared_bar
+
+        self.system = System(bars)
+        return self.system
+
+    def insert_hinge(
+            self,
+            bar_obj: Bar,
+            hinge: Literal[
+                'hinge_u_i', 'hinge_w_i', 'hinge_phi_i',
+                'hinge_u_j', 'hinge_w_j', 'hinge_phi_j'
+            ]
+    ):
+        """Inserts a hinge at a specific end and direction of a bar.
+
+        Modifies the selected bar by enabling a hinge for axial (u), shear (w),
+        or moment (phi) behavior at the start (`_i`) or end (`_j`). Updates
+        the system and internal memory for reconstruction or analysis.
+
+        Parameters
+        ----------
+        bar_obj : :any:`Bar`
+            The target bar to modify.
+
+        hinge : str
+            The type and location of hinge, chosen from:
+            'hinge_u_i', 'hinge_w_i', 'hinge_phi_i',
+            'hinge_u_j', 'hinge_w_j', 'hinge_phi_j'.
+
+        Returns
+        -------
+        :any:`System`
+            The updated system with the hinge applied.
+
+        Raises
+        ------
+        ValueError
+            If the hinge is already present on the bar.
+        """
+        current_bar = self._get_current_bar(bar_obj)
+
+        if getattr(current_bar, hinge):
+            raise ValueError(f"{hinge} is already present on the bar.")
+
+        node_i = self._get_current_node(current_bar.node_i)
+        node_j = self._get_current_node(current_bar.node_j)
+
+        modified_bar = replace(
+            current_bar,
+            node_i=node_i,
+            node_j=node_j,
+            **{hinge: True}
+        )
+
+        bars = list(self.system.bars)
+        idx = self._find_bar_index(bars, current_bar)
+        bars[idx] = modified_bar
+        self.system = System(bars)
+
+        self._update_bar(bar_obj, modified_bar)
+        self.memory_modification.append((bar_obj, hinge))
+
+        return self.system
+
+    def modify_support(
+            self,
+            node_obj: Node,
+            support: Literal['u', 'w', 'phi']
+    ):
+        """Frees a specific degree of freedom (support) at a given node.
+
+        Modifies the boundary condition of the node, turning the specified
+        support direction into a free (unconstrained) one. The system is
+        updated accordingly, and all bars connected to the node are
+        reconstructed.
+
+        Parameters
+        ----------
+        node_obj : :any:`Node`
+            The node whose support is being modified.
+
+        support : {'u', 'w', 'phi'}
+            Direction of the support to release:
+            'u' for horizontal,
+            'w' for vertical,
+            'phi' for rotational.
+
+        Returns
+        -------
+        :any:`System`
+            The system with the updated boundary condition.
+
+        Raises
+        ------
+        ValueError
+            If the selected support is already free.
+        """
+        node = self._get_current_node(node_obj)
+
+        if getattr(node, support) == 'free':
+            raise ValueError(f"Support '{support}' is already free.")
+
+        modified_node = replace(node, **{support: 'free'})
+        bars = list(self.system.bars)
+
+        for bar in bars:
+            updated_bar = None
+
+            if bar.node_i.x == node.x and bar.node_i.z == node.z:
+                updated_bar = replace(bar, node_i=modified_node)
+            elif bar.node_j.x == node.x and bar.node_j.z == node.z:
+                updated_bar = replace(bar, node_j=modified_node)
+
+            if updated_bar:
+                bars[bars.index(bar)] = updated_bar
+                self._update_bar(bar, updated_bar)
+
+        self.system = System(bars)
+        self.node_map[node_obj] = modified_node
+        self.memory_modification.append((node_obj, support))
+
+        return self.system
+
+    def modify_node_force_vir(
+            self, obj: Node, force: Literal['fx', 'fz', 'fm'],
+            virt_force: float = 1
+    ):
+        """Applies a virtual load to a node.
+
+        This is used for virtual work or energy methods (e.g., to compute
+        displacements). It modifies the node by assigning a virtual point load
+        in the specified direction.
+
+        Parameters
+        ----------
+        obj : :any:`Node`
+            The node to which the virtual load is applied.
+
+        force : {'fx', 'fz', 'fm'}
+            Type of force:
+            'fx' = horizontal,
+            'fz' = vertical,
+            'fm' = moment.
+
+        virt_force : float, optional
+            Magnitude of the virtual force (default is 1.0).
+
+        Returns
+        -------
+        :any:`System`
+            Updated system with the virtual load applied to the node.
+        """
+        current_node = self.node_map.get(obj)
+        if current_node is None:
+            raise ValueError("Node not found in system")
+
+        load = NodePointLoad(
+            x=virt_force if force == 'fx' else 0.0,
+            z=virt_force if force == 'fz' else 0.0,
+            phi=virt_force if force == 'fm' else 0.0
+        )
+
+        modified_node = replace(current_node, loads=load)
+        bars = list(self.system.bars)
+        new_bars = []
+
+        for bar in bars:
+            if bar is None:
+                new_bars.append(None)
+            elif bar.node_i == current_node or bar.node_j == current_node:
+                new_bars.append(replace(
+                    bar,
+                    node_i=modified_node if bar.node_i == current_node
+                    else bar.node_i,
+                    node_j=modified_node if bar.node_j == current_node
+                    else bar.node_j
+                ))
+            else:
+                new_bars.append(bar)
+
+        self.node_map[obj] = modified_node
+        self.system = System(new_bars)
+        return self.system
+
+    def modify_bar_force_vir(
+            self, obj: Bar, force: Literal['fx', 'fz', 'fm'],
+            virt_force: float = 1, position: float = 0):
+        """Applies a virtual point load to a bar.
+
+        Useful for virtual force methods to calculate internal forces
+        (e.g., to determine internal actions). The load is placed at the
+        specified relative position along the bar.
+
+        Parameters
+        ----------
+        obj : :any:`Bar`
+            The bar where the virtual load is applied.
+
+        force : {'fx', 'fz', 'fm'}
+            Direction/type of load:
+            'fx' = axial,
+            'fz' = transverse,
+            'fm' = moment.
+
+        position : float, optional
+            Relative position along the bar (0 to 1), default is 0.
+
+        virt_force : float, optional
+            Magnitude of the virtual force, default is 1.
+
+        Returns
+        -------
+        :any:`System`
+            Updated system with the virtual bar load.
+        """
+        current_bar = self.bar_map.get(obj)
+        if current_bar is None:
+            raise ValueError("Bar not found in system")
+
+        load = BarPointLoad(
+            x=virt_force if force == 'fx' else 0.0,
+            z=virt_force if force == 'fz' else 0.0,
+            phi=virt_force if force == 'fm' else 0.0,
+            position=position
+        )
+
+        modified_bar = replace(current_bar, point_loads=[load])
+        bars = list(self.system.bars)
+        for i, bar in enumerate(bars):
+            if bar == current_bar:
+                bars[i] = modified_bar
+                break
+
+        self.bar_map[obj] = modified_bar
+        if 0 < position < 1:
+            self.memory_bar_point_load.setdefault(obj, []).append(position)
+
+        self.system = System(bars)
+        return self.system
+
+    def delete_bar(self, bar_obj: Bar):
+        """Removes a bar from the system.
+
+        Updates the internal `bar_map` to mark the bar as deleted and
+        reconstructs the system without the specified bar.
+
+        Parameters
+        ----------
+        bar_obj : :any:`Bar`
+            The bar to be removed.
+
+        Returns
+        -------
+        :any:`System`
+            The system without the specified bar.
+
+        Raises
+        ------
+        ValueError
+            If the bar has already been deleted or cannot be found.
+        """
+        if self.bar_map.get(bar_obj) is None:
+            raise ValueError("Bar has already been deleted.")
+
+        bars = list(self.system.bars)
+        try:
+            bars.remove(self._get_current_bar(bar_obj))
+        except ValueError:
+            raise ValueError("The specified bar was not found in the "
+                             "current system.")
+
+        self._update_bar(bar_obj, None)
+        self.system = System(bars)
+        return self.system
+
+    def create_node_load_systems(self):
+        """Generates a set of systems with unit loads applied at modified DOFs.
+
+        For each recorded modification (either release of support or insertion
+        of hinge), a system is constructed where a unit point load is applied
+        at the corresponding degree of freedom (x, z, or phi). This is useful
+        for the :py:class:`KGV`.
+
+        Returns
+        -------
+        list[:any:`System`]
+            A list of systems, each with one unit node load applied.
+        """
+        systems = []
+
+        for obj, name in self.memory_modification:
+            if isinstance(obj, Bar):
+                node = obj.node_i if '_i' in name else obj.node_j
+                dof = 'x' if 'u' in name else 'z' if 'w' in name else 'phi'
+            elif isinstance(obj, Node):
+                node = obj
+                dof = 'x' if name == 'u' else 'z' if name == 'w' else 'phi'
+            else:
+                continue
+
+            current_node = self._get_current_node(node)
+
+            load = NodePointLoad(
+                x=1.0 if dof == 'x' else 0.0,
+                z=1.0 if dof == 'z' else 0.0,
+                phi=1.0 if dof == 'phi' else 0.0
+            )
+
+            new_node = replace(current_node, loads=load)
+
+            new_bars = [replace(b,
+                                node_i=new_node if b.node_i == current_node
+                                else b.node_i,
+                                node_j=new_node if b.node_j == current_node
+                                else b.node_j)
+                        for b in self.system.bars]
+
+            systems.append(System(new_bars))
+
+        return systems
+
+    def get_current_bar_point_positions(self):
+        """
+        Returns a list of all point load positions from
+        `memory_bar_point_load`, where each original bar is replaced with its
+        currently modified version.
+
+        This is useful to apply further operations (e.g., splitting) on the
+        up-to-date bars in the current system.
+
+        Returns
+        -------
+        list[tuple[:any:`Bar`, float]]
+            A list of tuples containing:
+            - the modified bar object
+            - the relative position (0 < pos < 1) where a point load exists
+        """
+        result = []
+        for original_bar, positions in self.memory_bar_point_load.items():
+            current_bar = self._get_current_bar(original_bar)
+            for pos in positions:
+                result.append((current_bar, pos))
+        return result
 
 
 @dataclass(eq=False)
@@ -1564,225 +2081,3 @@ class Polplan:
                   f'\n -> rPol: {chain.relative_pole}, '
                   f'\n -> mPol: {chain.absolute_pole}'
                   f'\n -> starr: {chain.stiff}')
-
-
-@dataclass(eq=False)
-class SystemModifier:
-
-    system: System
-
-    def delete_load(self):
-        bars = []
-        for bar in self.system.bars:
-            updated_bar = replace(
-                bar,
-                node_i=replace(bar.node_i, displacements=(), loads=()),
-                node_j=replace(bar.node_j, displacements=(), loads=()),
-                line_loads=(),
-                point_loads=(),
-                temp=BarTemp(temp_o=0, temp_u=0),
-            )
-            bars.append(updated_bar)
-            return System(bars)
-
-    def modify_bar_force(self, obj: Bar, force: Literal['fx', 'fz', 'fm'],
-                         position: float, virt_force: float = 1) -> System:
-        for bar in self.system.bars:
-            if bar == obj:
-                # find list index of the bar
-                bars = list(self.system.bars)
-                idx = bars.index(bar)
-
-                # set point_loads and hinge
-                force_mapping = self.get_force_mapping()
-                loads = force_mapping[force]['loads'](virt_force)
-                hinge = force_mapping[force]['hinge']
-
-                if 0 < position < 1:
-                    # divide bar at position and get 2 Bar-Instances
-                    bar_1, bar_2 = bar.segment([position])
-
-                    # replace point_loads and hinge
-                    bar_1 = replace(bar_1, hinge_phi_j=False, hinge_w_j=False,
-                                    hinge_u_j=False)
-
-                    modified_bar_1 = replace(bar_1, point_loads=loads[1],
-                                             **{hinge[1]: True})
-                    modified_bar_2 = replace(bar_2, point_loads=loads[0])
-
-                    # replace the 2 modified bars in list
-                    bars[idx:idx + 1] = [modified_bar_1, modified_bar_2]
-                else:
-                    # replace the modified bar in bars
-                    bars[idx] = replace(bar, point_loads=loads[position],
-                                        **{hinge[position]: True})
-
-                    if position in (0, 1):
-                        node = bar.node_i if position == 0 else bar.node_j
-                        connected_bars = self.system.node_to_bar_map()[node]
-
-                        if len(connected_bars) == 2:
-                            for conn_bar in connected_bars:
-                                if conn_bar != bar:
-                                    index = bars.index(conn_bar)
-                                    if conn_bar.node_i == node:
-                                        bars[index] = replace(
-                                            bars[index], point_loads=loads[0])
-                                    else:
-                                        bars[index] = replace(
-                                            bars[index], point_loads=loads[1])
-                return System(bars)
-        raise ValueError("Bar not found in system")
-
-    def modify_bar_deform(self, obj: Bar, deform: Literal['u', 'w', 'phi'],
-                          position: float = 0) -> System:
-        if deform not in ['u', 'w', 'phi']:
-            raise ValueError(f"Invalid deform type: {deform}")
-        for bar in self.system.bars:
-            if bar == obj:
-                # find list index of the bar
-                bars = list(self.system.bars)
-                idx = bars.index(bar)
-
-                if position in (0, 1):
-                    # set point_loads
-                    force_mapping = self.get_deform_mapping()
-                    loads = force_mapping[deform]
-
-                    # replace the modified bar in bars
-                    bars[idx] = replace(bar, point_loads=loads[1])
-
-                    node = bar.node_i if position == 0 else bar.node_j
-                    conn = self.system.node_to_bar_map()[node]
-
-                    if len(conn) == 2:
-                        bars[idx + 1] = replace(bars[idx + 1],
-                                                point_loads=loads[0])
-                else:
-                    if deform == 'u':
-                        point_load = BarPointLoad(1, 0, 0, 0, position)
-                    elif deform == 'w':
-                        point_load = BarPointLoad(0, 1, 0, 0, position)
-                    else:
-                        point_load = BarPointLoad(0, 0, 1, 0, position)
-                    bars[idx] = replace(bar, point_loads=point_load)
-                return System(bars)
-        raise ValueError("Bar not found in system")
-
-    def modify_node_force(self, obj: Node, force: Literal['fx', 'fz', 'fm'],
-                          virt_force: float = 1):
-        nodes = self.system.nodes()
-        for node in nodes:
-            if node == obj:
-                if force == 'fx':
-                    modified_node = (
-                        replace(node,
-                                u='free',
-                                loads=[NodePointLoad(-virt_force, 0, 0)])
-                    )
-                elif force == 'fz':
-                    modified_node = (
-                        replace(node,
-                                w='free',
-                                loads=[NodePointLoad(0, -virt_force, 0)])
-                    )
-                elif force == 'fm':
-                    modified_node = (
-                        replace(node,
-                                phi='free',
-                                loads=[NodePointLoad(0, 0, -virt_force)])
-                    )
-                else:
-                    raise ValueError(f"Invalid force type: {force}")
-
-                connected_bars = self.system.node_to_bar_map()[node]
-                bars = list(self.system.bars)
-
-                for bar in connected_bars:
-                    if node == bar.node_i:
-                        modified_bar = replace(bar, node_i=modified_node)
-                    else:
-                        modified_bar = replace(bar, node_j=modified_node)
-
-                    idx = bars.index(bar)
-                    bars[idx] = modified_bar
-                return System(bars)
-        raise ValueError("Node not found in system")
-
-    def modify_node_deform(self, obj: Node, deform: Literal['u', 'w', 'phi'],
-                           virt_force: float = 1):
-        nodes = self.system.nodes()
-        for node in nodes:
-            if node == obj:
-                if deform == 'u':
-                    modified_node = (
-                        replace(node,
-                                loads=[NodePointLoad(virt_force, 0, 0)])
-                    )
-                elif deform == 'w':
-                    modified_node = (
-                        replace(node,
-                                loads=[NodePointLoad(0, virt_force, 0)])
-                    )
-                elif deform == 'phi':
-                    modified_node = (
-                        replace(node,
-                                loads=[NodePointLoad(0, 0, -virt_force)])
-                    )
-                else:
-                    raise ValueError(f"Invalid deform type: {deform}")
-
-                connected_bars = self.system.node_to_bar_map()[node]
-                bars = list(self.system.bars)
-
-                for bar in connected_bars:
-                    if node == bar.node_i:
-                        modified_bar = replace(bar, node_i=modified_node)
-                    else:
-                        modified_bar = replace(bar, node_j=modified_node)
-
-                    idx = bars.index(bar)
-                    bars[idx] = modified_bar
-                return System(bars)
-        raise ValueError("Node not found in system")
-
-    def get_force_mapping(self) -> Dict[str, Dict[str, Callable]]:
-        return {
-            'fx': {
-                'loads': lambda virt_force: [
-                    BarPointLoad(-virt_force, 0, 0, 0, 0),
-                    BarPointLoad(virt_force, 0, 0, 0, 1)
-                ],
-                'hinge': ['hinge_u_i', 'hinge_u_j']
-            },
-            'fz': {
-                'loads': lambda virt_force: [
-                    BarPointLoad(0, -virt_force, 0, 0, 0),
-                    BarPointLoad(0, virt_force, 0, 0, 1)
-                ],
-                'hinge': ['hinge_w_i', 'hinge_w_j']
-            },
-            'fm': {
-                'loads': lambda virt_force: [
-                    BarPointLoad(0, 0, -virt_force, 0, 0),
-                    BarPointLoad(0, 0, virt_force, 0, 1)
-                ],
-                'hinge': ['hinge_phi_i', 'hinge_phi_j']
-            }
-        }
-
-    def get_deform_mapping(self) -> Dict:
-        return {
-            'u': [
-                    BarPointLoad(-1, 0, 0, 0, 0),
-                    BarPointLoad(1, 0, 0, 0, 1)
-                ],
-            'w': [
-                    BarPointLoad(0, -1, 0, 0, 0),
-                    BarPointLoad(0, 1, 0, 0, 1)
-                ],
-            'phi': [
-                    BarPointLoad(0, 0, -1, 0, 0),
-                    BarPointLoad(0, 0, 1, 0, 1)
-                ]
-        }
