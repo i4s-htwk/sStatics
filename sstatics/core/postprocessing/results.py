@@ -16,19 +16,19 @@ class SystemResult:
     n_disc: int = 10
 
     def __post_init__(self):
-        if len(self.system.segmented_bars) != len(self.deforms):
+        if len(self.system.mesh) != len(self.deforms):
             raise ValueError(
                 'The number of bars in "system.segmented_bars" does not match '
                 'the number of entries in "deforms".'
             )
-        if len(self.system.segmented_bars) != len(self.forces):
+        if len(self.system.mesh) != len(self.forces):
             raise ValueError(
                 'The number of bars in "system.segmented_bars" does not match '
                 'the number of entries in "forces".'
             )
         self.results_disc = [
             BarResult(bar, self.deforms[i], self.forces[i], self.n_disc)
-            for i, bar in enumerate(self.system.segmented_bars)
+            for i, bar in enumerate(self.system.mesh)
         ]
 
     @cached_property

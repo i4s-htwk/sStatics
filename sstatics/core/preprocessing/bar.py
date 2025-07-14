@@ -1,18 +1,15 @@
 
-from collections import defaultdict
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Literal
 
 import numpy as np
-from numpy.typing import ArrayLike
-import sympy
 
 from sstatics.core.preprocessing.cross_section import CrossSection
 from sstatics.core.preprocessing.material import Material
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.loads import (
-    BarLineLoad, BarPointLoad, NodePointLoad
+    BarLineLoad, BarPointLoad
 )
 from sstatics.core.preprocessing.temperature import BarTemp
 from sstatics.core.utils import transformation_matrix
@@ -1895,142 +1892,3 @@ class Bar:
             k = trans_m @ k @ np.transpose(trans_m)
 
         return k
-
-    def segment(self, dividing_positions: list[float] = []):
-        """ TODO """
-        positions, segmentation = defaultdict(list), False
-        for load in self.point_loads:
-            positions[load.position].append(load)
-            if load.position not in (0.0, 1.0):
-                segmentation = True
-        for pos in dividing_positions:
-            positions.setdefault(pos)
-            segmentation = True
-        if not segmentation:
-            return [self]
-
-        bars = []
-        for position in sorted(positions.keys()):
-
-            if position == 0.0 or position == 1.0:
-                continue
-
-            # calculate nodes
-            node_i = bars[-1].node_j if bars else self.node_i
-            c, s = np.cos(self.inclination), np.sin(self.inclination)
-            x = self.node_i.x + c * position * self.length
-            z = self.node_i.z - s * position * self.length
-            node_loads = [
-                NodePointLoad(load.x, load.z, load.phi, load.rotation)
-                for load in positions[position] or []
-            ]
-            node_j = self.node_j if position == 1.0 else Node(
-                x, z, loads=node_loads
-            )
-
-            # calculate bar line loads
-            line_loads = []
-            for i, line_load in enumerate(self.line_loads):
-                pi = (
-                    bars[-1].line_loads[i].pj if bars
-                    else self.line_loads[i].pi
-                )
-                pj = line_load.pi + (line_load.pj - line_load.pi) * position
-                line_loads.append(replace(line_load, pi=pi, pj=pj))
-
-            # set point loads
-            point_loads = []
-            if not bars:
-                point_loads = positions[0.0]
-
-            bars.append(replace(
-                self, node_i=node_i, node_j=node_j, line_loads=line_loads,
-                point_loads=point_loads, hinge_u_j=False, hinge_w_j=False,
-                hinge_phi_j=False
-            ))
-
-        # calculate bar line loads
-        line_loads = []
-        for i, line_load in enumerate(self.line_loads):
-            pi = (bars[-1].line_loads[i].pj)
-            line_loads.append(replace(line_load, pi=pi))
-
-        point_loads = []
-        if 1.0 in positions:
-            point_loads = positions[1.0]
-
-        bars.append(replace(
-            self, node_i=node_j, node_j=self.node_j, line_loads=line_loads,
-            point_loads=point_loads
-        ))
-
-        return bars
-
-    # TODO: refactor
-    def deform_line(
-        self, deform: ArrayLike, force: ArrayLike, scale: float = 1.0,
-        lambdify: bool = True, n_points: int | None = None
-    ):
-        """ TODO """
-        try:
-            deform = np.reshape(deform, shape=(6, 1))
-            force = np.reshape(force, shape=(6, 1))
-        except ValueError:
-            raise ValueError(
-                'deform and force have to be array-like objects that can be '
-                'reshaped to a flat numpy array with a length of 6.'
-            )
-        if n_points is not None and n_points <= 0:
-            raise ValueError(
-                'n_points has to be greater than zero or None.'
-            )
-
-        length = self.length + (deform[3][0] - deform[0][0]) * scale
-        q_r, q_l = self.line_load[4][0], self.line_load[1][0]
-        temp = self.material.therm_exp_coeff * self.temp.temp_delta
-        a_5 = (q_r - q_l) / (120 * self.EI * length)
-        a_4 = q_l / (24 * self.EI)
-        a_3 = (-(q_r - q_l) / (self.GA_s * length) + force[1][0] / self.EI) / 6
-        a_2 = force[2][0] / self.EI - q_l / self.GA_s
-        a_2 = (a_2 - temp / self.cross_section.height) / 2
-        a_1 = -deform[2][0] - force[1][0] / self.GA_s
-        a_0 = deform[1][0]
-        correction = sum([
-            c * length ** i
-            for i, c in enumerate((a_0, a_1, a_2, a_3, a_4, a_5))
-        ])
-        a_1 += (deform[4][0] - correction) / length
-        a_0 += self.node_i.z
-
-        x = sympy.Symbol('x')
-        w = sum([
-            scale * coeff * x ** i
-            for i, coeff in enumerate((a_0, a_1, a_2, a_3, a_4, a_5))
-        ])
-        w_lambda = sympy.lambdify(x, w, modules='numpy')
-
-        if n_points is None:
-            return w_lambda if lambdify else w
-
-        samples = np.linspace(start=0, stop=length, num=n_points)
-        x = samples + self.node_i.x + deform[0][0] * scale
-        z = w_lambda(samples)
-        s, c = np.sin(self.inclination), np.cos(self.inclination)
-        x, z = (
-            self.node_i.x + c * (x - self.node_i.x) + s * (z - self.node_i.z),
-            self.node_i.z - s * (x - self.node_i.x) + c * (z - self.node_i.z),
-        )
-        return x, z
-
-    def max_deform(
-            self, deform: np.array, force: np.array, n_points: int = 50
-    ):
-        """ TODO """
-        x, z = self.deform_line(deform, force, n_points=n_points)
-
-        x_ = np.linspace(0, self.length, n_points)
-        x__ = np.linspace(deform[0][0], self.length + deform[3][0], n_points)
-
-        dif = np.sqrt(np.square(x_ - x__) + np.square(z))
-        idx = np.argmax(dif)
-        return dif[idx], idx

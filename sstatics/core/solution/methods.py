@@ -148,7 +148,7 @@ class FirstOrder:
         k_system = self._get_zero_matrix()
         nodes = self.system.nodes()
         dof = self.dof
-        for index, bar in enumerate(self.system.segmented_bars):
+        for index, bar in enumerate(self.system.mesh):
             i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
             k = bar.stiffness_matrix(self.order, self.approach,
                                      f_axial=self._get_f_axial(index))
@@ -189,7 +189,7 @@ class FirstOrder:
         elastic = self._get_zero_matrix()
         nodes = self.system.nodes()
         dof = self.dof
-        for bar in self.system.segmented_bars:
+        for bar in self.system.mesh:
             i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
 
             el_bar = np.block([
@@ -238,7 +238,7 @@ class FirstOrder:
         f0_system = self._get_zero_vec()
         nodes = self.system.nodes()
         dof = self.dof
-        for index, bar in enumerate(self.system.segmented_bars):
+        for index, bar in enumerate(self.system.mesh):
             i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
             f0 = bar.f0(self.order, self.approach,
                         f_axial=self._get_f_axial(index))
@@ -337,7 +337,8 @@ class FirstOrder:
 
         Examples
         --------
-        >>> from sstatics import Bar, BarLineLoad, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing import (Bar,
+        >>>             BarLineLoad, CrossSection, Material, Node)
         >>> cross_section = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         >>> material = Material(2.1e8, 0.1, 0.1, 0.1)
         >>> node1 = Node(0, 0, u='fixed', w='fixed')
@@ -430,7 +431,7 @@ class FirstOrder:
                 deform[nodes.index(bar.node_j) * dof:
                        nodes.index(bar.node_j) * dof + dof]
             ])
-            for bar in self.system.segmented_bars
+            for bar in self.system.mesh
         ]
 
     @cached_property
@@ -463,7 +464,7 @@ class FirstOrder:
                 deform[nodes.index(bar.node_j) * dof:
                        nodes.index(bar.node_j) * dof + dof]
             ])
-            for bar in self.system.segmented_bars
+            for bar in self.system.mesh
         ]
 
     @cached_property
@@ -496,7 +497,7 @@ class FirstOrder:
                 to_node_coord=False, f_axial=self._get_f_axial(i)
             ) + bar.f0_point
             for i, (bar, deform) in
-            enumerate(zip(self.system.segmented_bars, bar_deform))
+            enumerate(zip(self.system.mesh, bar_deform))
         ]
 
     @cached_property
@@ -632,7 +633,7 @@ class FirstOrder:
         """
         deform_list = []
         bar_deform_list = self.bar_deform
-        for i, bar in enumerate(self.system.segmented_bars):
+        for i, bar in enumerate(self.system.mesh):
             delta_rel = np.zeros((6, 1))
             if True in bar.hinge:
                 k = bar.stiffness_matrix(
@@ -675,7 +676,7 @@ class FirstOrder:
         return [
             np.transpose(bar.transformation_matrix())
             @ np.vstack((bar.node_i.displacement, bar.node_j.displacement))
-            for bar in self.system.segmented_bars
+            for bar in self.system.mesh
         ]
 
     @cached_property
@@ -811,13 +812,13 @@ class SecondOrder(FirstOrder):
                     0, self.iterations, self.iteration_tolerance,
                     iteration_data, self.iteration_type,
                     [np.zeros((6, 1)) for _ in range(
-                        len(self.system.segmented_bars))],
+                        len(self.system.mesh))],
                     [np.zeros((6, 1)) for _ in range(
-                        len(self.system.segmented_bars))],
+                        len(self.system.mesh))],
                     [np.zeros((6, 1)) for _ in range(
-                        len(self.system.segmented_bars))],
+                        len(self.system.mesh))],
                     [np.zeros((6, 1)) for _ in range(
-                        len(self.system.segmented_bars))]))
+                        len(self.system.mesh))]))
                 return iteration_data
             else:
                 return (self.bar_deform_list,

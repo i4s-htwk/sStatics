@@ -1179,7 +1179,7 @@ class TestFirstOrder(TestCase):
         system = System([b1])
         self.assertEqual(
             len(FirstOrder(system).internal_forces),
-            len(system.segmented_bars))
+            len(system.mesh))
         # More cases
 
     def test_apply_hinge_modification(self):

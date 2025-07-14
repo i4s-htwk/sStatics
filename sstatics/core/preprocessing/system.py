@@ -1,7 +1,8 @@
 
+from collections import defaultdict
 from dataclasses import dataclass, replace, field
 from functools import cache, cached_property
-from typing import Literal, Dict, Callable, List
+from typing import Literal, Dict, Callable, List, Optional
 from itertools import combinations
 
 import numpy as np
@@ -330,6 +331,7 @@ class System:
     """
 
     bars: tuple[Bar, ...] | list[Bar]
+    user_divisions: Optional[Dict[Bar, List[float]]] = None
 
     # weitere Validierungen? sich schneidende Stäbe?
     def __post_init__(self):
@@ -361,16 +363,15 @@ class System:
         if set(visited) != set(nodes):
             raise ValueError("The system's graph needs to be connected.")
 
-        self.segmented_bars = []
-        for bar in self.bars:
-            self.segmented_bars += bar.segment()
-        self.segmented_bars = tuple(self.segmented_bars)
+        self.create_mesh(user_divisions=self.user_divisions)
 
-        self.dof = 3
+    @property
+    def mesh(self):
+        return self._mesh.mesh
 
     @cache
     def connected_nodes(self, segmented: bool = True):
-        bars = self.segmented_bars if segmented else self.bars
+        bars = self.mesh if segmented else self.bars
         connections = {}
         for bar in bars:
             for node in (bar.node_i, bar.node_j):
@@ -385,7 +386,7 @@ class System:
 
     @cache
     def node_to_bar_map(self, segmented: bool = True):
-        bars = self.segmented_bars if segmented else self.bars
+        bars = self.mesh if segmented else self.bars
         node_connection = {}
         for bar in bars:
             for node in (bar.node_i, bar.node_j):
@@ -400,6 +401,212 @@ class System:
 
     def get_polplan(self):
         self.polplan = Polplan(self)
+
+    def create_mesh(self, user_divisions=None):
+        self._mesh = MeshGenerator(bars=self.bars,
+                                   user_divisions=user_divisions)()
+
+
+@dataclass(eq=False)
+class MeshGenerator:
+    bars: List[Bar]
+    user_divisions: Optional[Dict[Bar, List[float]]] = None
+
+    def __post_init__(self):
+        self.bars = list(self.bars)
+        self._mesh: List[Bar] = []
+        self._user_segments: List[Bar] = []
+
+    @property
+    def mesh(self):
+        return self._mesh
+
+    @property
+    def user_segments(self):
+        return self._user_segments
+
+    def generate(self):
+        user_divisions = self.user_divisions or {}
+        calc_mesh = []
+        user_mesh = []
+
+        for i, bar in enumerate(self.bars):
+
+            user_pos = user_divisions.get(bar, [])
+            load_pos = self._get_point_loads(bar)
+
+            if not user_pos and not load_pos:
+                calc_mesh.append(bar)
+                user_mesh.append(bar)
+                continue
+
+            if user_pos:
+                user_pos, load_pos = (
+                    self._transfer_loads_to_user_pos(user_pos, load_pos)
+                )
+                user_segments = self._split(bar, user_pos)
+            else:
+                user_segments = [bar]
+
+            user_mesh.extend(user_segments)
+
+            calc_segments = user_segments.copy()
+
+            if load_pos:
+                for idx, pos_load in (
+                        self._assign_loads_to_segments(
+                            load_pos, user_pos).items()
+                ):
+                    new_segments = self._split(calc_segments[idx], pos_load)
+                    calc_segments[idx:idx + 1] = new_segments
+
+            calc_mesh.extend(calc_segments)
+
+        self._user_segments = user_mesh
+        self._mesh = calc_mesh
+
+    @staticmethod
+    def _assign_loads_to_segments(load_pos_i, user_pos_i):
+        user_pos_i = sorted(set(user_pos_i) | {0.0, 1.0})
+        index = {}
+
+        for p, loads in load_pos_i.items():
+            for i, (a, b) in enumerate(zip(user_pos_i, user_pos_i[1:])):
+                if p in (0.0, 1.0):
+                    index.setdefault(
+                        i, defaultdict(list))[p].extend(loads)
+                    break
+                if a < p < b:
+                    new_pos = (p - a) / (b - a)
+                    index.setdefault(
+                        i, defaultdict(list))[new_pos].extend(loads)
+                    break
+        return index
+
+    @staticmethod
+    def _get_point_loads(bar):
+        return {load.position: [load] for load in bar.point_loads}
+
+    @staticmethod
+    def _transfer_loads_to_user_pos(user_pos_i: list[float], load_pos_i):
+        user_positions = defaultdict(list, {k: [] for k in user_pos_i})
+        for pos in list(load_pos_i):
+            if pos in user_positions or pos in (0.0, 1.0):
+                user_positions[pos].extend(load_pos_i[pos])
+                del load_pos_i[pos]
+
+        return user_positions, load_pos_i
+
+    @staticmethod
+    def _add_end_loads(user_positions, bar):
+        for load in bar.point_loads:
+            if load.position in (0.0, 1.0):
+                user_positions[load.position].append(load)
+        return user_positions
+
+    @staticmethod
+    def _to_node_load(point_loads):
+        return [
+            NodePointLoad(load.x, load.z, load.phi, load.rotation)
+            for load in point_loads
+        ]
+
+    @staticmethod
+    def _interp_coords(bar, position: float):
+        c, s = np.cos(bar.inclination), np.sin(bar.inclination)
+        return (
+            bar.node_i.x + c * position * bar.length,
+            bar.node_i.z - s * position * bar.length
+        )
+
+    @staticmethod
+    def _interp_lloads(bar: Bar,
+                       prev_bar: Optional[Bar],
+                       pos: Optional[float] = None):
+        if not bar.line_loads:
+            return []
+        return [
+            replace(
+                load,
+                pi=(prev_bar.line_loads[i].pj if prev_bar else load.pi),
+                pj=(load.pi + (load.pj - load.pi) * pos
+                    if pos is not None else load.pj)
+            )
+            for i, load in enumerate(bar.line_loads)
+        ]
+
+    def _split(self,
+               bar: Bar,
+               pos_dict: Dict[float, List[NodePointLoad]]) -> List[Bar]:
+        bars = []
+        prev_bar = None
+
+        for pos in sorted(pos_dict):
+            if pos in (0.0, 1.0):
+                continue
+
+            node_j = self._node(bar, pos, pos_dict[pos])
+
+            if prev_bar is None:
+                new_bar = self._bar_first(bar, node_j, pos, pos_dict[0.0])
+            else:
+                new_bar = self._bar_middle(bar, prev_bar, node_j, pos)
+
+            bars.append(new_bar)
+            prev_bar = new_bar
+
+        bars.append(self._bar_last(bar, prev_bar, pos_dict[1.0]))
+
+        return bars
+
+    def _node(self, bar, position: float, point_loads: List[NodePointLoad]):
+        x, z = self._interp_coords(bar, position)
+        return Node(x, z, loads=self._to_node_load(point_loads))
+
+    def _bar_first(self, bar, node_j, pos, end_point_loads):
+        return replace(
+            bar,
+            node_i=bar.node_i,
+            node_j=node_j,
+            point_loads=end_point_loads,
+            line_loads=self._interp_lloads(bar=bar, prev_bar=None, pos=pos),
+            hinge_u_j=False,
+            hinge_w_j=False,
+            hinge_phi_j=False
+        )
+
+    def _bar_middle(self, bar, prev_bar, node_j, pos):
+        return replace(
+            bar,
+            node_i=prev_bar.node_j,
+            node_j=node_j,
+            point_loads=[],
+            line_loads=self._interp_lloads(
+                bar=bar, prev_bar=prev_bar, pos=pos
+            ),
+            hinge_u_i=False,
+            hinge_w_i=False,
+            hinge_phi_i=False,
+            hinge_u_j=False,
+            hinge_w_j=False,
+            hinge_phi_j=False
+        )
+
+    def _bar_last(self, bar, prev_bar, end_point_loads):
+        return replace(
+            bar,
+            node_i=prev_bar.node_j,
+            node_j=bar.node_j,
+            point_loads=end_point_loads,
+            line_loads=self._interp_lloads(bar=bar, prev_bar=prev_bar),
+            hinge_u_i=False,
+            hinge_w_i=False,
+            hinge_phi_i=False
+        )
+
+    def __call__(self):
+        self.generate()
+        return self
 
 
 @dataclass(eq=False)
