@@ -1,8 +1,7 @@
 
-from sstatics.core.solution.methods import (
-    FirstOrder, InfluenceLine, SecondOrder
-)
-
+from sstatics.core.solution.first_order import FirstOrder
+from sstatics.core.solution.influence_line import InfluenceLine
+from sstatics.core.solution.second_order import SecondOrder
 
 __all__ = [
     'FirstOrder',
