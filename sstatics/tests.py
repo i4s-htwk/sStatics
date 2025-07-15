@@ -5,11 +5,17 @@ from unittest import TestCase
 import numpy as np
 from numpy.testing import assert_allclose as numpy_allclose
 
-from sstatics.core.preprocessing import (
-    Bar, BarLineLoad, BarPointLoad, BarTemp, CrossSection,
-    Material, Node, NodeDisplacement, NodePointLoad, System
+from sstatics.core.preprocessing.bar import Bar
+from sstatics.core.preprocessing.loads import (
+    BarLineLoad, BarPointLoad, NodePointLoad
 )
-from sstatics.core.solution import FirstOrder
+from sstatics.core.preprocessing.temperature import BarTemp
+from sstatics.core.preprocessing.cross_section import CrossSection
+from sstatics.core.preprocessing.material import Material
+from sstatics.core.preprocessing.node import Node
+from sstatics.core.preprocessing.dof import NodeDisplacement
+from sstatics.core.preprocessing.system import System
+from sstatics.core.solution.first_order import FirstOrder
 
 
 def assert_allclose(actual, desired, err_msg=''):
@@ -1179,7 +1185,7 @@ class TestFirstOrder(TestCase):
         system = System([b1])
         self.assertEqual(
             len(FirstOrder(system).internal_forces),
-            len(system.segmented_bars))
+            len(system.mesh))
         # More cases
 
     def test_apply_hinge_modification(self):

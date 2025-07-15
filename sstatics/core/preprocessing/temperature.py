@@ -55,7 +55,7 @@ class BarTemp:
 
         Examples
         --------
-        >>> from sstatics.core import BarTemp
+        >>> from sstatics.core.preprocessing.temperature import BarTemp
         >>> temp = BarTemp(15, 30).temp_s
         22.5
         """
@@ -81,7 +81,7 @@ class BarTemp:
 
         Examples
         --------
-        >>> from sstatics.core import BarTemp
+        >>> from sstatics.core.preprocessing.temperature import BarTemp
         >>> temp_diff = BarTemp(10, 20).temp_delta
         10.0
         """
