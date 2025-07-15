@@ -1,7 +1,7 @@
 
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from functools import cache, cached_property
+from functools import cached_property
 from itertools import combinations
 from typing import Callable, Dict, List, Literal, Optional, Union
 
@@ -87,7 +87,6 @@ class System:
     def mesh(self):
         return self._mesh.mesh
 
-    @cache
     def connected_nodes(self, segmented: bool = True):
         bars = self.mesh if segmented else self.bars
         connections = {}
@@ -102,7 +101,6 @@ class System:
             for node, connected_nodes in connections.items()
         }
 
-    @cache
     def node_to_bar_map(self, segmented: bool = True):
         bars = self.mesh if segmented else self.bars
         node_connection = {}
@@ -113,7 +111,6 @@ class System:
                 node_connection[node].append(bar)
         return node_connection
 
-    @cache
     def nodes(self, segmented: bool = True):
         return list(self.connected_nodes(segmented=segmented).keys())
 
@@ -412,13 +409,8 @@ class SystemModifier:
         immediately after instantiation.
         """
         for bar in self.system.bars:
-            if not bar:
-                continue
-            loads = bar.point_loads or []
-            if not isinstance(loads, (list, tuple)):
-                loads = [loads]
-            positions = [pl.position for pl in loads if
-                         isinstance(pl, BarPointLoad) and 0 < pl.position < 1]
+            loads = bar.point_loads
+            positions = [pl.position for pl in loads if 0 < pl.position < 1]
             if positions:
                 self.memory_bar_point_load[bar] = positions
 
@@ -948,9 +940,7 @@ class SystemModifier:
         new_bars = []
 
         for bar in bars:
-            if bar is None:
-                new_bars.append(None)
-            elif bar.node_i == current_node or bar.node_j == current_node:
+            if bar.node_i == current_node or bar.node_j == current_node:
                 new_bars.append(replace(
                     bar,
                     node_i=modified_node if bar.node_i == current_node
@@ -1007,7 +997,7 @@ class SystemModifier:
             position=position
         )
 
-        modified_bar = replace(current_bar, point_loads=[load])
+        modified_bar = replace(current_bar, point_loads=load)
         bars = list(self.system.bars)
         for i, bar in enumerate(bars):
             if bar == current_bar:
@@ -1102,27 +1092,25 @@ class SystemModifier:
 
         return systems
 
-    def get_current_bar_point_positions(self):
+    def division_positions_mesh(self):
         """
-        Returns a list of all point load positions from
-        `memory_bar_point_load`, where each original bar is replaced with its
-        currently modified version.
-
-        This is useful to apply further operations (e.g., splitting) on the
-        up-to-date bars in the current system.
+        Returns a dictionary mapping each bar to a
+        list of relative positions (0 < pos < 1) where point loads exist.
+        This is compatible with the `user_divisions` argument of
+        `MeshGenerator`.
 
         Returns
         -------
-        list[tuple[:any:`Bar`, float]]
-            A list of tuples containing:
-            - the modified bar object
-            - the relative position (0 < pos < 1) where a point load exists
+        dict[Bar, list[float]]
+            A dictionary where keys are Bar objects and values are lists of
+            division positions on that bar.
         """
-        result = []
+        result = {}
         for original_bar, positions in self.memory_bar_point_load.items():
-            current_bar = self._get_current_bar(original_bar)
-            for pos in positions:
-                result.append((current_bar, pos))
+            bar = self._get_current_bar(original_bar)
+            if bar not in result:
+                result[bar] = []
+            result[bar].extend(positions)
         return result
 
 
