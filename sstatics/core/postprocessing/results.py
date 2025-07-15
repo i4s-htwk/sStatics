@@ -17,13 +17,13 @@ class SystemResult:
     system : :py:class:`System`
         The statical system that was analyzed.
     deforms : list of :any:`numpy.ndarray`
-        List of deformation vectors for each segmented bar in the system.
-        Each deformation array corresponds to a segmented bar in
-        :py:attr:`system.segmented_bars`.
+        List of deformation vectors for each mesh bar in the system.
+        Each deformation array corresponds to a mesh bar in
+        :py:attr:`system.mesh`.
     forces : list of :any:`numpy.ndarray`
-        List of force vectors for each segmented bar in the system.
-        Each force array corresponds to a segmented bar in
-        :py:attr:`system.segmented_bars`.
+        List of force vectors for each mesh bar in the system.
+        Each force array corresponds to a mesh bar in
+        :py:attr:`system.mesh`.
     n_disc : :any:`int`, default=10
         Number of discrete evaluation points along each bar for discretisation
         of forces and deformations.
@@ -32,12 +32,12 @@ class SystemResult:
     ------
     ValueError
         If the length of :py:attr:`deforms` or :py:attr:`forces` does not match
-        the number of segmented bars in :py:attr:`system`.
+        the number of mesh in :py:attr:`system`.
 
     Attributes
     ----------
     bars : list of :py:class:`BarResult`
-        List of each segmented bar with discrete results.
+        List of each mesh bar with discrete results.
 
     Examples
     --------
@@ -71,13 +71,13 @@ class SystemResult:
     def __post_init__(self):
         if len(self.system.mesh) != len(self.deforms):
             raise ValueError(
-                'The number of bars in "system.segmented_bars" does not match '
-                'the number of entries in "deforms".'
+                'The number of bars in "system.mesh" does not match the '
+                'number of entries in "deforms".'
             )
         if len(self.system.mesh) != len(self.forces):
             raise ValueError(
-                'The number of bars in "system.segmented_bars" does not match '
-                'the number of entries in "forces".'
+                'The number of bars in "system.mesh" does not match the '
+                'number of entries in "forces".'
             )
         self.bars = [
             BarResult(bar, self.deforms[i], self.forces[i], self.n_disc)
@@ -86,7 +86,7 @@ class SystemResult:
 
     @cached_property
     def length_disc(self):
-        r"""Discrete evaluation points along the length of each segmented bar.
+        r"""Discrete evaluation points along the length of each mesh bar.
 
         Returns
         -------
@@ -113,7 +113,7 @@ class SystemResult:
         -------
         list of :any:`numpy.ndarray`
             Each array contains the deformation vectors evaluated along
-            the length of the corresponding segmented bar.
+            the length of the corresponding mesh bar.
 
         See Also
         --------
@@ -129,7 +129,7 @@ class SystemResult:
         -------
         list of :any:`numpy.ndarray`
             Each array contains the force vectors evaluated along
-            the length of the corresponding segmented bar.
+            the length of the corresponding mesh bar.
 
         See Also
         --------
@@ -182,14 +182,10 @@ class BarResult:
 
     Examples
     --------
-    >>> from sstatics.core.preprocessing.bar import Bar
-    >>> from sstatics.core.preprocessing.loads import BarLineLoad
-    >>> from sstatics.core.preprocessing.cross_section import CrossSection
-    >>> from sstatics.core.preprocessing.material import Material
-    >>> from sstatics.core.preprocessing.node import Node
-    >>> from sstatics.core.preprocessing.system import System
-    >>> from sstatics.core.solution.methods import FirstOrder
-    >>> from sstatics.core.postprocessing.results import BarResult
+    >>> from sstatics.core (
+    >>>     Bar, BarLineLoad, BarResult, CrossSection, Material, Node, System,
+    >>>     FirstOrder
+    >>> )
     >>> n1 = Node(0, 0, u='fixed', w='fixed')
     >>> n2 = Node(4, 0, w='fixed')
     >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
