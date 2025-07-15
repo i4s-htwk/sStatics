@@ -33,7 +33,7 @@ class CrossSectionGraphic(SingleGraphicObject):
             if isinstance(geometry, CircularSector) else geometry
         )
         color = (
-            (0, 255, 0, 0.1) if geometry.positive else (255, 0, 0, 0.1)
+            (60, 225, 0, 0.1) if geometry.positive else (255, 0, 0, 0.1)
         )
         return PolygonGraphic(
             geometry, self.show_center_of_mass, fillcolor=f'rgba{color}',

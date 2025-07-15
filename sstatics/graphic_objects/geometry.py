@@ -9,21 +9,6 @@ from sstatics.graphic_objects.utils import (
 )
 
 
-def set_alpha(rgba_string: str, alpha: float) -> str:
-    # Extrahiert rgba-Werte und ersetzt den letzten Wert durch das neue alpha
-    try:
-        rgba = rgba_string.strip().lower()
-        if not rgba.startswith("rgba"):
-            return rgba  # kein gültiger rgba-Wert
-        parts = rgba[5:-1].split(",")
-        if len(parts) != 4:
-            return rgba
-        r, g, b, _ = [p.strip() for p in parts]
-        return f'rgba({r}, {g}, {b}, {alpha})'
-    except Exception:
-        return rgba_string
-
-
 class PointGraphic(SingleGraphicObject):
 
     scatter_options = SingleGraphicObject.scatter_options | {
@@ -100,6 +85,7 @@ class PolygonGraphic(MultiGraphicObject):
     scatter_options = MultiGraphicObject.scatter_options | {
         'fill': 'toself',
         'fillcolor': 'rgba(0, 0, 0, 0)',
+        'point_color': None,
     }
 
     def __init__(
@@ -110,6 +96,20 @@ class PolygonGraphic(MultiGraphicObject):
         self.x = polygon.center_of_mass_y
         self.z = polygon.center_of_mass_z
         self.show_center_of_mass = show_center_of_mass
+        self.point_color = self.scatter_kwargs.pop('point_color', None)
+
+    @property
+    def _point_line_color(self):
+        color = self.point_color or self.scatter_kwargs.get('fillcolor')
+        if isinstance(color, str) and color.startswith("rgba"):
+            try:
+                parts = color[5:-1].split(",")
+                if len(parts) == 4:
+                    return \
+                        f"rgba({','.join(p.strip() for p in parts[:3])}, 1.0)"
+            except (IndexError, AttributeError):
+                pass
+        return color
 
     @property
     def traces(self):
@@ -124,11 +124,10 @@ class PolygonGraphic(MultiGraphicObject):
             x += [None] + list(ix)
             z += [None] + list(iz)
 
-        fill_color = self.scatter_kwargs['fillcolor']
         point = (
             PointGraphic(
                 self.x, self.z, marker=dict(size=10),
-                line_color=",".join(fill_color.split(",")[:3]) + ", 1.0)"
+                line_color=self._point_line_color
             ).traces if self.show_center_of_mass else ()
         )
         return (go.Scatter(x=x, y=z, **self.scatter_kwargs),) + point
