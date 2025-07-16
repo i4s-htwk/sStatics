@@ -117,9 +117,9 @@ class SystemResult:
 
         See Also
         --------
-        :py:attr:`bar_deforms_disc` in :py:class:`BarResult`
+        :py:attr:`deform_disc` in :py:class:`BarResult`
         """
-        return [result.bar_deforms_disc for result in self.bars]
+        return [result.deform_disc for result in self.bars]
 
     @cached_property
     def forces_disc(self):
@@ -133,9 +133,9 @@ class SystemResult:
 
         See Also
         --------
-        :py:attr:`bar_forces_disc` in :py:class:`BarResult`
+        :py:attr:`forces_disc` in :py:class:`BarResult`
         """
-        return [result.bar_forces_disc for result in self.bars]
+        return [result.forces_disc for result in self.bars]
 
     @cached_property
     def system_results_disc(self):
@@ -165,9 +165,9 @@ class BarResult:
     ----------
     bar : :any:`Bar`
         The bar that is to be discretised.
-    bar_deforms : :any:`numpy.ndarray`
+    deform : :any:`numpy.ndarray`
         The deformation vector of the bar with shape (6, 1).
-    bar_forces : :any:`numpy.ndarray`
+    forces : :any:`numpy.ndarray`
         The force vector of the bar with shape (6, 1).
     n_disc : :any:`int`, default=10
         Number of discrete points along the bar for discretisation.
@@ -175,7 +175,7 @@ class BarResult:
     Raises
     ------
     ValueError
-        :py:attr:`bar_deforms` and :py:attr:`bar_forces` need to have a shape
+        :py:attr:`deform` and :py:attr:`forces` need to have a shape
         of (6, 1)
     ValueError
         :py:attr:`n_disc` has to be greater than zero.
@@ -199,15 +199,15 @@ class BarResult:
     """
 
     bar: Bar
-    bar_deforms: np.ndarray
-    bar_forces: np.ndarray
+    deform: np.ndarray
+    forces: np.ndarray
     n_disc: int = 10
 
     def __post_init__(self):
-        if self.bar_deforms.shape != (6, 1):
-            raise ValueError('"bar_deforms" must have shape (6, 1).')
-        if self.bar_forces.shape != (6, 1):
-            raise ValueError('"bar_forces" must have shape (6, 1).')
+        if self.deform.shape != (6, 1):
+            raise ValueError('"deform" must have shape (6, 1).')
+        if self.forces.shape != (6, 1):
+            raise ValueError('"forces" must have shape (6, 1).')
         if self.n_disc < 1:
             raise ValueError('"n_disc" has to be greater than 0')
 
@@ -257,13 +257,13 @@ class BarResult:
 
             :math:`u`: Axial displacement at the start of bar.
 
-            :math:`p0_{i,x}, p0_{j,x}`: Distributed load in local x-direction
+            :math:`p_{i,x}, p_{j,x}`: Distributed load in local x-direction
             at the start and end of the bar.
 
         The difference between the load values is:
 
         .. math::
-            dp0_x = p0_{j,x} - p0_{i,x}
+            dp_x = p_{j,x} - p_{i,x}
 
         The polynomial coefficients in the local x-direction are calculated
         using the following matrix equation:
@@ -271,10 +271,10 @@ class BarResult:
         .. math::
             a_{x} =
             \begin{bmatrix}
-                p0_{i,x} & -N & u \\
-                \dfrac{dp0_x}{l} & -p0_{i,x} & -\dfrac{N}{EA} \\
-                0 & -\dfrac{dp0_x}{2l} & \dfrac{p0_{i,x}}{2EA} \\
-                0 & 0 & \dfrac{dp0_x}{6lEA}
+                p_{i,x} & -N & u \\
+                \dfrac{dp_x}{l} & -p_{i,x} & -\dfrac{N}{EA} \\
+                0 & -\dfrac{dp_x}{2l} & \dfrac{p_{i,x}}{2EA} \\
+                0 & 0 & \dfrac{dp_x}{6lEA}
             \end{bmatrix}
 
         The matrix columns correspond to the following physical quantities:
@@ -297,14 +297,14 @@ class BarResult:
         This represents the polynomial: :math:`p(x) = 0`
         """
         l, EA = self.bar.length, self.bar.EA
-        p0_ix, p0_jx = self.bar.line_load[0][0], self.bar.line_load[3][0]
-        n, u = self.bar_forces[0][0], self.bar_deforms[0][0]
-        dp0_x = p0_jx - p0_ix
+        p_ix, p_jx = self.bar.line_load[0][0], self.bar.line_load[3][0]
+        n, u = self.forces[0][0], self.deform[0][0]
+        dp_x = p_jx - p_ix
         return np.array([
-            [p0_ix, -n, u],
-            [dp0_x / l, -p0_ix, -n / EA],
-            [0, -dp0_x / (2 * l), p0_ix / (2 * EA)],
-            [0, 0, dp0_x / (6 * l * EA)]
+            [p_ix, -n, u],
+            [dp_x / l, -p_ix, -n / EA],
+            [0, -dp_x / (2 * l), p_ix / (2 * EA)],
+            [0, 0, dp_x / (6 * l * EA)]
         ])
 
     @cached_property
@@ -336,13 +336,13 @@ class BarResult:
             :math:`w, \varphi`: Transverse displacement and slope at the start
             of bar.
 
-            :math:`p0_{i,z}, p0_{j,z}`: Distributed load in the local
+            :math:`p_{i,z}, p_{j,z}`: Distributed load in the local
             z-direction at the start and end of the bar.
 
         The difference between the load values is:
 
         .. math::
-            dp0_z = p0_{j,z} - p0_{i,z}
+            dp_z = p_{j,z} - p_{i,z}
 
         The polynomial coefficients in the local z-direction are calculated
         using the following matrix equation:
@@ -350,15 +350,15 @@ class BarResult:
         .. math::
             a_{z} =
             \begin{bmatrix}
-                p0_{i,z} & -V & -M & \varphi & w \\
-                \dfrac{dp0_z}{l} & -p0_{i,z} & -V & -\dfrac{M}{EI} &
+                p_{i,z} & -V & -M & \varphi & w \\
+                \dfrac{dp_z}{l} & -p_{i,z} & -V & -\dfrac{M}{EI} &
                 -\varphi \\
-                0 & -\dfrac{dp0_z}{2l} & -\dfrac{p0_{i,z}}{2} & -\dfrac{V}{2EI}
+                0 & -\dfrac{dp_z}{2l} & -\dfrac{p_{i,z}}{2} & -\dfrac{V}{2EI}
                 & \dfrac{M}{2EI} \\
-                0 & 0 & -\dfrac{dp0_z}{6l} & -\dfrac{p0_{i,z}}{6EI} &
+                0 & 0 & -\dfrac{dp_z}{6l} & -\dfrac{p_{i,z}}{6EI} &
                 \dfrac{V}{6EI} \\
-                0 & 0 & 0 & -\dfrac{dp0_z}{24lEI} & \dfrac{p0_{i,z}}{24EI} \\
-                0 & 0 & 0 & 0 & \dfrac{dp0_z}{120lEI}
+                0 & 0 & 0 & -\dfrac{dp_z}{24lEI} & \dfrac{p_{i,z}}{24EI} \\
+                0 & 0 & 0 & 0 & \dfrac{dp_z}{120lEI}
             \end{bmatrix}
 
         The matrix columns correspond to the following physical quantities:
@@ -396,17 +396,17 @@ class BarResult:
 
         """
         l, EI = self.bar.length, self.bar.EI
-        p0_iz, p0_jz = self.bar.line_load[1][0], self.bar.line_load[4][0]
-        v, m = self.bar_forces[1][0], self.bar_forces[2][0]
-        w, phi = self.bar_deforms[1][0], self.bar_deforms[2][0]
-        dp0_z = p0_jz - p0_iz
+        p_iz, p_jz = self.bar.line_load[1][0], self.bar.line_load[4][0]
+        v, m = self.forces[1][0], self.forces[2][0]
+        w, phi = self.deform[1][0], self.deform[2][0]
+        dp_z = p_jz - p_iz
         return np.array([
-            [p0_iz, -v, -m, phi, w],
-            [dp0_z / l, -p0_iz, -v, -m / EI, -phi],
-            [0, -dp0_z / (2 * l), -p0_iz / 2, -v / (2 * EI), m / (2 * EI)],
-            [0, 0, -dp0_z / (6 * l), -p0_iz / (6 * EI), v / (6 * EI)],
-            [0, 0, 0, -dp0_z / (24 * l * EI), p0_iz / (24 * EI)],
-            [0, 0, 0, 0,  dp0_z / (120 * l * EI)]
+            [p_iz, -v, -m, phi, w],
+            [dp_z / l, -p_iz, -v, -m / EI, -phi],
+            [0, -dp_z / (2 * l), -p_iz / 2, -v / (2 * EI), m / (2 * EI)],
+            [0, 0, -dp_z / (6 * l), -p_iz / (6 * EI), v / (6 * EI)],
+            [0, 0, 0, -dp_z / (24 * l * EI), p_iz / (24 * EI)],
+            [0, 0, 0, 0,  dp_z / (120 * l * EI)]
         ])
 
     def _eval_poly(self, coef: np.ndarray):
@@ -454,7 +454,7 @@ class BarResult:
         return powers @ coef
 
     @cached_property
-    def bar_deforms_disc(self):
+    def deform_disc(self):
         r"""Evaluate displacement-related result vectors along the bar.
 
         This method computes the axial displacement `u(x)`, transverse
@@ -483,7 +483,7 @@ class BarResult:
         Examples
         --------
         >>> bar_result = BarResult(...)
-        >>> deforms = bar_result.bar_deforms_disc
+        >>> deforms = bar_result.deform_disc
 
         The values can be accessed as:
 
@@ -495,7 +495,7 @@ class BarResult:
         return np.vstack([self._eval_poly(c) for c in coef]).T
 
     @cached_property
-    def bar_forces_disc(self):
+    def forces_disc(self):
         r"""
         Evaluate internal force result vectors along the bar.
 
@@ -525,7 +525,7 @@ class BarResult:
         Examples
         --------
         >>> bar_result = BarResult(...)
-        >>> forces = bar_result.bar_forces_disc
+        >>> forces = bar_result.forces_disc
 
         The values can be accessed as:
 
