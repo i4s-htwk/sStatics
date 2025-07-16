@@ -261,8 +261,6 @@ class MeshGenerator:
         bars = []
         prev_bar = None
 
-        print(pos_dict)
-
         for pos in sorted(pos_dict):
             if pos in (0.0, 1.0):
                 continue
