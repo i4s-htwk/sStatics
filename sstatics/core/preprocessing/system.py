@@ -175,8 +175,10 @@ class MeshGenerator:
                         self._assign_loads_to_segments(
                             load_pos, user_pos).items()
                 ):
-                    new_segments = self._split(calc_segments[idx], pos_load)
-                    calc_segments[idx:idx + 1] = new_segments
+                    if not set(pos_load.keys()).issubset({0, 1}):
+                        calc_segments[idx:idx + 1] = (
+                            self._split(calc_segments[idx], pos_load)
+                        )
 
             calc_mesh.extend(calc_segments)
 
@@ -258,6 +260,8 @@ class MeshGenerator:
                pos_dict: Dict[float, List[NodePointLoad]]) -> List[Bar]:
         bars = []
         prev_bar = None
+
+        print(pos_dict)
 
         for pos in sorted(pos_dict):
             if pos in (0.0, 1.0):
