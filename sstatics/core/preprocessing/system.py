@@ -41,11 +41,8 @@ class System:
 
     Attributes
     ----------
-    segmented_bars : tuple[Bar, ...]
+    mesh : tuple[Bar, ...]
         The bars of the system after segmentation.
-
-    dof : int
-        Degrees of freedom for the system (fixed at 3).
     """
 
     bars: tuple[Bar, ...] | list[Bar]
@@ -83,10 +80,6 @@ class System:
 
         self.create_mesh(user_divisions=self.user_divisions)
 
-    @property
-    def mesh(self):
-        return self._mesh.mesh
-
     def connected_nodes(self, segmented: bool = True):
         bars = self.mesh if segmented else self.bars
         connections = {}
@@ -114,36 +107,66 @@ class System:
     def nodes(self, segmented: bool = True):
         return list(self.connected_nodes(segmented=segmented).keys())
 
+    @property
+    def mesh(self):
+        return self._mesh.mesh
+
+    @property
+    def user_mesh(self):
+        return self._mesh.user
+
+    def mesh_segments_of(self, bar):
+        return self._mesh.mesh_segments_of(bar)
+
+    def user_segments_of(self, bar: Bar) -> List[Bar]:
+        return self._mesh.user_segments_of(bar)
+
+    def bar_of(self, mesh_segment: Bar) -> Bar:
+        return self._mesh.bar_of(mesh_segment)
+
     def get_polplan(self):
         self.polplan = Polplan(self)
 
     def create_mesh(self, user_divisions=None):
-        self._mesh = MeshGenerator(bars=self.bars,
-                                   user_divisions=user_divisions)()
+        self._mesh = Mesh(bars=self.bars, user_divisions=user_divisions)()
 
 
 @dataclass(eq=False)
-class MeshGenerator:
+class Mesh:
     bars: List[Bar]
     user_divisions: Optional[Dict[Bar, List[float]]] = None
 
     def __post_init__(self):
         self.bars = list(self.bars)
         self._mesh: List[Bar] = []
-        self._user_segments: List[Bar] = []
+        self._user: List[Bar] = []
+
+        self._map_bar_user: Dict[Bar, List[Bar]] = {}
+        self._map_bar_mesh: Dict[Bar, List[Bar]] = {}
 
     @property
     def mesh(self):
         return self._mesh
 
     @property
-    def user_segments(self):
-        return self._user_segments
+    def user(self):
+        return self._user
+
+    @property
+    def _map_mesh_bar(self):
+        reverse_map = {}
+        for bar, mesh in self._map_bar_mesh.items():
+            for segment in mesh:
+                reverse_map[segment] = bar
+        return reverse_map
 
     def generate(self):
         user_divisions = self.user_divisions or {}
         calc_mesh = []
         user_mesh = []
+
+        map_bar_user = {}
+        map_bar_mesh = {}
 
         for i, bar in enumerate(self.bars):
 
@@ -164,6 +187,7 @@ class MeshGenerator:
                 user_segments = [bar]
 
             user_mesh.extend(user_segments)
+            map_bar_user[bar] = user_segments
 
             calc_segments = user_segments.copy()
 
@@ -176,11 +200,23 @@ class MeshGenerator:
                         calc_segments[idx:idx + 1] = (
                             self._split(calc_segments[idx], pos_load)
                         )
-
+            map_bar_mesh[bar] = calc_segments
             calc_mesh.extend(calc_segments)
 
-        self._user_segments = user_mesh
+        self._user = user_mesh
         self._mesh = calc_mesh
+
+        self._map_bar_user = map_bar_user
+        self._map_bar_mesh = map_bar_mesh
+
+    def mesh_segments_of(self, bar: Bar) -> List[Bar]:
+        return self._map_bar_mesh.get(bar)
+
+    def user_segments_of(self, bar: Bar) -> List[Bar]:
+        return self._map_bar_user.get(bar)
+
+    def bar_of(self, mesh_segment: Bar) -> Bar:
+        return self._map_mesh_bar.get(mesh_segment)
 
     @staticmethod
     def _assign_loads_to_segments(load_pos_i, user_pos_i):
