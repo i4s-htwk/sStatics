@@ -14,7 +14,7 @@ class SystemGraphic(SingleGraphicObject):
         super().__init__(
             system.bars[0].node_i.x, system.bars[0].node_i.z, **kwargs
         )
-        self.bars = system.bars
+        self.bars = system.mesh
         self.nodes = system.nodes()
         self.node_graphic = [
             NodeGraphic(
