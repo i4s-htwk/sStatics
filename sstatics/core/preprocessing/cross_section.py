@@ -385,8 +385,7 @@ class CrossSection:
         -----
         Circular sectors currently not included.
         """
-        minx, miny, maxx, maxy = self.polygon.height
-        return maxy - miny
+        return self.polygon.height
 
     def _calc_width(self) -> float:
         r"""
@@ -401,5 +400,4 @@ class CrossSection:
         -----
             Circular sectors currently not included.
         """
-        minx, miny, maxx, maxy = self.polygon.width
-        return maxx - minx
+        return self.polygon.width
