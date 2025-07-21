@@ -50,7 +50,7 @@ class Polygon:
     --------
     Create a rectangular polygon with no holes:
 
-    >>> from sstatics.core.geometry.objects import Polygon
+    >>> from sstatics.core.preprocessing.geometry.objects import Polygon
     >>> outer = [(0, 0), (4, 0), (4, 2), (0, 2), (0, 0)]
     >>> p = Polygon(points=outer)
 
@@ -135,7 +135,7 @@ class Polygon:
 
         Examples
         --------
-        >>> from sstatics.core.geometry.objects import Polygon
+        >>> from sstatics.core.preprocessing.geometry.objects import Polygon
 
         Without holes:
 
@@ -193,7 +193,7 @@ class Polygon:
 
         Examples
         --------
-        >>> from sstatics.core.geometry.objects import Polygon
+        >>> from sstatics.core.preprocessing.geometry.objects import Polygon
         >>> outer = [(0, 0), (4, 0), (4, 2), (0, 2), (0, 0)]
         >>> hole = [[(1, 0.5), (3, 0.5), (3, 1.5), (1, 1.5), (1, 0.5)]]
         >>> p = Polygon(points=outer, holes=hole)
@@ -238,7 +238,7 @@ class Polygon:
         --------
         Without holes:
 
-        >>> from sstatics.core.geometry.objects import Polygon
+        >>> from sstatics.core.preprocessing.geometry.objects import Polygon
         >>> outer = [(0, 0), (4, 0), (4, 2), (0, 2), (0, 0)]
         >>> p = Polygon(points=outer)
         >>> sz, sy = p.static_moment
@@ -589,7 +589,7 @@ class CircularSector:
         if not isinstance(self.start_angle, (int, float)):
             raise ValueError("Start angle must be a number (in radians).")
 
-    def convert_to_polygon(self, num_points=100):
+    def convert_to_polygon(self, num_points=500):
         cx, cy = self.center
         points = [(cx, cy)]
         for i in range(num_points + 1):
@@ -597,6 +597,17 @@ class CircularSector:
             x = cx + self.radius * np.cos(theta)
             y = cy + self.radius * np.sin(theta)
             points.append((x, y))
+
+        end_point = (
+            round(cx + self.radius * np.cos(self.start_angle + self.angle),
+                  12),
+            round(cy + self.radius * np.sin(self.start_angle + self.angle),
+                  12)
+        )
+
+        if end_point not in points:
+            points.append(end_point)
+
         points.append((cx, cy))
         return Polygon(points, positive=self.positive)
 
