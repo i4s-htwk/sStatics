@@ -49,7 +49,8 @@ class InfluenceLine:
             return deform_2, force_2
         else:
             # 1. polplan aufstellen
-            self.modified_system.get_polplan()
+            # self.modified_system.get_polplan()
+            # TODO: --> so war es vorher, ich glaube das braucht man nicht mehr
 
             if self.modified_system.polplan.solved:
                 # 2. Winkelberechnung für Scheibe in dem das obj enthalten ist
