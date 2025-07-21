@@ -5,7 +5,8 @@ from typing import Literal
 
 import numpy as np
 
-from sstatics.core import NodeDisplacement, NodePointLoad
+from sstatics.core.preprocessing.dof import NodeDisplacement
+from sstatics.core.preprocessing.loads import NodePointLoad
 
 
 @dataclass(eq=False)
@@ -94,11 +95,11 @@ class Node:
 
         Examples
         --------
-        >>> from sstatics.core import Node
+        >>> from sstatics.core.preprocessing.node import Node
         >>> Node(1, 2).displacement
         array([[0], [0], [0]])
 
-        >>> from sstatics.core import NodeDisplacement
+        >>> from sstatics.core.preprocessing.dof import NodeDisplacement
         >>> displacements = (NodeDisplacement(1.5, 2, 0.5),
         >>>                  NodeDisplacement(-2, 3, -0.3))
         >>> Node(-1, 3, displacements=displacements).displacement
@@ -142,7 +143,8 @@ class Node:
 
         Examples
         --------
-        >>> from sstatics.core import Node, NodePointLoad
+        >>> from sstatics.core.preprocessing.node import Node
+        >>> from sstatics.core.preprocessing.loads import NodePointLoad
             >>> import numpy
         >>> load = NodePointLoad(1, 2, 0.5, rotation=2 * numpy.pi)
         >>> Node(6, 5, rotation=numpy.pi, loads=(load,)).load
@@ -182,7 +184,7 @@ class Node:
 
         Examples
         --------
-        >>> from sstatics.core import Node
+        >>> from sstatics.core.preprocessing.node import Node
         >>> Node(0, 0, u='fixed', w='fixed', phi='free').elastic_support
         array([[0, 0, 0], [0, 0, 0], [0, 0, 0]])
         >>> Node(0, 0, u=100, w=200, phi=1000).elastic_support
@@ -210,7 +212,7 @@ class Node:
 
         Examples
         --------
-        >>> from sstatics.core import Node
+        >>> from sstatics.core.preprocessing.node import Node
         >>> node = Node(1, 2)
         >>> node.same_location(Node(1, 2))
         True

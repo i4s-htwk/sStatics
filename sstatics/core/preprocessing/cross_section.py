@@ -2,9 +2,12 @@
 from dataclasses import dataclass
 from typing import List, Optional, Union
 
-from sstatics.core.geometry.objects import CircularSector, Polygon
-from sstatics.core.geometry.operation import (PolygonMerge,
-                                              SectorToPolygonHandler)
+from sstatics.core.preprocessing.geometry.objects import (
+    CircularSector, Polygon
+)
+from sstatics.core.preprocessing.geometry.operation import (
+    PolygonMerge, SectorToPolygonHandler
+)
 
 
 @dataclass(eq=False)
@@ -264,11 +267,15 @@ class CrossSection:
         >>> sz, sy = cs.static_moment
         (np.float64(1.0), np.float64(2.0))
         """
-        sm = self.polygon.static_moment
-        if self.circular_sector:
-            for c in self.circular_sector:
-                sm = tuple(s + c_s for s, c_s in zip(sm, c.static_moment))
-        return sm
+        if self.polygon is None:
+            return (self._width * self._height ** 2 / 2,
+                    self._height * self._width ** 2 / 2)
+        else:
+            sm = self.polygon.static_moment
+            if self.circular_sector:
+                for c in self.circular_sector:
+                    sm = tuple(s + c_s for s, c_s in zip(sm, c.static_moment))
+            return sm
 
     @property
     def center_of_mass_y(self) -> float:
@@ -389,8 +396,7 @@ class CrossSection:
         -----
         Circular sectors currently not included.
         """
-        minx, miny, maxx, maxy = self.polygon.height
-        return maxy - miny
+        return self.polygon.height
 
     def _calc_width(self) -> float:
         r"""
@@ -405,5 +411,4 @@ class CrossSection:
         -----
             Circular sectors currently not included.
         """
-        minx, miny, maxx, maxy = self.polygon.width
-        return maxx - minx
+        return self.polygon.width

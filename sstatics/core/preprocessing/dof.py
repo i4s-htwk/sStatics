@@ -20,9 +20,9 @@ class DegreesOfFreedom:
         The rotational displacement (angle) or moment around the origin.
     """
 
-    x: float
-    z: float
-    phi: float
+    x: float = 0.0
+    z: float = 0.0
+    phi: float = 0.0
 
     @cached_property
     def vector(self):

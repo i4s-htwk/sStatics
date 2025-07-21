@@ -1,13 +1,12 @@
 
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from functools import cached_property
-from typing import Literal
 
 import numpy as np
 
-from sstatics.core import (Bar, BarTemp, Node, System, SystemModifier,
-                           transformation_matrix)
+from sstatics.core.preprocessing.system import System
+from sstatics.core.utils import transformation_matrix
 
 
 @dataclass(eq=False)
@@ -44,7 +43,10 @@ class FirstOrder:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> cross_section = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         >>> material = Material(2.1e8, 0.1, 0.1, 0.1)
         >>> node1 = Node(0, 0, u='fixed', w='fixed')
@@ -91,7 +93,10 @@ class FirstOrder:
 
         Examples
         --------
-        >>> from sstatics.core import Bar, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
         >>> cross_section = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         >>> material = Material(2.1e8, 0.1, 0.1, 0.1)
         >>> node1 = Node(0, 0, u='fixed', w='fixed')
@@ -145,7 +150,7 @@ class FirstOrder:
         k_system = self._get_zero_matrix()
         nodes = self.system.nodes()
         dof = self.dof
-        for index, bar in enumerate(self.system.segmented_bars):
+        for index, bar in enumerate(self.system.mesh):
             i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
             k = bar.stiffness_matrix(self.order, self.approach,
                                      f_axial=self._get_f_axial(index))
@@ -186,7 +191,7 @@ class FirstOrder:
         elastic = self._get_zero_matrix()
         nodes = self.system.nodes()
         dof = self.dof
-        for bar in self.system.segmented_bars:
+        for bar in self.system.mesh:
             i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
 
             el_bar = np.block([
@@ -235,7 +240,7 @@ class FirstOrder:
         f0_system = self._get_zero_vec()
         nodes = self.system.nodes()
         dof = self.dof
-        for index, bar in enumerate(self.system.segmented_bars):
+        for index, bar in enumerate(self.system.mesh):
             i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
             f0 = bar.f0(self.order, self.approach,
                         f_axial=self._get_f_axial(index))
@@ -334,7 +339,11 @@ class FirstOrder:
 
         Examples
         --------
-        >>> from sstatics import Bar, BarLineLoad, CrossSection, Material, Node
+        >>> from sstatics.core.preprocessing.bar import Bar
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> from sstatics.core.preprocessing.material import Material
+        >>> from sstatics.core.preprocessing.node import Node
+        >>> from sstatics.core.preprocessing.loads import BarLineLoad
         >>> cross_section = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         >>> material = Material(2.1e8, 0.1, 0.1, 0.1)
         >>> node1 = Node(0, 0, u='fixed', w='fixed')
@@ -427,7 +436,7 @@ class FirstOrder:
                 deform[nodes.index(bar.node_j) * dof:
                        nodes.index(bar.node_j) * dof + dof]
             ])
-            for bar in self.system.segmented_bars
+            for bar in self.system.mesh
         ]
 
     @cached_property
@@ -460,7 +469,7 @@ class FirstOrder:
                 deform[nodes.index(bar.node_j) * dof:
                        nodes.index(bar.node_j) * dof + dof]
             ])
-            for bar in self.system.segmented_bars
+            for bar in self.system.mesh
         ]
 
     @cached_property
@@ -493,7 +502,7 @@ class FirstOrder:
                 to_node_coord=False, f_axial=self._get_f_axial(i)
             ) + bar.f0_point
             for i, (bar, deform) in
-            enumerate(zip(self.system.segmented_bars, bar_deform))
+            enumerate(zip(self.system.mesh, bar_deform))
         ]
 
     @cached_property
@@ -629,7 +638,7 @@ class FirstOrder:
         """
         deform_list = []
         bar_deform_list = self.bar_deform
-        for i, bar in enumerate(self.system.segmented_bars):
+        for i, bar in enumerate(self.system.mesh):
             delta_rel = np.zeros((6, 1))
             if True in bar.hinge:
                 k = bar.stiffness_matrix(
@@ -672,7 +681,7 @@ class FirstOrder:
         return [
             np.transpose(bar.transformation_matrix())
             @ np.vstack((bar.node_i.displacement, bar.node_j.displacement))
-            for bar in self.system.segmented_bars
+            for bar in self.system.mesh
         ]
 
     @cached_property
@@ -781,274 +790,3 @@ class FirstOrder:
 
         self.order = original_order
         return l_avg
-
-
-# TODO: Idee besprechen
-@dataclass(eq=False)
-class SecondOrder(FirstOrder):
-
-    calc_approach: (
-            Literal['analytic', 'taylor', 'p_delta', 'iterativ'] | None) = None
-    iteration_type: Literal['incremental', 'cumulativ'] | None = None
-    iterations: float = 10
-    iteration_tolerance: float = 1e-3
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.dof = 3
-        self.order = 'second'
-        self.approach = self.calc_approach
-
-    def calc_second(self):
-        if self.solvable:
-            if self.approach == 'iterativ':
-                iteration_data = []
-                iteration_data.append(self.recursive_iteration(
-                    self.system, self.initial_system_iteration,
-                    0, self.iterations, self.iteration_tolerance,
-                    iteration_data, self.iteration_type,
-                    [np.zeros((6, 1)) for _ in range(
-                        len(self.system.segmented_bars))],
-                    [np.zeros((6, 1)) for _ in range(
-                        len(self.system.segmented_bars))],
-                    [np.zeros((6, 1)) for _ in range(
-                        len(self.system.segmented_bars))],
-                    [np.zeros((6, 1)) for _ in range(
-                        len(self.system.segmented_bars))]))
-                return iteration_data
-            else:
-                return (self.bar_deform_list,
-                        self._conversion_transversial_in_iternal_force)
-
-    @cached_property
-    def _conversion_transversial_in_iternal_force(self):
-        forces_list = []
-        for deform, force in zip(
-                self.bar_deform_list,
-                self.internal_forces):
-            phi_i, phi_j = deform[2, 0], deform[5, 0]
-            l_i, l_j = -force[0, 0], force[3, 0]
-            t_i, t_j = -force[1, 0], force[4, 0]
-            force_sec = np.array([
-                [-(l_i * np.cos(phi_i) - t_i * np.sin(phi_i))],
-                [-(t_i * np.cos(phi_i) + l_i * np.sin(phi_i))],
-                [force[2, 0]],
-                [l_j * np.cos(phi_j) - t_j * np.sin(phi_j)],
-                [t_j * np.cos(phi_j) + l_j * np.sin(phi_j)],
-                [force[5, 0]]
-            ])
-            forces_list.append(force_sec)
-        return forces_list
-
-    @property
-    def initial_system_iteration(self):
-        updated_bars = []
-        for bar in self.system.bars:
-            updated_bar = replace(
-                bar,
-                node_i=replace(bar.node_i, displacements=(), loads=()),
-                node_j=replace(bar.node_j, displacements=(), loads=()),
-                line_loads=(),
-                point_loads=(),
-                temp=BarTemp(temp_o=0, temp_u=0),
-            )
-            updated_bars.append(updated_bar)
-        return replace(self.system, bars=updated_bars)
-
-    def recursive_iteration(self, input_system, previous_system, iteration,
-                            max_iterations, tolerance, iteration_results,
-                            calculation_type,
-                            total_deltas_bar=None, total_internal_forces=None,
-                            total_deltas_node=None, total_deltas_system=None):
-
-        if iteration >= max_iterations:
-            return iteration_results
-
-        current_system = replace(input_system)
-
-        node_deform_current = FirstOrder(
-            input_system).node_deform_list
-        node_deform_previous = FirstOrder(
-            previous_system).node_deform_list
-
-        max_displacements = {'i': 0, 'j': 0}
-        updated_bars = []
-        for bar, node_deform, previous_node_deform in zip(
-                current_system.bars, node_deform_current,
-                node_deform_previous):
-
-            delta_displacement = node_deform - previous_node_deform
-            updated_node_i = replace(
-                bar.node_i,
-                x=bar.node_i.x + delta_displacement[0][0],
-                z=bar.node_i.z + delta_displacement[1][0],
-            )
-            updated_node_j = replace(
-                bar.node_j,
-                x=bar.node_j.x + delta_displacement[3][0],
-                z=bar.node_j.z + delta_displacement[4][0],
-            )
-
-            for node, indices in zip([bar.node_i, bar.node_j],
-                                     [(0, 1), (3, 4)]):
-                delta_x = abs(delta_displacement[indices[0]][0])
-                delta_z = abs(delta_displacement[indices[1]][0])
-                key = 'i' if node is bar.node_i else 'j'
-                max_displacements[key] = max(max_displacements[key], np.sqrt(
-                    delta_x ** 2 + delta_z ** 2))
-
-            updated_bar = replace(bar, node_i=updated_node_i,
-                                  node_j=updated_node_j)
-            updated_bars.append(updated_bar)
-        current_system = replace(current_system, bars=updated_bars)
-
-        if calculation_type == 'incremental':
-            bar_deform_current = FirstOrder(
-                input_system).bar_deform_list
-            bar_forces_current = FirstOrder(
-                input_system).internal_forces
-
-            for idx, (bar, bar_deform, node_deform, bar_forces) in enumerate(
-                    zip(current_system.bars, bar_deform_current,
-                        node_deform_current, bar_forces_current)):
-                incremental_displacement_bar = bar_deform - total_deltas_bar[
-                    idx]
-                incremental_displacement_node = (node_deform -
-                                                 total_deltas_node[idx])
-                incremental_internal_forces = (bar_forces -
-                                               total_internal_forces[idx])
-
-                total_deltas_bar[idx] += incremental_displacement_bar
-                total_deltas_node[idx] += incremental_displacement_node
-                total_internal_forces[idx] += incremental_internal_forces
-
-                result_dic = {
-                    'bar_displacement': incremental_displacement_bar,
-                    'node_displacement': incremental_displacement_node,
-                    'internal_forces': incremental_internal_forces
-                }
-                iteration_results.append((iteration, result_dic))
-        else:
-            result_dic = {
-                'bar_displacement': FirstOrder(
-                    input_system).node_deform_list,
-                'node_displacement': node_deform_current,
-                'internal_forces': FirstOrder(
-                    input_system).internal_forces
-            }
-            iteration_results.append((iteration, result_dic))
-
-        if all(max_displacements[key] < tolerance for key in
-               max_displacements):
-            return iteration_results
-
-        return self.recursive_iteration(
-            current_system, input_system, iteration + 1, max_iterations,
-            tolerance, iteration_results, calculation_type, total_deltas_bar,
-            total_internal_forces, total_deltas_node, total_deltas_system
-        )
-
-
-@dataclass(eq=False)
-class InfluenceLine:
-
-    system: System
-
-    def __post_init__(self):
-        self.dof = 3
-        self.modifier = SystemModifier(self.system)
-
-    def force(self, force: Literal['fx', 'fz', 'fm'], obj,
-              position: float = 0):
-        if force not in ['fx', 'fz', 'fm']:
-            raise ValueError(f"Invalid force type: {force}")
-
-        if isinstance(obj, Bar):
-            self.modified_system = self.modifier.modify_bar_force(
-                obj, force, position, virt_force=1)
-
-        elif isinstance(obj, Node):
-            if position:
-                raise ValueError(
-                    "If obj is an instance of Node, position must be None.")
-            self.modified_system = self.modifier.modify_node_force(
-                obj, force, virt_force=1)
-        else:
-            raise ValueError("obj must be an instance of Bar or Node")
-
-        calc_system = FirstOrder(self.modified_system)
-
-        if calc_system.solvable:
-            norm_force = self.calc_norm_force(force, obj)
-            if isinstance(obj, Bar):
-                self.modified_system = self.modifier.modify_bar_force(
-                    obj, force, position, virt_force=norm_force)
-            elif isinstance(obj, Node):
-                self.modified_system = self.modifier.modify_node_force(
-                    obj, force, virt_force=norm_force)
-            calc_system = FirstOrder(self.modified_system)
-            return calc_system.calc
-        else:
-            # TODO: Hier wird die Verschiebungsfigur zurückgegeben und
-            #       nicht deform, force wie bei calc_system.calc()
-            return None
-
-    def calc_norm_force(self, force: Literal['fx', 'fz', 'fm'],
-                        obj):
-        """
-        Normalize the deformation of the bar system based on the given force.
-        This method calculates a virtual force to balance the deformation
-        difference between two connected bars, based on their deformation.
-        """
-        calc_system = FirstOrder(self.modified_system)
-        if isinstance(obj, Bar):
-            # calc bar deformations
-            deform = calc_system.bar_deform_list
-
-            # Get the index of the bar in the system
-            bars = list(self.system.bars)
-            idx = bars.index(obj)
-
-            deform_bar_i, deform_bar_j = deform[idx], deform[idx + 1]
-
-            # Map the force type to corresponding indices for the deformation
-            # values
-            force_indices = {'fx': (3, 0), 'fz': (4, 1), 'fm': (5, 2)}
-            idx_i, idx_j = force_indices[force]
-
-            # Calculate the difference in deformation between the two bars
-            delta = deform_bar_j[idx_j][0] - deform_bar_i[idx_i][0]
-        elif isinstance(obj, Node):
-            node_deformation = calc_system.node_deform
-            for i, node in enumerate(self.system.nodes()):
-                if node == obj:
-                    node_deform = node_deformation[
-                               i * self.dof:i * self.dof + self.dof, :]
-                    force_indices = {'fx': 0, 'fz': 1, 'fm': 2}
-                    delta = node_deform[force_indices[force]][0]
-                    break
-        else:
-            raise ValueError("obj must be an instance of Bar or Node")
-
-        if delta == 0:
-            raise ZeroDivisionError("Deformation difference (delta) is zero, "
-                                    "cannot calculate norm force.")
-        return -1 * float(np.abs(1 / delta))
-
-    def deform(self, deform: Literal['u', 'w', 'phi'], obj: Bar,
-               position: float = 0):
-        if deform not in ['u', 'w', 'phi']:
-            raise ValueError(f"Invalid deform type: {deform}")
-
-        if isinstance(obj, Bar):
-            if not (0 <= position <= 1):
-                raise ValueError(
-                    f"Position {position} must be between 0 and 1.")
-
-            self.modified_system = (
-                self.modifier.modify_bar_deform(obj, deform, position))
-
-            calc_system = FirstOrder(self.modified_system)
-
-            return calc_system.calc
-        raise ValueError("obj must be an instance of Bar")
