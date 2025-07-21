@@ -346,13 +346,24 @@ class CrossSection:
             float
                 Circular sectors moment of inertia.
         """
+
         if self.circular_sector:
             return sum(
-                c.mom_of_int_y + c.mom_of_int_steiner(
-                    self.center_of_mass_z - c.center_of_mass_z)
+                c.mom_of_int_y + c.mom_of_int_steiner(self.center_of_mass_z - c.center_of_mass_z)
                 for c in self.circular_sector
             )
         return 0
+
+        #Wenn die Unterscheidung ob positive/negative Fläche in CrossSection stattfinden soll:
+        '''        
+        if self.circular_sector:
+            sum_mom_of_int_y = 0
+            for c in self.circular_sector:
+                part = c.mom_of_int_y + c.mom_of_int_steiner(self.center_of_mass_z - c.center_of_mass_z) #Hier noch Variablennamen anpassen!
+                sum_mom_of_int_y += part if c.positive else -part
+            return sum_mom_of_int_y
+        return 0
+        '''
 
     def _calc_mom_of_int(self) -> float:
         """

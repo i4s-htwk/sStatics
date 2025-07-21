@@ -572,7 +572,7 @@ class CircularSector:
     def __post_init__(self):
         if not isinstance(self.center, tuple) or len(self.center) != 2:
             raise ValueError(
-                "Center must be a tuple of two numeric values (x, y)."
+                "Center must be a tuple of two numeric values (y, z)."
             )
         if not all(isinstance(coord, (int, float)) for coord in self.center):
             raise ValueError(
@@ -606,27 +606,37 @@ class CircularSector:
         return 0.5 * self.radius ** 2 * abs(self.angle)
 
     @property
-    def static_moment(self):
-        # TODO: calc static moment of a CircularSector
-        return [0, 0]
-
-    @property
     def center_of_mass_y(self):
-        return self.static_moment[1] / self.area
+        return 2 * self.radius * (np.sin(self.angle + self.start_angle) - np.sin(self.start_angle)) / (3 * self.angle) + self.center[0]
 
     @property
     def center_of_mass_z(self):
-        return self.static_moment[0] / self.area
-
-    def mom_of_int_steiner(self, center):
-        return self.area * center ** 2
+        #Wie ist nun die Achse definiert?!? Wenn nach x-, y- System dann ohne Minus!
+        return -(2 * self.radius * (-np.cos(self.angle + self.start_angle) + np.cos(self.start_angle)) / (3 * self.angle) + self.center[1])
 
     @property
-    def mom_of_int_z(self) -> float:
-        # TODO: calc mon_of_int_z of a CircularSector
-        return 0
+    def static_moment(self):
+        # TODO: calc static moment of a CircularSector
+
+        #Hier nochmal wegen der Vorzeichendefintion schauen!!
+        #s_y = self.radius ** 3 * (-np.sin(self.angle + self.start_angle) + np.sin(self.start_angle)) / 3 + self.center[1] * self.area
+        #s_z = self.radius ** 3 * (np.cos(self.angle + self.start_angle) - np.cos(self.start_angle)) / 3 + self.center[0] * self.area
+        s_y = self.area * self.center_of_mass_z if self.positive else -self.area * self.center_of_mass_z
+        s_z = self.area * self.center_of_mass_y if self.positive else -self.area * self.center_of_mass_y
+        return [s_y, s_z]
+
+# Was macht diese Funktion?? --> Siehe cross_sections
+    def mom_of_int_steiner(self, center):
+        return self.area * center ** 2 if self.positive else -self.area * center ** 2
 
     @property
     def mom_of_int_y(self) -> float:
         # TODO: calc mon_of_int_y of a CircularSector
-        return 0
+        iy = self.radius ** 4 * (self.angle - 0.5 * (np.sin(2 * (self.angle + self.start_angle)) - np.sin(2 * self.start_angle))) / 8 - self.area * (self.center_of_mass_z - self.center[1]) ** 2
+        iy = iy if self.positive else -iy
+        return iy
+
+    @property
+    def mom_of_int_z(self) -> float:
+        # TODO: calc mon_of_int_z of a CircularSector
+        return self.radius ** 4 * (self.angle + 0.5 * (np.sin(2 * (self.angle + self.start_angle)) - np.sin(2 * self.start_angle))) / 8 - self.mom_of_int_steiner(self.center_of_mass_y - self.center[0])
