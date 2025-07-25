@@ -123,8 +123,8 @@ class System:
     @property
     def polplan(self):
         if not hasattr(self, "_polplan"):
-            from sstatics.core.preprocessing.poleplan import Polplan
-            self._polplan = Polplan(self)
+            from sstatics.core.preprocessing.poleplan.objects import Poleplan
+            self._polplan = Poleplan(self)
         return self._polplan
 
     def create_mesh(self, user_divisions=None):

@@ -72,7 +72,7 @@ class InfluenceLine:
             # 2.1 Um welche Scheibe handelt es sich
             idx = list(self.system.bars).index(obj)
             bar = self.modified_system.bars[idx]
-            chain = self.modified_system.polplan._get_chain(bars={bar})
+            chain = self.modified_system.polplan.get_chain(bars={bar})
 
             # 2.2 Wie groß ist der Winkel
             if force == 'fz':
@@ -85,7 +85,7 @@ class InfluenceLine:
                             f'Position {position}: {chain.absolute_pole} '
                             f'liegt im Unendlichen!')
                         aPole_coords, node_coords, c = (
-                            self.modified_system.polplan._find_adjacent_chain(
+                            self.modified_system.polplan.find_adjacent_chain(
                                 node, chain))
 
                         if aPole_coords is None:
@@ -94,7 +94,7 @@ class InfluenceLine:
                                 if rPole != node:
                                     aPole_coords, node_coords, c = (
                                         self.modified_system.polplan.
-                                        _find_adjacent_chain(
+                                        find_adjacent_chain(
                                             rPole.node, chain))
                         idx_chain = self.modified_system.polplan.chains.index(
                             chain)
@@ -129,7 +129,7 @@ class InfluenceLine:
             return chain, angle
         elif isinstance(obj, Node):
             # 2.1 Um welche Scheibe handelt es sich
-            chain = self.modified_system.polplan._get_chain_node(obj)
+            chain = self.modified_system.polplan.get_chain_node(obj)
             angle = 0
 
             # 2.2 Wie groß ist der Winkel
