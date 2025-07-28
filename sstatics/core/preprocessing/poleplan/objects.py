@@ -79,8 +79,8 @@ class Chain:
     relative_pole: set = field(default_factory=set)
     absolute_pole: Pole = None
     connection_nodes: set = field(default_factory=set)
-    stiff: bool = False
 
+    _stiff: bool = False
     _angle_factor: float = 0
     _angle: float = 0
 
@@ -130,6 +130,37 @@ class Chain:
     #                     self.stiff = True
     #                     return False
     #     return True
+
+    # Other properties
+    @property
+    def angle(self):
+        return self._angle
+
+    @angle.setter
+    def angle(self, value: float) -> None:
+        if not isinstance(value, (int, float)):
+            raise TypeError("Angle must be a number")
+        self._angle = float(value)
+
+    @property
+    def angle_factor(self):
+        return self._angle_factor
+
+    @angle_factor.setter
+    def angle_factor(self, value: float) -> None:
+        if not isinstance(value, (int, float)):
+            raise TypeError("Angle factor must be a number")
+        self._angle_factor = float(value)
+
+    @property
+    def stiff(self):
+        return self._stiff
+
+    @stiff.setter
+    def stiff(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError("Stiff must be bool.")
+        self._stiff = bool(value)
 
     def add_connection_node(self, node: Node | set[Node]):
         if isinstance(node, Node):
@@ -224,7 +255,7 @@ class Chain:
         self.bars.update(bars)
 
     @property
-    def absolute_pole_lines_dict(self):
+    def apole_lines(self):
         # kann nur aufgestellt werden,
         #   wenn die Koordinaten des Absolutpols bekannt sind
         if self.absolute_pole.same_location:
@@ -263,9 +294,8 @@ class Chain:
                         node=self.absolute_pole.node)
             return line_dict
 
-    # Drehwinkel
     @property
-    def vec_aPole_rPole_dict(self):
+    def displacement_to_rpoles(self):
         # Stellt einen Vektor zwischen aPole und rPole auf
         #   -> kann nur aufgestellt werden, wenn der aPole nicht im
         #      Unendlichen liegt
@@ -285,26 +315,6 @@ class Chain:
                 else:
                     vec_dict[rPole] = (rPole.coords - aPole_coords)
             return vec_dict
-
-    @property
-    def angle(self):
-        return self._angle
-
-    @angle.setter
-    def angle(self, value: float) -> None:
-        if not isinstance(value, (int, float)):
-            raise TypeError("Angle must be a number")
-        self._angle = float(value)
-
-    @property
-    def angle_factor(self):
-        return self._angle_factor
-
-    @angle_factor.setter
-    def angle_factor(self, value: float) -> None:
-        if not isinstance(value, (int, float)):
-            raise TypeError("Angle factor must be a number")
-        self._angle_factor = float(value)
 
 
 @dataclass(eq=False)

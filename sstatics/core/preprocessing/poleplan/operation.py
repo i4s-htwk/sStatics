@@ -496,7 +496,7 @@ class PoleIdentifier:
     #             if conn_chain != chain:
     #                 j = self.chains.index(conn_chain)
     #                 if conn_chain.solved_absolute_pole:
-    #                     line_dict = conn_chain.absolute_pole_lines_dict
+    #                     line_dict = conn_chain.apole_lines
     #                     if line_dict:
     #                         lines.append(line_dict[rPole.node])
     #     if len(lines) == 2:
@@ -587,7 +587,7 @@ class PoleIdentifier:
                     print(f' -> Scheibe {j} ist keine starre Scheibe.')
                     print(f'Hat Scheibe {j} eine Absolutpollinie?')
                     if conn_chain.solved_absolute_pole:
-                        line_dict = conn_chain.absolute_pole_lines_dict
+                        line_dict = conn_chain.apole_lines
                         if line_dict:
                             print(f' -> Absolutpollinie: ({j}) - ({i}|{j}):'
                                   f' z(x) = {line_dict[rPole.node][0]} * x '
@@ -771,8 +771,8 @@ class Validator:
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
 
-        line_1 = c1.absolute_pole_lines_dict[rPole.node]
-        line_2 = c2.absolute_pole_lines_dict[rPole.node]
+        line_1 = c1.apole_lines[rPole.node]
+        line_2 = c2.apole_lines[rPole.node]
 
         print(f'  -> z{c1_idx} = {line_1[0]} * x + {line_1[1]}')
         print(f'  -> z{c2_idx} = {line_2[0]} * x + {line_2[1]}')
@@ -797,8 +797,8 @@ class Validator:
         print('# Winkelbeziehung aufstellen')
         print(f'     -> c{c2_idx}.angle = '
               f'c{c2_idx}.angle_factor * c{c1_idx}.angle')
-        c1_distance = c1.vec_aPole_rPole_dict
-        c2_distance = c2.vec_aPole_rPole_dict
+        c1_distance = c1.displacement_to_rpoles
+        c2_distance = c2.displacement_to_rpoles
 
         if c1_distance is None or c2_distance is None:
             print('    -> Ein Absolutpol liegt im Unendlichen \n'
@@ -892,8 +892,8 @@ class Validator:
     #     return True
     #
     # def _validation_lines(self, c1: Chain, c2: Chain, rPole: Pole):
-    #     line_1 = c1.absolute_pole_lines_dict[rPole.node]
-    #     line_2 = c2.absolute_pole_lines_dict[rPole.node]
+    #     line_1 = c1.apole_lines[rPole.node]
+    #     line_2 = c2.apole_lines[rPole.node]
     #     x, z = get_intersection_point(line_1, line_2)
     #     if x == float('inf'):
     #         return True
@@ -905,8 +905,8 @@ class Validator:
     # def _calc_angle_relation(self, c1: Chain, c2: Chain, rPole: Pole):
     #     c1_idx = self.chains.index(c1)
     #     c2_idx = self.chains.index(c2)
-    #     c1_distance = c1.vec_aPole_rPole_dict
-    #     c2_distance = c2.vec_aPole_rPole_dict
+    #     c1_distance = c1.displacement_to_rpoles
+    #     c2_distance = c2.displacement_to_rpoles
     #     if c1_distance is None or c2_distance is None:
     #         if c1_distance is None:
     #             c1.set_angle_factor(1)
