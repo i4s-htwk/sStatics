@@ -80,8 +80,9 @@ class Chain:
     absolute_pole: Pole = None
     connection_nodes: set = field(default_factory=set)
     stiff: bool = False
-    angle_factor: float = 0
-    angle: float = 0
+
+    _angle_factor: float = 0
+    _angle: float = 0
 
     def __post_init__(self):
         if len(self.bars) == 0:
@@ -285,11 +286,25 @@ class Chain:
                     vec_dict[rPole] = (rPole.coords - aPole_coords)
             return vec_dict
 
-    def set_angle_factor(self, factor):
-        self.angle_factor = factor
+    @property
+    def angle(self):
+        return self._angle
 
-    def set_angle(self, angle):
-        self.angle = angle
+    @angle.setter
+    def angle(self, value: float) -> None:
+        if not isinstance(value, (int, float)):
+            raise TypeError("Angle must be a number")
+        self._angle = float(value)
+
+    @property
+    def angle_factor(self):
+        return self._angle_factor
+
+    @angle_factor.setter
+    def angle_factor(self, value: float) -> None:
+        if not isinstance(value, (int, float)):
+            raise TypeError("Angle factor must be a number")
+        self._angle_factor = float(value)
 
 
 @dataclass(eq=False)

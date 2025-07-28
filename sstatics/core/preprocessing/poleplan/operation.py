@@ -739,14 +739,16 @@ class Validator:
         if c1.stiff and not c2.stiff:
             print(f'  -> c{c1_idx} ist eine starre Scheibe')
             if c2.angle_factor == 0:
-                c2.set_angle_factor(1)
+                # c2.set_angle_factor(1)
+                c2.angle_factor = 1
                 print(f'  -> c{c2_idx}.set_angle_factor: 1')
             return True
 
         if c2.stiff and not c1.stiff:
             print(f'  -> c{c2_idx} ist eine starre Scheibe')
             if c1.angle_factor == 0:
-                c1.set_angle_factor(1)
+                # c1.set_angle_factor(1)
+                c1.angle_factor = 1
                 print(f'  -> c{c1_idx}.set_angle_factor: 1')
             return True
 
@@ -806,8 +808,8 @@ class Validator:
                 if c1.angle_factor == 0 or c1.angle_factor == 1:
                     print(f'    -> c{c1_idx}.angle_factor ist 0')
                     print(f'     -> c{c1_idx}.angle_factor wird auf 1 gesetzt')
-                    c1.set_angle_factor(1)
-
+                    # c1.set_angle_factor(1)
+                    c1.angle_factor = 1
                     # l1 = rPole.coords
                     a = np.array([[c1.absolute_pole.node.x],
                                   [c1.absolute_pole.node.z]])
@@ -820,7 +822,8 @@ class Validator:
                         r21)) * np.sign(np.dot(l1.T, r21)).item()
 
                     # Winkel-Faktor für c2 setzen
-                    c2.set_angle_factor(factor)
+                    # c2.set_angle_factor(factor)
+                    c2.angle_factor = factor
                     print(f'c{c2_idx}.angle_factor = '
                           f'l{c1_idx} / r{c2_idx}{c1_idx}')
                     print(f'c{c2_idx}.angle_factor = '
@@ -832,13 +835,15 @@ class Validator:
                         print(f'    -> c{c2_idx}.angle_factor ist 0')
                         print(f'     -> c{c2_idx}.angle_factor wird auf -1 '
                               f'gesetzt')
-                        c2.set_angle_factor(1)
+                        # c2.set_angle_factor(1)
+                        c2.angle_factor = 1
             if c2_distance is None:
                 print(f'    -> aPol : ({c2_idx}) ist im Unendlichen')
                 if c2.angle_factor == 0:
                     print(f'    -> c{c2_idx}.angle_factor ist 0')
                     print(f'     -> c{c2_idx}.angle_factor wird auf 1 gesetzt')
-                    c2.set_angle_factor(1)
+                    # c2.set_angle_factor(1)
+                    c2.angle_factor = 1
 
         elif rPole.is_infinite:
             # Wenn rPole = Querkraft- oder Normalkraftgelenk
@@ -847,7 +852,8 @@ class Validator:
             if c2.angle_factor == 0:
                 print(f'    -> c{c2_idx}.angle_factor ist 0')
                 print(f'     -> c{c2_idx}.angle_factor wird auf 1 gesetzt')
-                c2.set_angle_factor(1)
+                # c2.set_angle_factor(1)
+                c2.angle_factor = 1
         else:
             l1 = c1_distance[rPole]
             r21 = c2_distance[rPole]
@@ -857,7 +863,8 @@ class Validator:
                 r21)) * np.sign(np.dot(l1.T, r21)).item()
 
             # Winkel-Faktor für c2 setzen
-            c2.set_angle_factor(factor)
+            # c2.set_angle_factor(factor)
+            c2.angle_factor = factor
             print(f'c{c2_idx}.angle_factor = '
                   f'l{c1_idx} / r{c2_idx}{c1_idx}')
             print(f'c{c2_idx}.angle_factor = (({c1_idx}) - '
@@ -969,7 +976,8 @@ class AngleCalculator:
         chain_0 = self.chains[0]
         if chain_0 != target_chain:
             if not chain_0.stiff:
-                chain_0.set_angle_factor(1)
+                # chain_0.set_angle_factor(1)
+                chain_0.angle_factor = 1
 
         if target_chain.stiff:
             print(' -> Scheibe ist starr!')
@@ -979,7 +987,7 @@ class AngleCalculator:
                 angle = -1
             else:
                 angle = 1
-        target_chain.set_angle(angle)
+        target_chain.angle = angle
 
         print(
             f'Berechnung des Winkel von Scheibe 0, so dass,\n'
@@ -1012,7 +1020,7 @@ class AngleCalculator:
             angle = angle / factor
 
             print(f"Berechneter Winkel für Scheibe {i}: {angle}")
-            current_chain.set_angle(angle)
+            current_chain.angle = angle
 
         print('(((((((((((((())))))))))))))')
         print('Berechnung aller Scheibenwinkel')
@@ -1050,7 +1058,7 @@ class AngleCalculator:
             return False
 
         angle = c1.angle * c2.angle_factor
-        c2.set_angle(angle)
+        c2.angle = angle
         print(
             f'   -> c{c2_idx}.angle = '
             f'c{c1_idx}.angle * c{c2_idx}.angle_factor')
