@@ -1,5 +1,7 @@
 
 from dataclasses import dataclass, field
+from functools import cached_property
+from typing import Optional
 import numpy as np
 
 from sstatics.core.preprocessing.bar import Bar
@@ -306,15 +308,13 @@ class Poleplan:
         self.chain_identifier = ChainIdentifier(
             self.system, self.bars, self.chains)()
 
-        self.node_to_chain_map = self._create_node_to_chain_map()
-
         self.pole_identifier = PoleIdentifier(
             self.chains, self.node_to_chain_map, self.bars)()
 
         self.solved = Validator(self.chains, self.node_to_chain_map)()
-        print(self.solved)
 
-    def _create_node_to_chain_map(self):
+    @cached_property
+    def node_to_chain_map(self):
         conn = {}
         for chain in self.chains:
             for n in chain.connection_nodes:
@@ -335,7 +335,6 @@ class Poleplan:
         angle_calculator.set_angle(target_chain, target_angle)
 
     def get_displacement_figure(self):
-
         from sstatics.core.preprocessing.poleplan.operation import (
             DisplacementCalculator
         )
@@ -343,20 +342,39 @@ class Poleplan:
             self.chains, self.bars, self.node_to_chain_map
         )()
 
-    def get_chain(self, bars: set[Bar]):
-        for chain in self.chains:
-            if bars & chain.bars:
-                return chain
-        return None
+    def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
+        # TODO: Simplify get_chain to accept a single Bar object.
+        #   Original:
+        #     def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
+        #         """Returns chain containing any given bars."""
+        #         return next((chain for chain in self.chains
+        #                      if bars & chain.bars), None)
+        #   Simplified:
+        #     def get_chain(self, bar: Bar) -> Optional[Chain]:
+        #         """Returns chain containing the given bar."""
+        #         return next((chain for chain in self.chains
+        #                      if bar in chain.bars), None)
+        #   Add a separate method for multiple Bar objects:
+        #     def get_chain_containing_any(self, bars: set[Bar]):
+        #         """Returns chain containing any given bars."""
+        #         return next((chain for chain in self.chains
+        #                      if bars & chain.bars), None)
+        """Returns the chain that contains any of the given bars."""
+        return next(
+            (chain for chain in self.chains if bars & chain.bars), None
+        )
 
-    def get_chain_node(self, node):
-        for chain in self.chains:
-            for n in chain.connection_nodes:
-                if node.same_location(n):
-                    return chain
-        return None
+    def get_chain_node(self, node) -> Optional[Chain]:
+        """Returns the chain that is connected to the given node."""
+        return next(
+            (chain for chain in self.chains
+             if any(node.same_location(n)
+                    for n in chain.connection_nodes)), None
+        )
 
     def find_adjacent_chain(self, node, chain):
+        # TODO: Refactor this method and get_chain_and_angle(…) of
+        #  InfluenceLine class together.
         conn_chain = self.node_to_chain_map.get(node, [])
 
         if len(conn_chain) > 1:
@@ -388,18 +406,3 @@ class Poleplan:
                         ])
                     return aPole_coords, node_coords, c
         return None, None, None
-
-    def print_chains(self):
-        for chain in self.chains:
-            i = self.chains.index(chain)
-            index = []
-            conn = []
-            for bar in chain.bars:
-                index.append(self.bars.index(bar))
-            for n in chain.connection_nodes:
-                conn.append((n.x, n.z))
-
-            print(f'Chain: {i}, bars: {index}, \n -> conn_nodes: {conn}, '
-                  f'\n -> rPol: {chain.relative_pole}, '
-                  f'\n -> mPol: {chain.absolute_pole}'
-                  f'\n -> starr: {chain.stiff}')

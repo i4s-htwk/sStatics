@@ -151,6 +151,22 @@ def get_angle(point, center, displacement: float = 1):
     else:
         return displacement / length
 
+
+def print_chains(chains, bars):
+    for chain in chains:
+        i = chains.index(chain)
+        index = []
+        conn = []
+        for bar in chain.bars:
+            index.append(bars.index(bar))
+        for n in chain.connection_nodes:
+            conn.append((n.x, n.z))
+
+        print(f'Chain: {i}, bars: {index}, \n -> conn_nodes: {conn}, '
+              f'\n -> rPol: {chain.relative_pole}, '
+              f'\n -> mPol: {chain.absolute_pole}'
+              f'\n -> starr: {chain.stiff}')
+
 #############################################################################
 
 
@@ -171,7 +187,7 @@ class ChainIdentifier:
                     self.system.connected_nodes(segmented=False))[current_node]
                 self._identify_chains_from_node(current_node)
 
-                self.print_chains()
+                print_chains(self.chains, self.bars)
 
                 if shared_chains := self._find_shared_chains():
                     self._merge_chains(shared_chains)
@@ -183,7 +199,7 @@ class ChainIdentifier:
     def _identify_triangle(self):
         print('Dreieckssuche')
         self.find_all_conn()
-        self.print_chains()
+        print_chains(self.chains, self.bars)
         chains = [chain for chain in self.chains if
                   len(chain.connection_nodes) >= 2]
         if len(chains) >= 3:
@@ -201,7 +217,7 @@ class ChainIdentifier:
                 if len(valid_triangle_nodes) == 3:
                     print('--> gefunden!')
                     self._merge_chains([c1, c2, c3])
-                    self.print_chains()
+                    print_chains(self.chains, self.bars)
                     return True
         return False
 
@@ -453,22 +469,7 @@ class ChainIdentifier:
         # Neue Chain an ursprünglicher Stelle einfügen
         self.chains.insert(insertion_index, new_triangle_chain)
 
-        self.print_chains()
-
-    def print_chains(self):
-        for chain in self.chains:
-            i = self.chains.index(chain)
-            index = []
-            conn = []
-            for bar in chain.bars:
-                index.append(self.bars.index(bar))
-            for n in chain.connection_nodes:
-                conn.append((n.x, n.z))
-
-            print(f'Chain: {i}, bars: {index}, \n -> conn_nodes: {conn}, '
-                  f'\n -> rPol: {chain.relative_pole}, '
-                  f'\n -> mPol: {chain.absolute_pole}'
-                  f'\n -> starr: {chain.stiff}')
+        print_chains(self.chains, self.bars)
 
     def __call__(self):
         return self.run()
