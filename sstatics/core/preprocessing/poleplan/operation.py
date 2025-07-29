@@ -167,6 +167,28 @@ def print_chains(chains, bars):
               f'\n -> mPol: {chain.absolute_pole}'
               f'\n -> starr: {chain.stiff}')
 
+
+def print_dict_key_value(dictionary, bars):
+    print('# # # # # # # # # # # # # # # # # # # # # ')
+    for node, chains in dictionary.items():
+        print(f"Node: ({node.x}, {node.z})")
+        print('---------------------------')
+        for chain in chains:
+            i = chains.index(chain)
+            index = []
+            conn = []
+            for bar in chain.bars:
+                index.append(bars.index(bar))
+            for n in chain.connection_nodes:
+                conn.append((n.x, n.z))
+
+            print(f'  Chain: {i}, bars: {index}, \n   -> conn_nodes: {conn}, '
+                  f'\n   -> rPol: {chain.relative_pole}, '
+                  f'\n   -> mPol: {chain.absolute_pole}'
+                  f'\n   -> starr: {chain.stiff}')
+        print()
+        print('---------------------------')
+
 #############################################################################
 
 
@@ -232,6 +254,8 @@ class ChainIdentifier:
                 for node in (bar.node_i, bar.node_j):
                     if node not in chain.connection_nodes and node in conn:
                         self._add_node_to_chain(chain, node)
+                        chain.add_connection_node(node)
+        print_dict_key_value(conn, self.bars)
         return conn
 
     def _identify_chains_from_node(self, current_node: Node):
