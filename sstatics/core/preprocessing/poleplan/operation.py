@@ -169,6 +169,7 @@ def print_chains(chains, bars):
 
 
 def print_dict_key_value(dictionary, bars):
+    # Only for Debugging
     print('# # # # # # # # # # # # # # # # # # # # # ')
     for node, chains in dictionary.items():
         print(f"Node: ({node.x}, {node.z})")
