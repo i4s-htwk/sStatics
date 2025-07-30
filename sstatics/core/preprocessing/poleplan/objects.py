@@ -1,7 +1,6 @@
 
 from dataclasses import dataclass, field
-from functools import cached_property
-from typing import Optional
+from typing import Optional, Type
 import numpy as np
 
 from sstatics.core.preprocessing.bar import Bar
@@ -80,9 +79,9 @@ class Chain:
     absolute_pole: Pole = None
     connection_nodes: set = field(default_factory=set)
 
-    _stiff: bool = False
-    _angle_factor: float = 0
-    _angle: float = 0
+    _stiff: bool = field(init=False, default=False)
+    _angle_factor: float = field(init=False, default=0)
+    _angle: float = field(init=False, default=0)
 
     def __post_init__(self):
         if len(self.bars) == 0:
@@ -322,41 +321,67 @@ class Poleplan:
 
     system: System
 
-    def __post_init__(self):
-        self.bars = self.system.bars
-        self.chains = []
+    _node_to_chains: Optional[dict] = field(init=False, default=None)
+    _node_to_multiple_chains: Optional[dict] = field(init=False, default=None)
 
+    def __post_init__(self):
         from sstatics.core.preprocessing.poleplan.operation import (
             ChainIdentifier, PoleIdentifier, Validator
         )
 
-        self.chain_identifier = ChainIdentifier(
-            self.system, self.bars, self.chains)()
+        steps: list[Type] = [
+            ChainIdentifier,
+            PoleIdentifier,
+            Validator,
+        ]
 
-        self.pole_identifier = PoleIdentifier(
-            self.chains, self.node_to_chain_map, self.bars)()
+        results = {}
+        for i, step_class in enumerate(steps):
+            if i == 0:
+                step = step_class(self.system)
+            else:
+                step = step_class(results.get('chains'),
+                                  results.get('node_to_chains'))
+            step()
+            results['chains'] = step.chains
 
-        self.solved = Validator(self.chains, self.node_to_chain_map)()
+            self.node_to_chains = step.node_to_chains
 
-    @cached_property
-    def node_to_chain_map(self):
-        conn = {}
-        for chain in self.chains:
-            for n in chain.connection_nodes:
-                if n not in conn:
-                    conn[n] = []
-                conn[n].append(chain)
-            for bar in chain.bars:
-                for node in (bar.node_i, bar.node_j):
-                    if node not in chain.connection_nodes and node in conn:
-                        chain.add_connection_node(node)
+            results['node_to_chains'] = self.node_to_multiple_chains
+
+            if i == 2:
+                results['solved'] = step.solved
+
+        self.chains = results['chains']
+        self.solved = results['solved']
+
+    @property
+    def node_to_chains(self):
+        return self._node_to_chains
+
+    @node_to_chains.setter
+    def node_to_chains(self, value):
+        if not isinstance(value, dict):
+            raise TypeError("Angle must be a dict")
+        self._node_to_chains = value
+
+    @property
+    def node_to_multiple_chains(self):
+        if self._node_to_multiple_chains is None:
+            self._node_to_multiple_chains = (
+                self._filter_multiple_chains(self.node_to_chains))
+        return self._node_to_multiple_chains
+
+    @staticmethod
+    def _filter_multiple_chains(conn):
         return {key: chains for key, chains in conn.items() if len(chains) > 1}
 
     def set_angle(self, target_chain, target_angle):
         from sstatics.core.preprocessing.poleplan.operation import (
             AngleCalculator
         )
-        angle_calculator = AngleCalculator(self.chains, self.node_to_chain_map)
+        angle_calculator = AngleCalculator(self.chains,
+                                           self.node_to_multiple_chains)
         angle_calculator.set_angle(target_chain, target_angle)
 
     def get_displacement_figure(self):
@@ -364,7 +389,7 @@ class Poleplan:
             DisplacementCalculator
         )
         return DisplacementCalculator(
-            self.chains, self.bars, self.node_to_chain_map
+            self.chains, self.system.bars, self.node_to_multiple_chains
         )()
 
     def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
@@ -400,7 +425,7 @@ class Poleplan:
     def find_adjacent_chain(self, node, chain):
         # TODO: Refactor this method and get_chain_and_angle(…) of
         #  InfluenceLine class together.
-        conn_chain = self.node_to_chain_map.get(node, [])
+        conn_chain = self.node_to_multiple_chains.get(node, [])
 
         if len(conn_chain) > 1:
             print(' -> es gibt angrenzende Scheiben')
