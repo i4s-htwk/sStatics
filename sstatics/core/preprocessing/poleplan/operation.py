@@ -185,8 +185,6 @@ def print_dict_key_value(dictionary, bars, all_chains):
         print()
         print('---------------------------')
 
-#############################################################################
-
 
 @dataclass(eq=False)
 class ChainIdentifier:
@@ -312,27 +310,25 @@ class ChainIdentifier:
     def _new_chain(self, bars: Set[Bar], current_node: Node):
         existing_chain = self._get_chain(bars)
         if existing_chain:
-            self._add_bar_to_chain(existing_chain, bars)
+            existing_chain.add_bars(bars)
             self._add_node_to_chain(existing_chain, current_node)
         else:
             new_chain = Chain(bars)
             self._add_node_to_chain(new_chain, current_node)
             self._chains.append(new_chain)
 
-    def _has_hinge(self, bar: Bar, node: Node):
+    @staticmethod
+    def _has_hinge(bar: Bar, node: Node):
         if bar.node_i == node:
-            return any([bar.hinge_u_i, bar.hinge_w_i, bar.hinge_phi_i])
+            return any(bar.hinge[0:3])
         else:
-            return any([bar.hinge_u_j, bar.hinge_w_j, bar.hinge_phi_j])
+            return any(bar.hinge[4:6])
 
     def _get_chain(self, bars: Set[Bar]):
         for chain in self._chains:
             if bars & chain.bars:
                 return chain
         return None
-
-    def _add_bar_to_chain(self, chain: Chain, bars: Set[Bar]):
-        chain.add_bars(bars)
 
     def _add_node_to_chain(self, chain: Chain, node: Node):
         # TODO: das muss vereinfacht werden!
@@ -530,31 +526,6 @@ class ChainIdentifier:
 class PoleIdentifier:
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
-
-    # def identify_pole(self):
-    #     for i, chain in enumerate(self.chains):
-    #         if not chain.solved_absolute_pole:
-    #             self._find_absolute_pole(chain)
-    #
-    # def _find_absolute_pole(self, chain: Chain, lines: List = None):
-    #     i = self.chains.index(chain)
-    #     if lines is None:
-    #         lines = []
-    #     for rPole in chain.relative_pole:
-    #         connected_chain = self.node_to_chains.get(rPole.node, [])
-    #         for conn_chain in connected_chain:
-    #             if conn_chain != chain:
-    #                 j = self.chains.index(conn_chain)
-    #                 if conn_chain.solved_absolute_pole:
-    #                     line_dict = conn_chain.apole_lines
-    #                     if line_dict:
-    #                         lines.append(line_dict[rPole.node])
-    #     if len(lines) == 2:
-    #         x, z = get_intersection_point(lines[0], lines[1])
-    #         if x is not None:
-    #             chain.set_absolute_pole(
-    #                 Pole(Node(x=x, z=z), same_location=True),
-    #                 overwrite=True)
 
     def run(self):
         for i, chain in enumerate(self.chains):
@@ -936,63 +907,6 @@ class Validator:
                 return rPole
         return None
 
-    # def validate(self):
-    #     for node, chains in self.node_to_chains.items():
-    #         for c1, c2 in combinations(chains, 2):
-    #             if not self._validate_chain_pair(c1, c2, node):
-    #                 return False
-    #     return True
-    #
-    # def _validate_chain_pair(self, c1: Chain, c2: Chain, node: Node):
-    #     rPole = self._get_rPole_from_chain(node, c1)
-    #     if not self._validation_lines(c1, c2, rPole):
-    #         return False
-    #     self._calc_angle_relation(c1, c2, rPole)
-    #     return True
-    #
-    # def _validation_lines(self, c1: Chain, c2: Chain, rPole: Pole):
-    #     line_1 = c1.apole_lines[rPole.node]
-    #     line_2 = c2.apole_lines[rPole.node]
-    #     x, z = get_intersection_point(line_1, line_2)
-    #     if x == float('inf'):
-    #         return True
-    #     elif x is None:
-    #         return True
-    #     else:
-    #         return False
-    #
-    # def _calc_angle_relation(self, c1: Chain, c2: Chain, rPole: Pole):
-    #     c1_idx = self.chains.index(c1)
-    #     c2_idx = self.chains.index(c2)
-    #     c1_distance = c1.displacement_to_rpoles
-    #     c2_distance = c2.displacement_to_rpoles
-    #     if c1_distance is None or c2_distance is None:
-    #         if c1_distance is None:
-    #             c1.set_angle_factor(1)
-    #             factor = (np.linalg.norm(c1.absolute_pole.coords -
-    #             rPole.coords) /
-    #                       np.linalg.norm(c2_distance[rPole])) * np.sign(
-    #                 np.dot((c1.absolute_pole.coords - rPole.coords).T,
-    #                        c2_distance[rPole])).item()
-    #             c2.set_angle_factor(factor)
-    #         if c2_distance is None:
-    #             c2.set_angle_factor(1)
-    #
-    #     elif rPole.is_infinite:
-    #         c2.set_angle_factor(1)
-    #     else:
-    #         l1 = c1_distance[rPole]
-    #         r21 = c2_distance[rPole]
-    #         factor = (np.linalg.norm(l1) / np.linalg.norm(
-    #             r21)) * np.sign(np.dot(l1.T, r21)).item()
-    #         c2.set_angle_factor(factor)
-    #
-    # def _get_rPole_from_chain(self, node: Node, chain: Chain):
-    #     for rPole in chain.relative_pole:
-    #         if rPole.node == node:
-    #             return rPole
-    #     return None
-
     def __call__(self):
         return self.run()
 
@@ -1001,28 +915,6 @@ class Validator:
 class AngleCalculator:
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
-
-    # def calculate_angle(self, target_chain, target_angle):
-    #     target_chain_index = self.chains.index(target_chain)
-    #     angle = target_angle
-    #     target_chain.set_angle(angle)
-    #     for i in range(target_chain_index - 1, -1, -1):
-    #         next_chain = self.chains[i + 1]
-    #         factor = next_chain.angle_factor
-    #         current_chain = self.chains[i]
-    #         angle = angle / factor
-    #         current_chain.set_angle(angle)
-    #     for node, chains in self.node_to_chains.items():
-    #         for c1, c2 in combinations(chains, 2):
-    #             self._calc_c2_angle_from_c1(c1, c2)
-    #
-    # def _calc_c2_angle_from_c1(self, c1: Chain, c2: Chain):
-    #     c1_idx = self.chains.index(c1)
-    #     c2_idx = self.chains.index(c2)
-    #     if c1.stiff or c2.stiff:
-    #         return False
-    #     angle = c1.angle * c2.angle_factor
-    #     c2.set_angle(angle)
 
     def set_angle(self, target_chain, target_angle):
         print('---------------------------')
@@ -1130,65 +1022,6 @@ class DisplacementCalculator:
     chains: List[Chain]
     bars: List[Bar]
     node_to_chains: Dict[Node, List[Chain]]
-
-    # def calculate_displacement(self):
-    #     displacement_bar_list = [np.zeros((6, 1)) for _ in self.bars]
-    #     bar_index_map = {bar: idx for idx, bar in enumerate(self.bars)}
-    #     for i, chain in enumerate(self.chains):
-    #         if chain.stiff:
-    #             continue
-    #         if chain.absolute_pole.is_infinite:
-    #             displacement = self._calc_displacement_from_translation(
-    #             chain)
-    #             for bar in chain.bars:
-    #                 idx = bar_index_map[bar]
-    #                 displacement_bar = displacement_bar_list[idx]
-    #                 displacement_bar[0:2, :] = displacement
-    #                 displacement_bar[3:5, :] = displacement
-    #                 displacement_bar = np.transpose(
-    #                     bar.transformation_matrix()) @ displacement_bar
-    #                 displacement_bar_list[idx] = displacement_bar
-    #         else:
-    #             center = chain.absolute_pole.coords
-    #             angle = chain.angle
-    #             for bar in chain.bars:
-    #                 idx = bar_index_map[bar]
-    #                 node_i = np.array([[bar.node_i.x], [bar.node_i.z]])
-    #                 node_j = np.array([[bar.node_j.x], [bar.node_j.z]])
-    #                 displacement_bar = displacement_bar_list[idx]
-    #                 displacement_bar[0:2, :] = (
-    #                     self._calc_displacement_from_rotation(
-    #                         node_i, center, angle))
-    #                 displacement_bar[3:5, :] = (
-    #                     self._calc_displacement_from_rotation(
-    #                         node_j, center, angle))
-    #                 displacement_bar[2, :] = displacement_bar[5, :] = -angle
-    #                 displacement_bar = np.transpose(
-    #                     bar.transformation_matrix()) @ displacement_bar
-    #                 displacement_bar_list[idx] = displacement_bar
-    #     return displacement_bar_list
-    #
-    # def _calc_displacement_from_translation(self, chain: Chain):
-    #     m, _ = chain.absolute_pole.line()
-    #     r = np.array([[1], [0]] if m is None else [[-m], [1]])
-    #     v_norm = r / np.linalg.norm(r)
-    #     for rPole in chain.relative_pole:
-    #         for conn_chain in self.node_to_chains[rPole.node]:
-    #             if conn_chain != chain and not conn_chain.stiff:
-    #                 aPole_coords = np.array([
-    #                     [conn_chain.absolute_pole.node.x],
-    #                     [conn_chain.absolute_pole.node.z]])
-    #                 rPole_coords = np.array([[rPole.node.x],
-    #                                          [rPole.node.z]])
-    #                 delta = aPole_coords - rPole_coords
-    #                 r = np.hypot(delta[0][0], delta[1][0])
-    #                 return r * np.sign(chain.angle) *
-    #                 conn_chain.angle * v_norm
-    #
-    # def _calc_displacement_from_rotation(self, point, center, angle):
-    #     delta = point - center
-    #     r = np.array([[0, -1], [1, 0]])
-    #     return angle * r @ delta
 
     def run(self):
         displacement_bar_list: List[np.ndarray] = \
