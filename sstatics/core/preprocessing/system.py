@@ -469,7 +469,13 @@ class SystemModifier:
 
                 if 0 < position < 1:
                     # divide bar at position and get 2 Bar-Instances
-                    bar_1, bar_2 = bar.segment([position])
+                    mesh = Mesh(self.system.bars,
+                                user_divisions={bar: [position]})
+                    mesh.generate()
+                    bar_1, bar_2 = mesh.user_segments_of(bar)
+
+                    # methode .segment gibt es nicht mehr
+                    # bar_1, bar_2 = bar.segment([position])
 
                     # replace point_loads and hinge
                     bar_1 = replace(bar_1, hinge_phi_j=False, hinge_w_j=False,
