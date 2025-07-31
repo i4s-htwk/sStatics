@@ -6,9 +6,9 @@ import numpy as np
 
 from sstatics.core.preprocessing.bar import Bar
 from sstatics.core.preprocessing.node import Node
+from sstatics.core.preprocessing.poleplan.operation import get_angle
 from sstatics.core.preprocessing.system import System, SystemModifier
 from sstatics.core.solution.first_order import FirstOrder
-from sstatics.core.utils import get_angle
 
 
 @dataclass(eq=False)
