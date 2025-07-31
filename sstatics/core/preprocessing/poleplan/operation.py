@@ -2,7 +2,7 @@ from collections import defaultdict
 
 import numpy as np
 from dataclasses import dataclass, field
-from typing import List, Dict, Set, Optional
+from typing import List, Dict, Set, Optional, Tuple
 from itertools import combinations
 
 from sstatics.core.preprocessing.bar import Bar
@@ -916,91 +916,111 @@ class AngleCalculator:
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
 
-    def set_angle(self, target_chain, target_angle):
+    def calculate_angles(self, target_chain: Chain, target_angle: float) -> \
+            None:
         print('---------------------------')
         print('Schritt 4: Winkelberechnung')
         print('---------------------------')
-        target_chain_index = self.chains.index(target_chain)
-        # Rückwärtsrechnen, um den Winkel für Scheibe 0 zu berechnen
-        angle = target_angle
+        print(f'Die Drehwinkel aller Scheiben sollen so bestimmt werden, '
+              f'dass die Scheibe {self.chains.index(target_chain)} den '
+              f'Winkel von {target_angle} hat.')
 
-        chain_0 = self.chains[0]
-        if chain_0 != target_chain:
-            if not chain_0.stiff:
-                # chain_0.set_angle_factor(1)
-                chain_0.angle_factor = 1
+        angle, target_chain_index = (self._init_target_chain(
+            target_chain, target_angle
+        ))
 
-        if target_chain.stiff:
-            print(' -> Scheibe ist starr!')
-            target_chain_index = target_chain_index + 1
-            target_chain = self.chains[target_chain_index]
-            if not target_chain.absolute_pole.is_infinite:
-                angle = -1
-            else:
-                angle = 1
-        target_chain.angle = angle
+        print('Berechnung des Winkels von Scheibe 0, so dass,')
+        print(f'Scheibe {target_chain_index} den Winkel {angle} hat.')
 
-        print(
-            f'Berechnung des Winkel von Scheibe 0, so dass,\n'
-            f'Scheibe {target_chain_index} den Winkel {angle} hat.')
-
-        # Rückwärts iterieren bis Scheibe 0
-        # TODO: das geht nur, wenn die Reihenfolge der Liste mit der der
-        #  Geometrie übereinstimmt, wenn am Ende Scheiben zusammengefasst
-        #  werden, ändert sich die Reihenfolge
-        for i in range(target_chain_index - 1, -1, -1):
-            print('i: ', i)
-            next_chain = self.chains[i + 1]
-            factor = next_chain.angle_factor
-
-            print('factor: ', factor)
-
-            if factor == 0:
-                print(
-                    f"Winkelberechnung für Kette {i + 1} abgebrochen: "
-                    f"angle_factor = 0")
-                break
-
-            current_chain = self.chains[i]
-
-            if current_chain.angle_factor == 0:
-                print(
-                    f"Winkelberechnung für Kette {i} abgebrochen:"
-                    f" angle_factor = 0")
-                break
-            angle = angle / factor
-
-            print(f"Berechneter Winkel für Scheibe {i}: {angle}")
-            current_chain.angle = angle
-
-        print('(((((((((((((())))))))))))))')
-        print('Berechnung aller Scheibenwinkel')
-        # Vorwärts iterieren ab Scheibe target_chain_index
-        # TODO: das funktioniert nur, wenn die Scheiben alle von anfang bis
-        #  Ende durchnummeriert sind und nicht am Ende Dreiecke Identifiziert
-        #  werden
-        previous_chain = None
-        for node, chains in self.node_to_chains.items():
-            print('=========================')
-            print('Knoten: ', node.x, node.z)
-            print(f'Überprüfte Scheiben: '
-                  f'{[self.chains.index(c) for c in chains]}')
-
-            if previous_chain and previous_chain in chains:
-                pairs = [(previous_chain, c) for c in chains if
-                         c != previous_chain]
-            else:
-                pairs = combinations(chains, 2)
-
-            for c1, c2 in pairs:
-                self._calc_c2_angle_from_c1(c1, c2)
-                previous_chain = c2
+        if target_chain_index != 0:
+            self._backward_calc(target_chain_index, angle)
+        else:
+            print(' -> Keine Rückwärtsberechnung nötig, da die ausgewählte '
+                  'Scheibe Scheibe 0 ist!')
+        self._forward_calc()
 
         print('-----------------------')
         print('Schritt 4 abgeschlossen')
         print('-----------------------')
 
-    def _calc_c2_angle_from_c1(self, c1: Chain, c2: Chain):
+    def _init_target_chain(self, target_chain: Chain, target_angle: float):
+        # Behandlung der ersten Scheibe, falls sie nicht Ziel ist und nicht
+        # starr
+        target_chain_index = self.chains.index(target_chain)
+        chain_0 = self.chains[0]
+        if chain_0 != target_chain and not chain_0.stiff:
+            chain_0.angle_factor = 1
+            print('Set angle_factor=1 for chain 0')
+
+        # Behandlung, falls target_chain starr ist
+        if target_chain.stiff:
+            print(f'Die Ausgewählte Scheibe mit dem Index:'
+                  f' {target_chain_index} ist starr!')
+            print(' -> Keinen Drehwinkel!')
+            target_chain_index += 1
+            print(f' -> neue Scheibe mit dem Index {target_chain_index}')
+            target_chain = self.chains[target_chain_index]
+            # TODO: Warum wir der Winkel hier auf -1 oder +1 gesetzt?
+            if not target_chain.absolute_pole.is_infinite:
+                target_angle = -1
+            else:
+                target_angle = 1
+
+        target_chain.angle = target_angle
+
+        return target_angle, target_chain_index
+
+    def _backward_calc(self, target_chain_index: int, initial_angle: float) \
+            -> None:
+        # TODO: das geht nur, wenn die Reihenfolge der Liste mit der der
+        #  Geometrie übereinstimmt ! Das muss vorher sichergestellt sein!
+        angle = initial_angle
+        for i in range(target_chain_index - 1, -1, -1):
+            next_chain = self.chains[i + 1]
+            factor = next_chain.angle_factor
+            print(f'Berechnung für Scheibe {i}: factor = {factor}')
+            if factor == 0:
+                print(f"Winkelberechnung für Kette {i + 1} abgebrochen: "
+                      f"angle_factor = 0")
+                break
+
+            current_chain = self.chains[i]
+            if current_chain.angle_factor == 0:
+                print(f"Winkelberechnung für Kette {i} abgebrochen: "
+                      f"angle_factor = 0")
+                break
+
+            angle /= factor
+            current_chain.angle = angle
+            print(f"Berechneter Winkel für Scheibe {i}: {angle}")
+
+    def _forward_calc(self) -> None:
+        print('(((((((((((((())))))))))))))')
+        print('Berechnung aller Scheibenwinkel')
+
+        previous_chain = None
+        for node, chains in self.node_to_chains.items():
+            print('=========================')
+            print(f'Knoten: {node.x}, {node.z}')
+            print(f'Überprüfte Scheiben: '
+                  f'{[self.chains.index(c) for c in chains]}')
+
+            pairs = self._get_chain_pairs(chains, previous_chain)
+
+            for c1, c2 in pairs:
+                self._calc_c2_angle_from_c1(c1, c2)
+                previous_chain = c2
+
+    @staticmethod
+    def _get_chain_pairs(chains: List[Chain], previous_chain: Chain) -> (
+            List)[Tuple[Chain, Chain]]:
+        """Gets pairs of chains for angle calculation."""
+        if previous_chain and previous_chain in chains:
+            return [(previous_chain, c) for c in chains if c != previous_chain]
+        else:
+            return list(combinations(chains, 2))
+
+    def _calc_c2_angle_from_c1(self, c1: Chain, c2: Chain) -> bool:
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
         print(f' -> Kombo: {c1_idx} - {c2_idx}')
@@ -1010,11 +1030,12 @@ class AngleCalculator:
 
         angle = c1.angle * c2.angle_factor
         c2.angle = angle
-        print(
-            f'   -> c{c2_idx}.angle = '
-            f'c{c1_idx}.angle * c{c2_idx}.angle_factor')
+
+        print(f'   -> c{c2_idx}.angle = c{c1_idx}.angle *  '
+              f'c{c2_idx}.angle_factor')
         print(f'   -> c{c2_idx}.angle = {c1.angle} * {c2.angle_factor}')
         print(f'   -> c{c2_idx}.angle = {angle}')
+        return True
 
 
 @dataclass(eq=False)

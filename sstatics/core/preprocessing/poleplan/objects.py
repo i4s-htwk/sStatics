@@ -382,7 +382,7 @@ class Poleplan:
         )
         angle_calculator = AngleCalculator(self.chains,
                                            self.node_to_multiple_chains)
-        angle_calculator.set_angle(target_chain, target_angle)
+        angle_calculator.calculate_angles(target_chain, target_angle)
 
     def get_displacement_figure(self):
         from sstatics.core.preprocessing.poleplan.operation import (
