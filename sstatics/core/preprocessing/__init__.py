@@ -12,7 +12,6 @@ from sstatics.core.preprocessing.loads import (
 )
 from sstatics.core.preprocessing.material import Material
 from sstatics.core.preprocessing.node import Node
-from sstatics.core.preprocessing.poleplan import Chain, Pole, Polplan
 from sstatics.core.preprocessing.system import Mesh, System, SystemModifier
 from sstatics.core.preprocessing.temperature import BarTemp
 
@@ -22,7 +21,6 @@ __all__ = [
     'BarLineLoad',
     'BarPointLoad',
     'BarTemp',
-    'Chain',
     'CrossSection',
     'DegreesOfFreedom',
     'geometry',
@@ -32,8 +30,6 @@ __all__ = [
     'NodeDisplacement',
     'NodePointLoad',
     'PointLoad',
-    'Pole',
-    'Polplan',
     'System',
     'SystemModifier',
 ]

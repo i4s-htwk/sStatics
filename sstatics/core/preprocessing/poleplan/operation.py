@@ -1,310 +1,212 @@
-
-from dataclasses import dataclass, field
-from functools import cached_property
-from itertools import combinations
-from typing import List
+from collections import defaultdict
 
 import numpy as np
+from dataclasses import dataclass, field
+from typing import List, Dict, Set, Optional, Tuple
+from itertools import combinations
 
 from sstatics.core.preprocessing.bar import Bar
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.system import System
-from sstatics.core.utils import get_intersection_point, validate_point_on_line
+
+from sstatics.core.preprocessing.poleplan.objects import Chain, Pole
+
+
+def get_intersection_point(line1, line2):
+    """
+    Calculate the intersection point of two lines.
+
+    Args:
+        line1 (tuple): (slope, intercept) of the first line.
+        line2 (tuple): (slope, intercept) of the second line.
+
+    Returns:
+        tuple: (x, z) coordinates of the intersection point or
+            (None, None) if no intersection.
+    """
+    m1, n1 = line1
+    m2, n2 = line2
+
+    is_identical, is_parallel = _check_lines(m1, n1, m2, n2)
+
+    if is_identical:
+        print(u' -> z0 = z1 identische Geraden!')
+        return float('inf'), float('inf')
+
+    elif is_parallel:
+        print(u' -> z0 und z1 sind parallele Geraden')
+        return None, None
+
+    # Handle vertical lines
+    if m1 is None:
+        return n1, m2 * n1 + n2
+    if m2 is None:
+        return n2, m1 * n2 + n1
+
+    # Handle horizontal lines
+    if m1 == 0:
+        return (n1 - n2) / m2, n1
+    if m2 == 0:
+        return (n2 - n1) / m1, n2
+
+    # General case: matrix representation
+    matrix = np.array([[-m1, 1], [-m2, 1]])
+    b = np.array([n1, n2])
+    x, z = np.linalg.solve(matrix, b)
+    return x, z
+
+
+def _check_lines(m1, n1, m2, n2, epsilon=1e-9):
+    """
+    Check if two lines are identical or parallel.
+
+    Args:
+        m1 (float or None): slope of the first line. None if vertical.
+        n1 (float): intercept of the first line.
+            If m1 is None, it's the x-coordinate.
+        m2 (float or None): slope of the second line. None if vertical.
+        n2 (float): intercept of the second line.
+            If m2 is None, it's the x-coordinate.
+        epsilon (float, optional): tolerance for floating-point comparison.
+         Defaults to 1e-9.
+
+    Returns:
+        tuple: (is_identical, is_parallel)
+    """
+    if m1 is None and m2 is None:  # Both lines are vertical
+        is_parallel = True
+        is_identical = np.isclose(n1, n2, atol=epsilon)
+    elif m1 is None or m2 is None:  # One line is vertical, the other is not
+        is_parallel = False
+        is_identical = False
+    else:
+        is_parallel = np.isclose(m1, m2, atol=epsilon)
+        is_identical = is_parallel and np.isclose(n1, n2, atol=epsilon)
+    return is_identical, is_parallel
+
+
+def validate_point_on_line(line, point, debug=False, epsilon=1e-9):
+    """
+    Validate if a point lies on a line.
+
+    Args:
+        line (tuple): (slope, intercept) of the line.
+        point (tuple): (x, z) coordinates of the point.
+        debug (bool, optional): print debug information. Defaults to
+            False.
+        epsilon (float, optional): tolerance for floating-point
+            comparison. Defaults to 1e-9.
+
+    Returns:
+        bool: True if the point lies on the line, False otherwise.
+    """
+    m, n = line
+    x, z = point
+
+    if m is None:  # Vertical line
+        result = abs(x - n) < epsilon
+    else:
+        z_calc = m * x + n
+        result = abs(z - z_calc) < epsilon
+
+    if debug:
+        status = u'JA' if result else u'NEIN'
+        position = u'auf' if result else u'nicht auf'
+        print(u'      -> {}, Punkt liegt {} der Geraden'.format(
+            status, position))
+    return result
+
+
+def get_angle(point, center, displacement: float = 1):
+    """
+    Calculate the angle between a point and a center.
+
+    Args:
+        point (numpy array): coordinates of the point.
+        center (numpy array): coordinates of the center.
+        displacement (float, optional): displacement factor. Defaults
+            to 1.
+
+    Returns:
+        float: angle between the point and the center.
+    """
+    r = point - center
+
+    # Length of the vector
+    length = np.linalg.norm(r)
+
+    # Determine the sign
+    if np.all(center == 0):
+        sign = np.sign(r[0, 0])
+    else:
+        sign = np.sign(np.dot(r.T, center)).item()
+
+    if displacement == 1:
+        return sign / length
+    else:
+        return displacement / length
+
+
+def print_chains(chains, bars):
+    for chain in chains:
+        i = chains.index(chain)
+        index = []
+        conn = []
+        for bar in chain.bars:
+            index.append(bars.index(bar))
+        for n in chain.connection_nodes:
+            conn.append((n.x, n.z))
+
+        print(f'Chain: {i}, bars: {index}, \n -> conn_nodes: {conn}, '
+              f'\n -> rPol: {chain.relative_pole}, '
+              f'\n -> mPol: {chain.absolute_pole}'
+              f'\n -> starr: {chain.stiff}')
+
+
+def print_dict_key_value(dictionary, bars, all_chains):
+    # Only for Debugging
+    print('# # # # # # # # # # # # # # # # # # # # # ')
+    for node, chains in dictionary.items():
+        print(f"Node: ({node.x}, {node.z})")
+        print('---------------------------')
+        for chain in chains:
+            i = all_chains.index(chain)
+            index = []
+            conn = []
+            for bar in chain.bars:
+                index.append(bars.index(bar))
+            for n in chain.connection_nodes:
+                conn.append((n.x, n.z))
+
+            print(f'  Chain: {i}, bars: {index}, \n   -> conn_nodes: {conn}, '
+                  f'\n   -> rPol: {chain.relative_pole}, '
+                  f'\n   -> mPol: {chain.absolute_pole}'
+                  f'\n   -> starr: {chain.stiff}')
+        print()
+        print('---------------------------')
 
 
 @dataclass(eq=False)
-class Pole:
-
-    node: Node
-    same_location: bool = False
-    direction: float = None
-    is_infinite: bool = False
-
-    def __post_init__(self):
-        if self.is_infinite:
-            if self.direction is None:
-                raise ValueError("A Pole at infinity must have a direction.")
-        elif not self.same_location:
-            if self.direction is None:
-                raise ValueError(
-                    "A Pole with unknown coordinates must have a direction.")
-        else:
-            if self.direction is not None:
-                raise ValueError(
-                    "A Pole with same_location=True cannot have a direction.")
-
-    def __eq__(self, other):
-        return (isinstance(other, Pole)
-                and self.x == other.x and self.z == other.z)
-
-    def __hash__(self):
-        return hash((self.x, self.z))
-
-    @property
-    def x(self):
-        return self.node.x if self.same_location else None
-
-    @property
-    def z(self):
-        return self.node.z if self.same_location else None
-
-    @property
-    def coords(self):
-        return np.array([[self.x], [self.z]])
-
-    def line(self, node: Node = None):
-        if self.same_location:
-            return False
-
-        if node is not None:
-            x, z = node.x, node.z
-        else:
-            x, z = self.node.x, self.node.z
-
-        # Prüfen, ob die Gerade vertikal ist (cos(direction) ≈ 0)
-        if np.isclose(np.cos(self.direction), 0, atol=1e-9):
-            return None, x  # Vertikale Gerade: x = x0
-        elif np.isclose(np.cos(self.direction), -1, atol=1e-9):
-            return 0, z
-
-        # Steigung m = tan(direction)
-        m = np.tan(self.direction)
-
-        # y-Achsenabschnitt n berechnen: z = m*x + n → n = z - m*x
-        n = z - m * x
-        return [m, n]
-
-
-@dataclass(eq=False)
-class Chain:
-
-    bars: set = field(default_factory=set)
-    relative_pole: set = field(default_factory=set)
-    absolute_pole: Pole = None
-    connection_nodes: set = field(default_factory=set)
-    stiff: bool = False
-    angle_factor: float = 0
-    angle: float = 0
-
-    def __post_init__(self):
-        if len(self.bars) == 0:
-            raise ValueError('There need to be at least one bar.')
-
-    @property
-    def solved(self) -> bool:
-        # if self.solved_absolute_pole:
-        #     self.solved_relation_aPole_rPole
-        if self.stiff:
-            return True
-        poles_valid = (
-                self.solved_absolute_pole
-                and self.solved_relative_pole
-        )
-        return (
-                self.bars is not None
-                and len(self.connection_nodes) > 0
-                and poles_valid
-        )
-
-    @property
-    def solved_absolute_pole(self) -> bool:
-        return (
-                self.absolute_pole is not None
-                and (
-                        self.absolute_pole.same_location
-                        or self.absolute_pole.is_infinite
-                )
-        )
-
-    @property
-    def solved_relative_pole(self) -> bool:
-        return all(pole.same_location or pole.is_infinite
-                   for pole in self.relative_pole)
-
-    # @property
-    # def solved_relation_aPole_rPole(self):
-    #     if self.absolute_pole.is_infinite:
-    #         for rPole in self.relative_pole:
-    #             print(rPole)
-    #             if rPole.same_location:
-    #                 if not validate_point_on_line(
-    #                         self.absolute_pole.line(), (rPole.x, rPole.z)):
-    #                     self.stiff = True
-    #                     return False
-    #     return True
-
-    def add_connection_node(self, node: Node | set[Node]):
-        if isinstance(node, Node):
-            self.connection_nodes.add(node)
-        elif isinstance(node, set):
-            self.connection_nodes.update(node)
-        else:
-            raise TypeError("Expected a Node or a list of Nodes")
-
-    def set_absolute_pole(self, pole: Pole, overwrite: bool = False):
-        if not isinstance(pole, Pole):
-            raise TypeError("absolute_pole must be an instance of Pole.")
-
-        if self.absolute_pole is not None:
-            if overwrite:
-                self.absolute_pole = pole
-            else:
-                if (self.absolute_pole.same_location and
-                        pole.same_location):
-                    # Fall 1: Vorhandener Pol hat Punkt, neuer Pol hat Punkt
-                    #  -> Vergleich der Punkte
-                    if self.absolute_pole.node != pole.node:
-                        self.stiff = True
-                    self.absolute_pole = Pole(pole.node,
-                                              same_location=True)
-                elif (self.absolute_pole.same_location and
-                      not pole.same_location):
-                    # Fall 2: Vorhandener Pol hat Punkt, neuer Pol hat Linie
-                    #  -> Punkt liegt auf Linie
-                    point = (self.absolute_pole.x, self.absolute_pole.z)
-                    if not validate_point_on_line(pole.line(), point):
-                        self.stiff = True
-                    self.absolute_pole = Pole(self.absolute_pole.node,
-                                              same_location=True)
-                elif (not self.absolute_pole.same_location and
-                      pole.same_location):
-                    # Fall 3: Vorhandener Pol hat Linie, neuer Pol hat Punkt
-                    #  -> Punkt liegt auf Linie
-                    point = [pole.x, pole.z]
-                    if not validate_point_on_line(self.absolute_pole.line(),
-                                                  point):
-                        self.stiff = True
-                    self.absolute_pole = Pole(pole.node,
-                                              same_location=True)
-                elif (not self.absolute_pole.same_location and
-                      not pole.same_location):
-                    # Fall 4: Vorhandener Pol hat Linie, neuer Pol hat Linie
-                    #  -> Schnittpunkt der Linien
-                    line_1 = self.absolute_pole.line()
-                    line_2 = pole.line()
-                    x, z = get_intersection_point(line_1, line_2)
-                    if x is not None:
-                        if x != float('inf'):
-                            if pole.node.x == x and pole.node.z == z:
-                                self.absolute_pole = Pole(
-                                    pole.node,
-                                    same_location=True)
-                            elif (self.absolute_pole.node.x == x and
-                                  self.absolute_pole.node.z == z):
-                                self.absolute_pole = Pole(
-                                    self.absolute_pole.node,
-                                    same_location=True)
-                            else:
-                                self.absolute_pole = Pole(
-                                    Node(x=x, z=z),
-                                    same_location=True)
-                    else:
-                        self.absolute_pole = Pole(
-                            Node(x=pole.node.x,
-                                 z=pole.node.z),
-                            same_location=False, is_infinite=True,
-                            direction=pole.direction)
-        else:
-            self.absolute_pole = pole
-
-    def add_relative_pole(self, pole: Pole | list[Pole]):
-        if isinstance(pole, Pole):
-            self.relative_pole.add(pole)
-        elif isinstance(pole, set):
-            if not all(isinstance(p, Pole) for p in pole):
-                raise TypeError(
-                    "All items in the list must be instances of Pole.")
-            self.relative_pole.update(pole)
-        else:
-            raise (
-                TypeError("Expected a Pole object or a list of Pole objects."))
-
-    def add_bars(self, bars: set[Bar]):
-        self.bars.update(bars)
-
-    @property
-    def absolute_pole_lines_dict(self):
-        # kann nur aufgestellt werden,
-        #   wenn die Koordinaten des Absolutpols bekannt sind
-        if self.absolute_pole.same_location:
-            # wenn eine Scheibe mehrere Relativepole besitzt hat sie Scheibe
-            # mehrere Absolutpollinien
-            #   -> Geradenparameter werden in einer Liste gespeichert
-            line_dict = {}
-            for rPol in self.relative_pole:
-                # Absolutpollinie kann aufgestellt werden,
-                #   1. wenn die Koordinaten des Relativpols bekannt sind
-                if rPol.same_location:
-                    # Vertikale Gerade x = n
-                    if rPol.x == self.absolute_pole.x:
-                        m, n = None, rPol.x
-                    # Allgemeine Gerade y = m * x + n
-                    #   (Sonderfall: horizontale Gerade y = n)
-                    else:
-                        m = ((rPol.z - self.absolute_pole.z) /
-                             (rPol.x - self.absolute_pole.x))
-                        n = self.absolute_pole.z - m * self.absolute_pole.x
-                    line_dict[rPol.node] = [m, n]
-                #   2. wenn die Koordinaten des Relativpols im Unendlichen
-                #      liegen
-                #      -> hierbei wird die Gerade in den Absolutpol verschoben
-                else:
-                    line_dict[rPol.node] = rPol.line(
-                        node=self.absolute_pole.node)
-            return line_dict
-        else:
-            line_dict = {}
-            for rPol in self.relative_pole:
-                if rPol.same_location:
-                    line_dict[rPol.node] = self.absolute_pole.line(node=rPol)
-                else:
-                    line_dict[rPol.node] = rPol.line(
-                        node=self.absolute_pole.node)
-            return line_dict
-
-    # Drehwinkel
-    @property
-    def vec_aPole_rPole_dict(self):
-        # Stellt einen Vektor zwischen aPole und rPole auf
-        #   -> kann nur aufgestellt werden, wenn der aPole nicht im
-        #      Unendlichen liegt
-        if self.absolute_pole.is_infinite:
-            return None
-        else:
-            aPole_coords = self.absolute_pole.coords
-            # wenn eine Scheibe mehrere Relativepole besitzt hat sie Scheibe
-            # mehrere Absolutpollinien und damit mehrere Vektoren
-            #   -> Vektoren werden in einer Liste gespeichert
-            vec_dict = {}
-
-            for rPole in self.relative_pole:
-                if rPole.is_infinite:
-                    rPole_coords = np.array([[rPole.node.x], [rPole.node.z]])
-                    vec_dict[rPole] = (rPole_coords - aPole_coords)
-                else:
-                    vec_dict[rPole] = (rPole.coords - aPole_coords)
-            return vec_dict
-
-    def set_angle_factor(self, factor):
-        self.angle_factor = factor
-
-    def set_angle(self, angle):
-        self.angle = angle
-
-
-@dataclass(eq=False)
-class Polplan:
-
+class ChainIdentifier:
     system: System
+
+    _node_to_chains: Optional[dict] = field(init=False, default=defaultdict)
+    _chains: list[Chain] = field(init=False, default_factory=list)
 
     def __post_init__(self):
         self.bars = self.system.bars
-        self.chains = []
+
+    @property
+    def node_to_chains(self):
+        return self._node_to_chains
+
+    @property
+    def chains(self):
+        return self._chains
+
+    def run(self):
         nodes = self.system.nodes(mesh_type='bars')
         to_visit, visited = [nodes[0]], []
-        print('-----------------------------------------------')
-        print('Schritt 1: Scheibenidentifikation + Pole finden')
-        print('-----------------------------------------------')
         while to_visit:
             current_node = to_visit.pop(0)
             if current_node not in visited:
@@ -312,43 +214,77 @@ class Polplan:
                 to_visit += (
                     self.system.connected_nodes(mesh_type='bars')
                 )[current_node]
-                self._identify_chains(current_node)
-        print('----------------------------')
-        print('Schnitt 1.1: Dreiecke finden')
-        print('----------------------------')
+                self._identify_chains_from_node(current_node)
+
+                print_chains(self._chains, self.bars)
+
+                if shared_chains := self._find_shared_chains():
+                    self._merge_chains(shared_chains)
+                self._identify_triangle()
+
         while self._identify_triangle():
             continue
-        print('------------------------')
-        print('Schritt 1 abgeschlossen!')
-        print('------------------------')
-        print('---------------------------------------------')
-        print('Schritt 2: weitere Absolutpole identifizieren')
-        print('---------------------------------------------')
-        self._identify_pole()
 
-        print('------------------------')
-        print('Schritt 2 abgeschlossen!')
-        print('------------------------')
+    def _identify_triangle(self):
+        print('Dreieckssuche')
+        self.find_all_conn()
+        print_chains(self._chains, self.bars)
+        chains = [chain for chain in self._chains if
+                  len(chain.connection_nodes) >= 2]
+        if len(chains) >= 3:
+            for c1, c2, c3 in combinations(chains, 3):
+                nodes = set().union(
+                    c1.connection_nodes,
+                    c2.connection_nodes,
+                    c3.connection_nodes)
+                node_counts = {node: 0 for node in nodes}
+                for chain in [c1, c2, c3]:
+                    for node in chain.connection_nodes:
+                        node_counts[node] += 1
+                valid_triangle_nodes = [node for node, count in
+                                        node_counts.items() if count == 2]
+                if len(valid_triangle_nodes) == 3:
+                    print('--> gefunden!')
+                    self._merge_chains([c1, c2, c3])
+                    print_chains(self._chains, self.bars)
+                    return True
+        return False
 
-        self.print_chains()
+    def find_all_conn(self):
+        # conn = {}
+        # for chain in self._chains:
+        #     # node - chain zuweisung
+        #     for n in chain.connection_nodes:
+        #         if n not in conn:
+        #             conn[n] = []
+        #         conn[n].append(chain)
+        #     # jeder Stab hat 2 Knoten, es kann aber sein, dass nur der
+        #     # Anfangs oder Endknoten des Stabes bereits als
+        #     # Verbindungsknoten in der Scheibe hinterlegt ist, der jeweils
+        #     # andere kann aber ggf. ebenfalls ein Verbindungsknoten zu einer
+        #     # Anderen Scheibe haben (das wird dann ersichtlich, wenn dieser
+        #     # im dict 'conn' enthalten ist.
+        #     # -> diese Knoten sollen müssen gefunden werden!
+        #     for bar in chain.bars:
+        #         for node in (bar.node_i, bar.node_j):
+        #             if node not in chain.connection_nodes and node in conn:
+        #                 # der Knoten muss nun der Scheibe hinzugefügt werden
+        #                 self._add_node_to_chain(chain, node)
+        # print_dict_key_value(conn, self.bars)
+        # # return conn
+        node_to_chains = {}
+        for chain in self._chains:
+            for node in chain.connection_nodes:
+                node_to_chains.setdefault(node, []).append(chain)
+            for bar in chain.bars:
+                for node in (bar.node_i, bar.node_j):
+                    if (node not in chain.connection_nodes and
+                            node in node_to_chains):
+                        self._add_node_to_chain(chain, node)
+        self._node_to_chains = node_to_chains
+        print_dict_key_value(node_to_chains, self.bars, self._chains)
 
-        print('------------------------------------------')
-        print('Schritt 3: Polplan auf Widersprüche prüfen')
-        print('------------------------------------------')
-
-        if self.solved:
-            print('Polplan widerspruchsfrei')
-            print('------------------------')
-            print('Schritt 3 abgeschlossen!')
-            print('------------------------')
-        else:
-            print('Polplan hat Widerspruch')
-            print('------------------------')
-            print('Schritt 3 abgeschlossen!')
-            print('------------------------')
-
-    # Scheiben finden
-    def _identify_chains(self, current_node: Node):
+    def _identify_chains_from_node(self, current_node: Node):
         print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
         print(f'({current_node.x},{current_node.z})')
         unassigned_bars = []
@@ -358,55 +294,45 @@ class Polplan:
         for bar in connected_bars:
             print('---------------------------------------------')
             print(f'Stabnr: {self.bars.index(bar)}')
-            hinge_check = any([
-                bar.hinge_u_i, bar.hinge_w_i, bar.hinge_phi_i
-            ]) if bar.node_i == current_node else any([
-                bar.hinge_u_j, bar.hinge_w_j, bar.hinge_phi_j
-            ])
-            if hinge_check:
+            if self._has_hinge(bar, current_node):
                 print(' -> Gelenk')
                 print('   -> hier beginnt eine neue Scheibe')
                 self._new_chain({bar}, current_node)
             else:
                 print(' -> kein Gelenk')
                 unassigned_bars.append(bar)
-                print(f'   -> Stab wird zur Stabliste hinzugefügt: '
-                      f'{[self.bars.index(b) for b in unassigned_bars]}')
+
         print('Gibt es noch unverarbeitete angrenzende Stäbe?')
         if unassigned_bars:
             print(f' -> Ja, folgende Stäbe sind noch nicht zugewiesen: '
                   f'{[self.bars.index(b) for b in unassigned_bars]}')
             self._new_chain(set(unassigned_bars), current_node)
 
-    def _new_chain(self, bars: set[Bar], current_node: Node):
-        print(f'Sind Stäben: {[self.bars.index(b) for b in bars]}, '
-              f'schon in einer Scheibe vorhanden?')
+    def _new_chain(self, bars: Set[Bar], current_node: Node):
         existing_chain = self._get_chain(bars)
         if existing_chain:
-            print(f'-> Stab {[self.bars.index(b) for b in bars]} '
-                  f'schon in Chain-nr.: '
-                  f'{self.chains.index(existing_chain)}')
-            print(f' -> Stäbe werden Scheibe '
-                  f'{self.chains.index(existing_chain)} hinzugefügt')
-            self._add_bar_to_chain(existing_chain, bars)
+            existing_chain.add_bars(bars)
             self._add_node_to_chain(existing_chain, current_node)
         else:
-            print(f'-> Stab {[self.bars.index(b) for b in bars]} '
-                  f'noch nicht in Chains')
-            print(' -> neue Scheibe')
             new_chain = Chain(bars)
             self._add_node_to_chain(new_chain, current_node)
-            self.chains.append(new_chain)
+            self._chains.append(new_chain)
 
-        shared_chains = self._find_shared_chains()
-        if shared_chains:
-            self._merge_chains(shared_chains)
-        self._identify_triangle()
+    @staticmethod
+    def _has_hinge(bar: Bar, node: Node):
+        if bar.node_i == node:
+            return any(bar.hinge[0:3])
+        else:
+            return any(bar.hinge[4:6])
 
-    def _add_bar_to_chain(self, chain: Chain, bars: set[Bar]):
-        chain.add_bars(bars)
+    def _get_chain(self, bars: Set[Bar]):
+        for chain in self._chains:
+            if bars & chain.bars:
+                return chain
+        return None
 
     def _add_node_to_chain(self, chain: Chain, node: Node):
+        # TODO: das muss vereinfacht werden!
         print('...')
         print(f'Aktueller Knoten ({node.x},{node.z}) '
               f'wird zur Scheibe hinzugefügt')
@@ -541,69 +467,36 @@ class Polplan:
                                 Pole(node, is_infinite=True,
                                      direction=direction))
 
-    def find_all_conn(self):
-        conn = {}
-        for chain in self.chains:
-            for n in chain.connection_nodes:
-                if n not in conn:
-                    conn[n] = []
-                conn[n].append(chain)
-
+    def _find_shared_chains(self):
+        bar_to_chains = {}
+        for chain in self._chains:
             for bar in chain.bars:
-                for node in (bar.node_i, bar.node_j):
-                    if node not in chain.connection_nodes and node in conn:
-                        self._add_node_to_chain(chain, node)
-        return conn
-
-    def _identify_triangle(self):
-        self.find_all_conn()
-        self.print_chains()
-        # Filter: Nur Scheiben mit >= 2 Verbindungsknoten
-        chains = [chain for chain in self.chains if
-                  len(chain.connection_nodes) >= 2]
-
-        # Prüfen, ob mindestens 3 Scheiben vorhanden sind
-        if len(chains) >= 3:
-            # Alle Kombinationen von drei Scheiben prüfen
-            for c1, c2, c3 in combinations(chains, 3):
-                # Alle Verbindungsknoten sammeln
-                # (mit Set zur Vermeidung von Duplikaten)
-                nodes = set().union(
-                    c1.connection_nodes,
-                    c2.connection_nodes,
-                    c3.connection_nodes)
-                print(len(nodes))
-                node_counts = {node: 0 for node in nodes}
-                for chain in [c1, c2, c3]:
-                    for node in chain.connection_nodes:
-                        node_counts[node] += 1
-
-                # Prüfen, ob genau 3 Knoten existieren,
-                # die alle 2-mal vorkommen
-                valid_triangle_nodes = [node for node, count in
-                                        node_counts.items() if count == 2]
-
-                # Prüfen, ob genau drei unterschiedliche Knoten existieren
-                if len(valid_triangle_nodes) == 3:
-                    print('-> Dreieck gefunden')
-                    self._merge_chains([c1, c2, c3])
-                    return True
-        return False
+                bar_to_chains.setdefault(bar, []).append(chain)
+        return [
+            chain for chains in bar_to_chains.values() if len(chains) > 1 for
+            chain in chains
+        ]
 
     def _merge_chains(self, chains: list[Chain]):
-        # Prüfe, ob alle zu mergen-Ketten in self.chains vorhanden sind
+        # Prüfe, ob alle zu mergen-Ketten in self._chains vorhanden sind
         missing_chains = [chain for chain in chains if
-                          chain not in self.chains]
+                          chain not in self._chains]
         if missing_chains:
             raise ValueError(
-                f"Chain: {missing_chains} is not in self.chains.")
+                f"Chain: {missing_chains} is not in self._chains.")
+
+        # Finde den kleinsten Index der vorkommenden Chains
+        insertion_index = min(self._chains.index(chain) for chain in chains)
 
         # Sammle alle Bars aus den zu mergen-Ketten
         bars = set(bar for chain in chains for bar in chain.bars)
 
-        # Entferne die Ketten direkt aus self.chains
+        # Entferne die Ketten direkt aus self._chains
         for chain in chains:
-            self.chains.remove(chain)
+            print('Index: ')
+            print(self._chains.index(chain))
+        for chain in chains:
+            self._chains.remove(chain)
 
         remaining_connection_nodes = set()
         for chain in chains:
@@ -621,50 +514,21 @@ class Polplan:
         for n in remaining_connection_nodes:
             self._add_node_to_chain(new_triangle_chain, n)
 
-        self.chains.append(new_triangle_chain)
-        self.print_chains()
+        # Neue Chain an ursprünglicher Stelle einfügen
+        self._chains.insert(insertion_index, new_triangle_chain)
 
-    def _get_chain(self, bars: set[Bar]):
-        for chain in self.chains:
-            if bars & chain.bars:
-                return chain
-        return None
+        print_chains(self._chains, self.bars)
 
-    def _get_chain_node(self, node):
-        for chain in self.chains:
-            for n in chain.connection_nodes:
-                if node.same_location(n):
-                    return chain
-        return None
+    def __call__(self):
+        return self.run()
 
-    def _find_shared_chains(self):
-        """Finds all Chain objects that share at least one common bar."""
-        bar_to_chains = {}
 
-        for chain in self.chains:
-            for bar in chain.bars:
-                bar_to_chains.setdefault(bar, []).append(chain)
+@dataclass(eq=False)
+class PoleIdentifier:
+    chains: List[Chain]
+    node_to_chains: Dict[Node, List[Chain]]
 
-        # Sammle alle Chains, die mindestens ein gemeinsames Bar-Objekt haben
-        return [
-            chain for chains in bar_to_chains.values() if len(chains) > 1 for
-            chain in chains
-        ]
-
-    # Pole finden
-    @cached_property
-    def solved(self):
-        return (
-            self._validation()
-            and all(chain.solved is True for chain in self.chains)
-        )
-
-    @cached_property
-    def node_to_chain_map(self):
-        return {key: chains for key, chains in
-                self.find_all_conn().items() if len(chains) > 1}
-
-    def _identify_pole(self):
+    def run(self):
         for i, chain in enumerate(self.chains):
             print('------------------------------')
             print(f'///////// Scheibe {i} \\\\\\\\\\\\\\\\\\\\')
@@ -677,7 +541,7 @@ class Polplan:
                     if break_outer_loop:
                         break
                     connected_chain = (
-                        self.node_to_chain_map.get(rPole.node, []))
+                        self.node_to_chains.get(rPole.node, []))
                     if (len(connected_chain) > 1 and
                             any(c.stiff for c in connected_chain
                                 if c != chain)):
@@ -728,7 +592,7 @@ class Polplan:
         # Finden der angrenzenden Scheiben und deren Pol-Linien
         print('Finden der angrenzenden Scheiben...')
         for rPole in chain.relative_pole:
-            connected_chain = self.node_to_chain_map[rPole.node]
+            connected_chain = self.node_to_chains[rPole.node]
             intersection = set()
             print(f'Scheiben mit dem gleichen Verbindungsknoten '
                   f'({rPole.node.x} | {rPole.node.z}):')
@@ -745,7 +609,7 @@ class Polplan:
                     print(f' -> Scheibe {j} ist keine starre Scheibe.')
                     print(f'Hat Scheibe {j} eine Absolutpollinie?')
                     if conn_chain.solved_absolute_pole:
-                        line_dict = conn_chain.absolute_pole_lines_dict
+                        line_dict = conn_chain.apole_lines
                         if line_dict:
                             print(f' -> Absolutpollinie: ({j}) - ({i}|{j}):'
                                   f' z(x) = {line_dict[rPole.node][0]} * x '
@@ -858,17 +722,25 @@ class Polplan:
         if len(chain.relative_pole) == 0:
             chain.add_relative_pole(Pole(pole.node, same_location=True))
 
-    def _get_rPole_from_chain(self, node: Node, chain: Chain):
-        for rPole in chain.relative_pole:
-            if rPole.node == node:
-                return rPole
-        return None
+    def __call__(self):
+        return self.run()
 
-    # Überprüfung
-    def _validation(self):
+
+@dataclass(eq=False)
+class Validator:
+    chains: List[Chain]
+    node_to_chains: Dict[Node, List[Chain]]
+
+    _solved: Optional[bool] = field(init=False, default=False)
+
+    @property
+    def solved(self):
+        return self._solved
+
+    def run(self):
         print('Validierung Start...')
         previous_chain = None
-        for node, chains in self.node_to_chain_map.items():
+        for node, chains in self.node_to_chains.items():
             print('=========================')
             print('Knoten: ', node.x, node.z)
             print(f'Überprüfte Scheiben: '
@@ -882,9 +754,11 @@ class Polplan:
 
             for c1, c2 in pairs:
                 if not self._validate_chain_pair(c1, c2, node):
+                    self._solved = False
                     return False
 
                 previous_chain = c2
+        self._solved = True
         return True
 
     def _validate_chain_pair(self, c1: Chain, c2: Chain, node: Node):
@@ -895,14 +769,16 @@ class Polplan:
         if c1.stiff and not c2.stiff:
             print(f'  -> c{c1_idx} ist eine starre Scheibe')
             if c2.angle_factor == 0:
-                c2.set_angle_factor(1)
+                # c2.set_angle_factor(1)
+                c2.angle_factor = 1
                 print(f'  -> c{c2_idx}.set_angle_factor: 1')
             return True
 
         if c2.stiff and not c1.stiff:
             print(f'  -> c{c2_idx} ist eine starre Scheibe')
             if c1.angle_factor == 0:
-                c1.set_angle_factor(1)
+                # c1.set_angle_factor(1)
+                c1.angle_factor = 1
                 print(f'  -> c{c1_idx}.set_angle_factor: 1')
             return True
 
@@ -925,8 +801,8 @@ class Polplan:
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
 
-        line_1 = c1.absolute_pole_lines_dict[rPole.node]
-        line_2 = c2.absolute_pole_lines_dict[rPole.node]
+        line_1 = c1.apole_lines[rPole.node]
+        line_2 = c2.apole_lines[rPole.node]
 
         print(f'  -> z{c1_idx} = {line_1[0]} * x + {line_1[1]}')
         print(f'  -> z{c2_idx} = {line_2[0]} * x + {line_2[1]}')
@@ -951,8 +827,8 @@ class Polplan:
         print('# Winkelbeziehung aufstellen')
         print(f'     -> c{c2_idx}.angle = '
               f'c{c2_idx}.angle_factor * c{c1_idx}.angle')
-        c1_distance = c1.vec_aPole_rPole_dict
-        c2_distance = c2.vec_aPole_rPole_dict
+        c1_distance = c1.displacement_to_rpoles
+        c2_distance = c2.displacement_to_rpoles
 
         if c1_distance is None or c2_distance is None:
             print('    -> Ein Absolutpol liegt im Unendlichen \n'
@@ -962,8 +838,8 @@ class Polplan:
                 if c1.angle_factor == 0 or c1.angle_factor == 1:
                     print(f'    -> c{c1_idx}.angle_factor ist 0')
                     print(f'     -> c{c1_idx}.angle_factor wird auf 1 gesetzt')
-                    c1.set_angle_factor(1)
-
+                    # c1.set_angle_factor(1)
+                    c1.angle_factor = 1
                     # l1 = rPole.coords
                     a = np.array([[c1.absolute_pole.node.x],
                                   [c1.absolute_pole.node.z]])
@@ -976,7 +852,8 @@ class Polplan:
                         r21)) * np.sign(np.dot(l1.T, r21)).item()
 
                     # Winkel-Faktor für c2 setzen
-                    c2.set_angle_factor(factor)
+                    # c2.set_angle_factor(factor)
+                    c2.angle_factor = factor
                     print(f'c{c2_idx}.angle_factor = '
                           f'l{c1_idx} / r{c2_idx}{c1_idx}')
                     print(f'c{c2_idx}.angle_factor = '
@@ -988,13 +865,15 @@ class Polplan:
                         print(f'    -> c{c2_idx}.angle_factor ist 0')
                         print(f'     -> c{c2_idx}.angle_factor wird auf -1 '
                               f'gesetzt')
-                        c2.set_angle_factor(1)
+                        # c2.set_angle_factor(1)
+                        c2.angle_factor = 1
             if c2_distance is None:
                 print(f'    -> aPol : ({c2_idx}) ist im Unendlichen')
                 if c2.angle_factor == 0:
                     print(f'    -> c{c2_idx}.angle_factor ist 0')
                     print(f'     -> c{c2_idx}.angle_factor wird auf 1 gesetzt')
-                    c2.set_angle_factor(1)
+                    # c2.set_angle_factor(1)
+                    c2.angle_factor = 1
 
         elif rPole.is_infinite:
             # Wenn rPole = Querkraft- oder Normalkraftgelenk
@@ -1003,7 +882,8 @@ class Polplan:
             if c2.angle_factor == 0:
                 print(f'    -> c{c2_idx}.angle_factor ist 0')
                 print(f'     -> c{c2_idx}.angle_factor wird auf 1 gesetzt')
-                c2.set_angle_factor(1)
+                # c2.set_angle_factor(1)
+                c2.angle_factor = 1
         else:
             l1 = c1_distance[rPole]
             r21 = c2_distance[rPole]
@@ -1013,98 +893,135 @@ class Polplan:
                 r21)) * np.sign(np.dot(l1.T, r21)).item()
 
             # Winkel-Faktor für c2 setzen
-            c2.set_angle_factor(factor)
+            # c2.set_angle_factor(factor)
+            c2.angle_factor = factor
             print(f'c{c2_idx}.angle_factor = '
                   f'l{c1_idx} / r{c2_idx}{c1_idx}')
             print(f'c{c2_idx}.angle_factor = (({c1_idx}) - '
                   f'({c1_idx}|{c2_idx})) / (({c2_idx}) - ({c1_idx}|{c2_idx}))')
             print(f'c{c2_idx}.angle_factor = {factor}')
 
-    # Bestimme alle Winkel
-    def set_angle(self, target_chain, target_angle):
+    @staticmethod
+    def _get_rPole_from_chain(node: Node, chain: Chain):
+        for rPole in chain.relative_pole:
+            if rPole.node == node:
+                return rPole
+        return None
+
+    def __call__(self):
+        return self.run()
+
+
+@dataclass(eq=False)
+class AngleCalculator:
+    chains: List[Chain]
+    node_to_chains: Dict[Node, List[Chain]]
+
+    def calculate_angles(self, target_chain: Chain, target_angle: float) -> \
+            None:
         print('---------------------------')
         print('Schritt 4: Winkelberechnung')
         print('---------------------------')
-        target_chain_index = self.chains.index(target_chain)
-        # Rückwärtsrechnen, um den Winkel für Scheibe 0 zu berechnen
-        angle = target_angle
+        print(f'Die Drehwinkel aller Scheiben sollen so bestimmt werden, '
+              f'dass die Scheibe {self.chains.index(target_chain)} den '
+              f'Winkel von {target_angle} hat.')
 
-        chain_0 = self.chains[0]
-        if chain_0 != target_chain:
-            if not chain_0.stiff:
-                chain_0.set_angle_factor(1)
+        angle, target_chain_index = (self._init_target_chain(
+            target_chain, target_angle
+        ))
 
-        if target_chain.stiff:
-            print(' -> Scheibe ist starr!')
-            target_chain_index = target_chain_index + 1
-            target_chain = self.chains[target_chain_index]
-            if not target_chain.absolute_pole.is_infinite:
-                angle = -1
-            else:
-                angle = 1
-        target_chain.set_angle(angle)
+        print('Berechnung des Winkels von Scheibe 0, so dass,')
+        print(f'Scheibe {target_chain_index} den Winkel {angle} hat.')
 
-        print(
-            f'Berechnung des Winkel von Scheibe 0, so dass,\n'
-            f'Scheibe {target_chain_index} den Winkel {angle} hat.')
-
-        # Rückwärts iterieren bis Scheibe 0
-        # TODO: das geht nur, wenn die Reihenfolge der Liste mit der der
-        #  Geometrie übereinstimmt, wenn am Ende Scheiben zusammengefasst
-        #  werden, ändert sich die Reihenfolge
-        for i in range(target_chain_index - 1, -1, -1):
-            print('i: ', i)
-            next_chain = self.chains[i + 1]
-            factor = next_chain.angle_factor
-
-            print('factor: ', factor)
-
-            if factor == 0:
-                print(
-                    f"Winkelberechnung für Kette {i + 1} abgebrochen: "
-                    f"angle_factor = 0")
-                break
-
-            current_chain = self.chains[i]
-
-            if current_chain.angle_factor == 0:
-                print(
-                    f"Winkelberechnung für Kette {i} abgebrochen:"
-                    f" angle_factor = 0")
-                break
-            angle = angle / factor
-
-            print(f"Berechneter Winkel für Scheibe {i}: {angle}")
-            current_chain.set_angle(angle)
-
-        print('(((((((((((((())))))))))))))')
-        print('Berechnung aller Scheibenwinkel')
-        # Vorwärts iterieren ab Scheibe target_chain_index
-        # TODO: das funktioniert nur, wenn die Scheiben alle von anfang bis
-        #  Ende durchnummeriert sind und nicht am Ende Dreiecke Identifiziert
-        #  werden
-        previous_chain = None
-        for node, chains in self.node_to_chain_map.items():
-            print('=========================')
-            print('Knoten: ', node.x, node.z)
-            print(f'Überprüfte Scheiben: '
-                  f'{[self.chains.index(c) for c in chains]}')
-
-            if previous_chain and previous_chain in chains:
-                pairs = [(previous_chain, c) for c in chains if
-                         c != previous_chain]
-            else:
-                pairs = combinations(chains, 2)
-
-            for c1, c2 in pairs:
-                self._calc_c2_angle_from_c1(c1, c2)
-                previous_chain = c2
+        if target_chain_index != 0:
+            self._backward_calc(target_chain_index, angle)
+        else:
+            print(' -> Keine Rückwärtsberechnung nötig, da die ausgewählte '
+                  'Scheibe Scheibe 0 ist!')
+        self._forward_calc()
 
         print('-----------------------')
         print('Schritt 4 abgeschlossen')
         print('-----------------------')
 
-    def _calc_c2_angle_from_c1(self, c1: Chain, c2: Chain):
+    def _init_target_chain(self, target_chain: Chain, target_angle: float):
+        # Behandlung der ersten Scheibe, falls sie nicht Ziel ist und nicht
+        # starr
+        target_chain_index = self.chains.index(target_chain)
+        chain_0 = self.chains[0]
+        if chain_0 != target_chain and not chain_0.stiff:
+            chain_0.angle_factor = 1
+            print('Set angle_factor=1 for chain 0')
+
+        # Behandlung, falls target_chain starr ist
+        if target_chain.stiff:
+            print(f'Die Ausgewählte Scheibe mit dem Index:'
+                  f' {target_chain_index} ist starr!')
+            print(' -> Keinen Drehwinkel!')
+            target_chain_index += 1
+            print(f' -> neue Scheibe mit dem Index {target_chain_index}')
+            target_chain = self.chains[target_chain_index]
+            # TODO: Warum wir der Winkel hier auf -1 oder +1 gesetzt?
+            if not target_chain.absolute_pole.is_infinite:
+                target_angle = -1
+            else:
+                target_angle = 1
+
+        target_chain.angle = target_angle
+
+        return target_angle, target_chain_index
+
+    def _backward_calc(self, target_chain_index: int, initial_angle: float) \
+            -> None:
+        # TODO: das geht nur, wenn die Reihenfolge der Liste mit der der
+        #  Geometrie übereinstimmt ! Das muss vorher sichergestellt sein!
+        angle = initial_angle
+        for i in range(target_chain_index - 1, -1, -1):
+            next_chain = self.chains[i + 1]
+            factor = next_chain.angle_factor
+            print(f'Berechnung für Scheibe {i}: factor = {factor}')
+            if factor == 0:
+                print(f"Winkelberechnung für Kette {i + 1} abgebrochen: "
+                      f"angle_factor = 0")
+                break
+
+            current_chain = self.chains[i]
+            if current_chain.angle_factor == 0:
+                print(f"Winkelberechnung für Kette {i} abgebrochen: "
+                      f"angle_factor = 0")
+                break
+
+            angle /= factor
+            current_chain.angle = angle
+            print(f"Berechneter Winkel für Scheibe {i}: {angle}")
+
+    def _forward_calc(self) -> None:
+        print('(((((((((((((())))))))))))))')
+        print('Berechnung aller Scheibenwinkel')
+
+        previous_chain = None
+        for node, chains in self.node_to_chains.items():
+            print('=========================')
+            print(f'Knoten: {node.x}, {node.z}')
+            print(f'Überprüfte Scheiben: '
+                  f'{[self.chains.index(c) for c in chains]}')
+
+            pairs = self._get_chain_pairs(chains, previous_chain)
+
+            for c1, c2 in pairs:
+                self._calc_c2_angle_from_c1(c1, c2)
+                previous_chain = c2
+
+    @staticmethod
+    def _get_chain_pairs(chains: List[Chain], previous_chain: Chain) -> (
+            List)[Tuple[Chain, Chain]]:
+        """Gets pairs of chains for angle calculation."""
+        if previous_chain and previous_chain in chains:
+            return [(previous_chain, c) for c in chains if c != previous_chain]
+        else:
+            return list(combinations(chains, 2))
+
+    def _calc_c2_angle_from_c1(self, c1: Chain, c2: Chain) -> bool:
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
         print(f' -> Kombo: {c1_idx} - {c2_idx}')
@@ -1113,15 +1030,22 @@ class Polplan:
             return False
 
         angle = c1.angle * c2.angle_factor
-        c2.set_angle(angle)
-        print(
-            f'   -> c{c2_idx}.angle = '
-            f'c{c1_idx}.angle * c{c2_idx}.angle_factor')
+        c2.angle = angle
+
+        print(f'   -> c{c2_idx}.angle = c{c1_idx}.angle *  '
+              f'c{c2_idx}.angle_factor')
         print(f'   -> c{c2_idx}.angle = {c1.angle} * {c2.angle_factor}')
         print(f'   -> c{c2_idx}.angle = {angle}')
+        return True
 
-    # Berechne Verschiebungsfigur
-    def get_displacement_figure(self):
+
+@dataclass(eq=False)
+class DisplacementCalculator:
+    chains: List[Chain]
+    bars: List[Bar]
+    node_to_chains: Dict[Node, List[Chain]]
+
+    def run(self):
         displacement_bar_list: List[np.ndarray] = \
             [np.zeros((6, 1)) for _ in self.bars]
         bar_index_map = {bar: idx for idx, bar in enumerate(self.bars)}
@@ -1177,7 +1101,7 @@ class Polplan:
         # Iteriere über die relativen Pole der Scheibe
         for rPole in chain.relative_pole:
             # Iteriere über die verbundenen Scheiben
-            for conn_chain in self.node_to_chain_map[rPole.node]:
+            for conn_chain in self.node_to_chains[rPole.node]:
                 # Überprüft, ob es sich um eine verbundene Scheibe handelt
                 if (conn_chain != chain and not conn_chain.stiff):
                     aPole_coords = np.array([
@@ -1200,51 +1124,5 @@ class Polplan:
         r = np.array([[0, -1], [1, 0]])
         return angle * r @ delta
 
-    def _find_adjacent_chain(self, node, chain):
-        conn_chain = self.node_to_chain_map.get(node, [])
-
-        if len(conn_chain) > 1:
-            print(' -> es gibt angrenzende Scheiben')
-
-            print('Gibt es Starre Scheiben?')
-            for c in conn_chain:
-                if c == chain:
-                    continue
-                print(
-                    self.chains.index(c))
-                if c.stiff:
-                    print('starr')
-                    continue
-
-                # Falls nicht starr,
-                # die absoluten Koordinaten speichern
-                aPole_coords = c.absolute_pole.coords
-
-                # Die relative Pol-Koordinate ermitteln,
-                # falls der Knoten nicht übereinstimmt
-                for rPole in c.relative_pole:
-                    if not rPole.is_infinite:
-                        node_coords = rPole.coords
-                    else:
-                        node_coords = aPole_coords = np.array([
-                            [rPole.node.x],
-                            [rPole.node.z]
-                        ])
-                    return aPole_coords, node_coords, c
-        return None, None, None
-
-    # Print
-    def print_chains(self):
-        for chain in self.chains:
-            i = self.chains.index(chain)
-            index = []
-            conn = []
-            for bar in chain.bars:
-                index.append(self.bars.index(bar))
-            for n in chain.connection_nodes:
-                conn.append((n.x, n.z))
-
-            print(f'Chain: {i}, bars: {index}, \n -> conn_nodes: {conn}, '
-                  f'\n -> rPol: {chain.relative_pole}, '
-                  f'\n -> mPol: {chain.absolute_pole}'
-                  f'\n -> starr: {chain.stiff}')
+    def __call__(self):
+        return self.run()
