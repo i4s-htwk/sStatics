@@ -1,7 +1,7 @@
 
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from typing import Callable, Dict, List, Literal, Optional, Union
+from typing import Callable, Dict, List, Literal, Optional, Union, Tuple
 
 import numpy as np
 
@@ -57,7 +57,7 @@ class System:
                     'Cannot instantiate a system with bars that share the '
                     'same location.'
                 )
-        nodes = self.nodes(segmented=False)
+        nodes = self.nodes(mesh_type='bars')
         for i, node in enumerate(nodes[0:-1]):
             for other_node in nodes[i + 1:]:
                 if node.same_location(other_node) and node != other_node:
@@ -67,19 +67,21 @@ class System:
                     )
         to_visit, visited = [nodes[0]], []
         while to_visit:
-            current_node = to_visit.pop(0)
-            if current_node not in visited:
-                visited.append(current_node)
-                to_visit += self.connected_nodes(segmented=False)[current_node]
+            curr_node = to_visit.pop(0)
+            if curr_node not in visited:
+                visited.append(curr_node)
+                to_visit += self.connected_nodes(mesh_type='bars')[curr_node]
         if set(visited) != set(nodes):
             raise ValueError("The system's graph needs to be connected.")
 
         self.create_mesh(user_divisions=self.user_divisions)
 
-    def connected_nodes(self, segmented: bool = True):
-        bars = self.mesh if segmented else self.bars
+    def connected_nodes(
+            self, mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh'
+    ):
+        bar_type = self.__getattribute__(mesh_type)
         connections = {}
-        for bar in bars:
+        for bar in bar_type:
             for node in (bar.node_i, bar.node_j):
                 if node not in connections:
                     connections[node] = set()
@@ -100,8 +102,15 @@ class System:
                 node_connection[node].append(bar)
         return node_connection
 
-    def nodes(self, segmented: bool = True):
-        return list(self.connected_nodes(segmented=segmented).keys())
+    def nodes(self, mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh'):
+        return list(self.connected_nodes(mesh_type=mesh_type).keys())
+
+    @property
+    def max_dimensions(self) -> Tuple[float, float]:
+        nodes = self.nodes(mesh_type='bars')
+        x_coords = [node.x for node in nodes]
+        z_coords = [node.z for node in nodes]
+        return max(x_coords) - min(x_coords), max(z_coords) - min(z_coords)
 
     @property
     def mesh(self):
