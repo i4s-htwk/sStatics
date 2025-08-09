@@ -28,14 +28,14 @@ class Arrow(SingleGraphicObject):
     @property
     def traces(self):
         arrow = IsoscelesTriangleGraphic.from_angle(
-            self.x, self.z, rotation=np.pi,
-            scale=self.scale / (1 + self.tail_length), **self.scatter_kwargs
+            self.x, self.z, scatter_options=self.scatter_kwargs,
+            rotation=np.pi, scale=self.scale / (1 + self.tail_length)
         )
         arrow_traces = arrow.transform_traces(self.x, self.z, self.rotation)
         z_offset = np.cos(np.pi / 8) * self.scale / (1 + self.tail_length)
         tail = LineGraphic.from_points(
             [(self.x, self.z - z_offset), (self.x, self.z - self.scale)],
-            **self.scatter_kwargs
+            scatter_options=self.scatter_kwargs
         )
         tail_traces = tail.transform_traces(self.x, self.z, self.rotation)
         return *arrow_traces, *tail_traces
@@ -43,13 +43,17 @@ class Arrow(SingleGraphicObject):
 
 class CoordinateSystem(SingleGraphicObject):
 
+    annotation_options = SingleGraphicObject.annotation_options | {
+        'font': {'size': 40, 'family': 'Times New Roman'},
+    }
+
     def __init__(self, x, z, x_text=None, z_text=None, **kwargs):
         super().__init__(x, z, **kwargs)
         self.x_text = x_text
         self.z_text = z_text
 
     @property
-    def annotations(self):
+    def _annotations(self):
         annotations = []
         if self.x_text is not None:
             x, z = rotate(
@@ -57,30 +61,25 @@ class CoordinateSystem(SingleGraphicObject):
                 (2 * self.x + self.scale) / 2, self.z - self.scale / 15,
                 self.rotation
             )
-            annotations.append(go.layout.Annotation(
-                x=x, y=z, text=self.x_text, showarrow=False, font_size=40,
-                textangle=None
-            ))
+            annotations.append((x, z, self.x_text),)
         if self.z_text is not None:
             x, z = rotate(
                 self.x, self.z,
                 self.x - self.scale / 15, (2 * self.z + self.scale) / 2,
                 self.rotation
             )
-            annotations.append(go.layout.Annotation(
-                x=x, y=z, text=self.z_text, showarrow=False, font_size=40,
-                textangle=None
-            ))
+            annotations.append((x, z, self.z_text),)
         return tuple(annotations)
 
     @property
     def traces(self):
         x_axis = Arrow(
-            self.x + self.scale, self.z, tail_length=6, scale=self.scale,
-            rotation=np.pi / 2
+            self.x + self.scale, self.z, tail_length=6, rotation=np.pi / 2,
+            scale=self.scale, scatter_options=self.scatter_kwargs
         )
         z_axis = Arrow(
-            self.x, self.z + self.scale, tail_length=6, scale=self.scale
+            self.x, self.z + self.scale, tail_length=6, scale=self.scale,
+            scatter_options=self.scatter_kwargs
         )
         x_axis_traces = x_axis.transform_traces(
             self.x, self.z, self.rotation

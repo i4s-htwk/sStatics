@@ -126,8 +126,11 @@ class PolygonGraphic(MultiGraphicObject):
 
         point = (
             PointGraphic(
-                self.x, self.z, marker=dict(size=10),
-                line_color=self._point_line_color
+                self.x, self.z,
+                scatter_options={
+                    'marker': dict(size=10),
+                    'line_color': self._point_line_color
+                }
             ).traces if self.show_center_of_mass else ()
         )
         return (go.Scatter(x=x, y=z, **self.scatter_kwargs),) + point
@@ -157,10 +160,10 @@ class RectangleGraphic(SingleGraphicObject):
 
     @property
     def traces(self):
-        polygon = PolygonGraphic(Polygon(self._points), **self.scatter_kwargs)
-        return polygon.transform_traces(
-            self.x, self.z, rotation=self.rotation, scale=self.scale
-        )
+        return PolygonGraphic(
+            Polygon(self._points), scatter_options=self.scatter_kwargs,
+            rotation=self.rotation, scale=self.scale
+        ).traces
 
 
 class IsoscelesTriangleGraphic(SingleGraphicObject):
@@ -196,10 +199,12 @@ class IsoscelesTriangleGraphic(SingleGraphicObject):
 
     @property
     def traces(self):
-        return PolygonGraphic(
-            Polygon(self._points), rotation=self.rotation, scale=self.scale,
-            **self.scatter_kwargs
-        ).traces
+        triangle = PolygonGraphic(
+            Polygon(self._points), scatter_options=self.scatter_kwargs
+        )
+        return triangle.transform_traces(
+            self.x, self.z, rotation=self.rotation, scale=self.scale
+        )
 
 
 class EllipseGraphic(SingleGraphicObject):
@@ -246,7 +251,7 @@ class EllipseGraphic(SingleGraphicObject):
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
-class CircularSector(EllipseGraphic):
+class CircularSectorGraphic(EllipseGraphic):
 
     def __init__(
         self, x, z, a, b=None, angle_range=(0, 2 * np.pi), n_points=100,
@@ -266,9 +271,11 @@ class CircularSector(EllipseGraphic):
     @property
     def traces(self):
         start_line = LineGraphic.from_points(
-            [(self.x, self.z), self.start_points], **self.scatter_kwargs
+            [(self.x, self.z), self.start_points],
+            scatter_options=self.scatter_kwargs
         ).traces
         end_line = LineGraphic.from_points(
-            [(self.x, self.z), self.end_points], **self.scatter_kwargs
+            [(self.x, self.z), self.end_points],
+            scatter_options=self.scatter_kwargs
         ).traces
         return self.sector, *start_line, *end_line

@@ -32,15 +32,15 @@ class BaseLineHatchSupport(Support):
     @property
     def traces(self):
         line = LineGraphic.from_center(
-            self.x, self.z, self.width, rotation=np.pi / 2,
-            **self.scatter_kwargs
+            self.x, self.z, self.width, scatter_options=self.scatter_kwargs,
+            rotation=np.pi / 2,
         )
         line_traces = line.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
         hatching = Hatching(
             self.x - self.offset / 8, self.z, self.width, self.offset / 4,
-            rotation=np.pi / 2, **self.scatter_kwargs
+            scatter_options=self.scatter_kwargs, rotation=np.pi / 2
         )
         hatching_traces = hatching.transform_traces(
             self.x, self.z, self.rotation, self.scale
@@ -56,14 +56,15 @@ class BaseDoubleLineHatchSupport(Support):
     @property
     def traces(self):
         line = LineGraphic.from_center(
-            self.x, self.z, self.width, rotation=np.pi / 2,
-            **self.scatter_kwargs
+            self.x, self.z, self.width, scatter_options=self.scatter_kwargs,
+            rotation=np.pi / 2
         )
         line_traces = line.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
         base_support = BaseLineHatchSupport(
-            self.x - self.offset / 4, self.z, self.width, **self.scatter_kwargs
+            self.x - self.offset / 4, self.z, self.width,
+            scatter_options=self.scatter_kwargs
         )
         base_support_traces = base_support.transform_traces(
             self.x, self.z, self.rotation, self.scale
@@ -84,14 +85,15 @@ class RollerSupport(Support):
     @property
     def traces(self):
         triangle = IsoscelesTriangleGraphic.from_width(
-            self.x, self.z, self.width, **self.scatter_kwargs
+            self.x, self.z, self.width, scatter_options=self.scatter_kwargs
         )
         triangle_traces = triangle.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
         z_off = 2 / 3 * np.sqrt(4 - self.width ** 2)
         line = LineGraphic.from_center(
-            self.x, self.z + z_off, self.width, **self.scatter_kwargs
+            self.x, self.z + z_off, self.width,
+            scatter_options=self.scatter_kwargs
         )
         line_traces = line.transform_traces(
             self.x, self.z, self.rotation, self.scale
@@ -108,20 +110,21 @@ class PinnedSupport(Support):
     def traces(self):
         top_line = LineGraphic.from_center(
             self.x + 3 / 8 * self.offset, self.z - 3 / 8 * self.width,
-            5 / 4 * self.offset, **self.scatter_kwargs
+            5 / 4 * self.offset, scatter_options=self.scatter_kwargs
         )
         top_line_traces = top_line.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
         bottom_line = LineGraphic.from_center(
             self.x + 3 / 8 * self.offset, self.z + 3 / 8 * self.width,
-            5 / 4 * self.offset, **self.scatter_kwargs
+            5 / 4 * self.offset, scatter_options=self.scatter_kwargs
         )
         bottom_line_traces = bottom_line.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
         base_support = BaseDoubleLineHatchSupport(
-            self.x - self.offset / 4, self.z, self.width, **self.scatter_kwargs
+            self.x - self.offset / 4, self.z, self.width,
+            scatter_options=self.scatter_kwargs
         )
         base_support_traces = base_support.transform_traces(
             self.x, self.z, self.rotation, self.scale
@@ -137,7 +140,7 @@ class FixedSupportUW(Support):
     @property
     def traces(self):
         triangle = IsoscelesTriangleGraphic.from_width(
-            self.x, self.z, self.width, **self.scatter_kwargs
+            self.x, self.z, self.width, scatter_options=self.scatter_kwargs
         )
         triangle_traces = triangle.transform_traces(
             self.x, self.z, self.rotation, self.scale
@@ -145,7 +148,7 @@ class FixedSupportUW(Support):
         z_off = np.sqrt(4 - self.width ** 2) / 2
         hatching = Hatching(
             self.x, self.z + 7 / 6 * z_off, self.width, 1 / 3 * z_off,
-            **self.scatter_kwargs
+            scatter_options=self.scatter_kwargs
         )
         hatching_traces = hatching.transform_traces(
             self.x, self.z, self.rotation, self.scale
@@ -167,20 +170,21 @@ class FixedSupportWPhi(Support):
     def traces(self):
         top_line = LineGraphic.from_center(
             self.x + 3 / 8 * self.offset, self.z - 3 / 8 * self.width,
-            5 / 4 * self.offset, **self.scatter_kwargs
+            5 / 4 * self.offset, scatter_options=self.scatter_kwargs
         )
         top_line_traces = top_line.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
         bottom_line = LineGraphic.from_center(
             self.x + 3 / 8 * self.offset, self.z + 3 / 8 * self.width,
-            5 / 4 * self.offset, **self.scatter_kwargs
+            5 / 4 * self.offset, scatter_options=self.scatter_kwargs
         )
         bottom_line_traces = bottom_line.transform_traces(
             self.x, self.z, self.rotation, self.scale
         )
         base_support = BaseLineHatchSupport(
-            self.x - self.offset / 4, self.z, self.width, **self.scatter_kwargs
+            self.x - self.offset / 4, self.z, self.width,
+            scatter_options=self.scatter_kwargs
         )
         base_support_traces = base_support.transform_traces(
             self.x, self.z, self.rotation, self.scale
