@@ -25,9 +25,10 @@ def scaling(ox, oz, x, z, scale=1):
     return x_scale, z_scale
 
 
-def transform(ox, oz, x, z, rotation=0, scale=1):
+def transform(ox, oz, x, z, rotation=0, scale=1, translation=(0, 0)):
     x, z = rotate(ox, oz, x, z, rotation)
     x, z = scaling(ox, oz, x, z, scale)
+    x, z = translate(ox, oz, x, z, translation)
     return x, z
 
 
@@ -49,14 +50,23 @@ class MultiGraphicObject(abc.ABC):
     # TODO: find a better solution to pass down options to customize an object
     # TODO: each instance should be customizable
     # TODO: default values should be the intended appearance
+    # TODO: solution: style-file oder class(es)?
     scatter_options = {
         'mode': 'lines',
         'line_color': 'black',
         'showlegend': False,
         'hoverinfo': 'skip',
     }
+    annotation_options = {
+        'font': {'size': 20, 'family': 'Times New Roman'},
+        'showarrow': False,
+        'textangle': 0,
+    }
 
-    def __init__(self, points, rotation=0, scale=1, **scatter_kwargs):
+    def __init__(
+            self, points, scatter_options=None, annotation_options=None,
+            rotation=0, scale=1, translation=(0, 0)
+    ):
         if scale <= 0:
             raise ValueError('"scale" has to be a number greater than zero.')
         if not (
@@ -71,11 +81,25 @@ class MultiGraphicObject(abc.ABC):
         self.points = points
         self.rotation = rotation
         self.scale = scale
-        self.scatter_kwargs = self.scatter_options | scatter_kwargs
+        self.tranlation = translation
+        self.scatter_kwargs = (
+                self.scatter_options | (scatter_options or {})
+        )
+        self.annotation_kwargs = (
+                self.annotation_options | (annotation_options or {})
+        )
+
+    @property
+    def _annotations(self):
+        """Override this to return a sequence of (x, y, text)."""
+        return ()
 
     @property
     def annotations(self):
-        return ()
+        return tuple(
+            go.layout.Annotation(x=x, y=y, text=text, **self.annotation_kwargs)
+            for x, y, text in self._annotations
+        )
 
     @property
     @abc.abstractmethod
@@ -88,8 +112,7 @@ class MultiGraphicObject(abc.ABC):
         traces = []
         for trace in self.traces:
             x, z = np.array(trace.x), np.array(trace.y)
-            x, z = transform(ox, oz, x, z, rotation, scale)
-            x, z = translate(ox, oz, x, z, translation)
+            x, z = transform(ox, oz, x, z, rotation, scale, translation)
             traces.append(trace.update(x=x, y=z))
         return tuple(traces)
 
