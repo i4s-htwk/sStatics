@@ -1,6 +1,5 @@
 
 import numpy as np
-import plotly.graph_objs as go
 
 from sstatics.core.preprocessing.node import Node
 
@@ -38,18 +37,16 @@ class NodeGraphic(SingleGraphicObject):
         support = support_classes.get((u, w, phi), FreeNode)
         if (support is RollerSupport and
                 u == 'fixed' and w == 'free' and phi == 'free'):
-            return support(x, z, rotation=-np.pi/2, **self.scatter_kwargs)
-        return support(x, z, **self.scatter_kwargs)
+            return support(
+                x, z, scatter_options=self.scatter_kwargs, rotation=-np.pi/2
+            )
+        return support(x, z, scatter_options=self.scatter_kwargs)
 
     @property
-    def annotations(self):
+    def _annotations(self):
         if self.number is not None:
-            d = 0.25 * self.scale
-            x, z = self.x, self.z - d
-            return (go.layout.Annotation(
-                x=x, y=z, text=self.number, showarrow=False,
-                font=dict(size=20, family='Times New Roman'), textangle=None
-            ),)
+            d = 0.3 * self.scale
+            return ((self.x, self.z - d, self.number),)
         return ()
 
     @property
