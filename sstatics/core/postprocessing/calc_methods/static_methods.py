@@ -202,7 +202,7 @@ class RED(PVK):
         hinge = sum(sum(h is True for h in b.hinge)
                     for b in self.modifier.system.bars)
         return support + 3 * len(self.modifier.system.bars) - (
-            3 * len(self.modifier.system.nodes(False)) + hinge)
+            3 * len(self.modifier.system.nodes('bars')) + hinge)
 
     def calc(self):
         """Performs the calculation using the Reduction Theorem.

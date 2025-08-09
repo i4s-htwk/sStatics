@@ -300,7 +300,7 @@ class Polplan:
     def __post_init__(self):
         self.bars = self.system.bars
         self.chains = []
-        nodes = self.system.nodes(segmented=False)
+        nodes = self.system.nodes(mesh_type='bars')
         to_visit, visited = [nodes[0]], []
         print('-----------------------------------------------')
         print('Schritt 1: Scheibenidentifikation + Pole finden')
@@ -310,7 +310,8 @@ class Polplan:
             if current_node not in visited:
                 visited.append(current_node)
                 to_visit += (
-                    self.system.connected_nodes(segmented=False))[current_node]
+                    self.system.connected_nodes(mesh_type='bars')
+                )[current_node]
                 self._identify_chains(current_node)
         print('----------------------------')
         print('Schnitt 1.1: Dreiecke finden')
