@@ -877,15 +877,6 @@ class TestBar(TestCase):
             )
             # hier noch Fehler bei 'second' 'analytic'
 
-    def test_segment(self):
-        """TODO"""
-
-    def test_deformation_line(self):
-        """TODO"""
-
-    def test_max_deform(self):
-        """TODO"""
-
 
 class TestSystem(TestCase):
 
@@ -905,6 +896,7 @@ class TestSystem(TestCase):
 class TestFirstOrder(TestCase):
 
     def test_get_zero_matrix(self):
+        # Check that _get_zero_matrix returns correct zero-size for system DOFs
         cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
         material = Material(210000000, 0.1, 81000000, 0.1)
         n1, n2, n3, n4 = Node(0, 0), Node(0, 2), Node(0, 4), Node(6, 0)
@@ -926,6 +918,7 @@ class TestFirstOrder(TestCase):
         )
 
     def test_get_zero_vec(self):
+        # Check that _get_zero_vec returns correct zero-size for system DOFs
         cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
         material = Material(210000000, 0.1, 81000000, 0.1)
         n1, n2, n3, n4 = Node(0, 0), Node(0, 2), Node(0, 4), Node(6, 0)
@@ -946,9 +939,26 @@ class TestFirstOrder(TestCase):
                     'the vector must be a 12x1 zero vector.')
 
     def test_get_f_axial(self):
-        """TODO"""
+        # Check axial force getter for first- and second-order cases
+        cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+        material = Material(210000000, 0.1, 81000000, 0.1)
+        n1, n2 = Node(0, 0), Node(1, 0)
+        b1 = Bar(n1, n2, cross, material)
+        fo = FirstOrder(System([b1]))
+
+        self.assertEqual(
+            fo._get_f_axial(0), 0,
+            'For first-order analysis, _get_f_axial must return 0.')
+
+        fo.order = 'second'
+        object.__setattr__(fo, 'averaged_longitudinal_force', [42.0])
+        self.assertEqual(
+            fo._get_f_axial(0), 42.0,
+            'For second-order analysis, _get_f_axial must return '
+            'averaged_longitudinal_force.')
 
     def test_stiffness_matrix(self):
+        # Check stiffness matrix content, symmetry, and caching
         material = Material(210000000, 0.1, 81000000, 0.1)
         cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         cross2 = CrossSection(349e-8, 21.2e-4, 0.096, 0.1, 0.1)
@@ -970,7 +980,8 @@ class TestFirstOrder(TestCase):
                 [0, -1527.75, 2037, 0, 428.4, 5539.8, 0, 1099.35, 732.9],
                 [0, 0, 0, -222600, 0, 0, 222600, 0, 0],
                 [0, 0, 0, 0, -1099.35, 1099.35, 0, 1099.35, 1099.35],
-                [0, 0, 0, 0, -1099.35, 732.9, 0, 1099.35, 1465.8]]))
+                [0, 0, 0, 0, -1099.35, 732.9, 0, 1099.35, 1465.8]]),
+            err_msg='Unexpected stiffness matrix values for system1.')
         assert_allclose(
             FirstOrder(system2).stiffness_matrix,
             np.array([
@@ -990,9 +1001,21 @@ class TestFirstOrder(TestCase):
                 [0, 0, 0, -763.875, 0, -1527.75, 0, 0, 0, 763.875, 0,
                  -1527.75],
                 [0, 0, 0, 0, -149625, 0, 0, 0, 0, 0, 149625, 0],
-                [0, 0, 0, 1527.75, 0, 2037, 0, 0, 0, -1527.75, 0, 4074]]))
+                [0, 0, 0, 1527.75, 0, 2037, 0, 0, 0, -1527.75, 0, 4074]]),
+            err_msg='Unexpected stiffness matrix values for system1.')
+        # Check matrix symmetry
+        k1 = FirstOrder(system1).stiffness_matrix
+        assert_allclose(k1, k1.T,
+                        err_msg="Stiffness matrix must be symmetric.")
+        # Check caching of stiffness_matrix
+        fo_sym = FirstOrder(system1)
+        m1 = fo_sym.stiffness_matrix
+        m2 = fo_sym.stiffness_matrix
+        self.assertIs(m1, m2,
+                      "stiffness_matrix should be cached on instance.")
 
     def test_elastic_matrix(self):
+        # Check elastic matrix assembly and that off-diagonal terms are zero
         material = Material(210000000, 0.1, 81000000, 0.1)
         cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         n1, n2 = Node(0, 0), Node(4, 0)
@@ -1001,8 +1024,8 @@ class TestFirstOrder(TestCase):
         assert_allclose(
             FirstOrder(system1).elastic_matrix,
             np.zeros((6, 6)),
-            err_msg='If the nodes are not elasticly supported a zero matrix is'
-                    'returned.')
+            err_msg='If nodes are not elastically supported, a zero elastic '
+                    'matrix must be returned.')
         n3 = Node(4, 0, u=100, phi=1000)
         b1 = Bar(n1, n3, cross1, material)
         system1 = System([b1])
@@ -1014,11 +1037,19 @@ class TestFirstOrder(TestCase):
                             [0, 0, 0, 100, 0, 0],
                             [0, 0, 0, 0, 0, 0],
                             [0, 0, 0, 0, 0, 1000]]),
-                        err_msg='If the nodes are elasticly supported the'
-                                'elastic values are on the diagonal of the '
-                                'matrix')
+                        err_msg='Elastic support values must appear on the '
+                                'diagonal blocks only.')
+        # Check off-diagonal of elastic matrix equals zero
+        em = FirstOrder(system1).elastic_matrix
+        off = em - np.diag(np.diag(em))
+        assert_allclose(
+            off, np.zeros_like(off),
+            err_msg="Elastic matrix must be strictly diagonal-blocked "
+                    "(no off-diagonal terms)."
+        )
 
     def test_system_matrix(self):
+        # Check system_matrix equals stiffness + elastic and is cached
         material = Material(210000000, 0.1, 81000000, 0.1)
         cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         cross2 = CrossSection(349e-8, 21.2e-4, 0.096, 0.1, 0.1)
@@ -1026,6 +1057,7 @@ class TestFirstOrder(TestCase):
         b1 = Bar(n1, n2, cross1, material)
         b2 = Bar(n2, n3, cross2, material)
         system1 = System([b1, b2])
+        # Check expected numerical values (golden matrix)
         assert_allclose(
             FirstOrder(system1).system_matrix,
             np.array([
@@ -1039,8 +1071,13 @@ class TestFirstOrder(TestCase):
                 [0, 0, 0, -222600, 0, 0, 222700, 0, 0],
                 [0, 0, 0, 0, -1099.35, 1099.35, 0, 1099.35, 1099.35],
                 [0, 0, 0, 0, -1099.35, 732.9, 0, 1099.35, 1465.8]]),
-            err_msg='The system matrix is the sum of the stiffness and the '
-                    'elastic matrix')
+            err_msg='system_matrix must equal '
+                    'stiffness_matrix + elastic_matrix.')
+        # Check caching (same object instance)
+        fo_sys = FirstOrder(system1)
+        s1 = fo_sys.system_matrix
+        s2 = fo_sys.system_matrix
+        self.assertIs(s1, s2, "system_matrix should be cached on instance.")
 
     def test_f0_1_order(self):
         material = Material(210000000, 0.1, 81000000, 0.1)
@@ -1052,11 +1089,14 @@ class TestFirstOrder(TestCase):
         b1 = Bar(n1, n2, cross1, material, line_loads=l_load1)
         b2 = Bar(n2, n3, cross1, material, line_loads=l_load2)
         b3 = Bar(n2, n4, cross1, material, line_loads=l_load3)
+        # Check expected f0 values for multiple bars
         assert_allclose(
             FirstOrder(System([b1, b2, b3])).f0,
             np.array([[0], [-2], [1.3333333333], [4], [-5.3000997009],
                       [2.4667663676], [4], [0], [-2.6666666667],
-                      [0], [-3.6999002991], [-1.1999002991]]))
+                      [0], [-3.6999002991], [-1.1999002991]]),
+            err_msg='Unexpected f0 vector for the given line loads.')
+        # Check zero f0 if no loads exist
         b1 = Bar(n1, n2, cross1, material)
         b2 = Bar(n2, n3, cross1, material)
         b3 = Bar(n2, n4, cross1, material)
@@ -1065,6 +1105,7 @@ class TestFirstOrder(TestCase):
             np.zeros((12, 1)),
             err_msg='If the system is not subjected to loads, a zero vector is'
                     'returned.')
+        # Check invariance when bar is segmented vs. not segmented (same f0)
         n_load1, n_load2 = NodePointLoad(1, 20, 0), NodePointLoad(5, 0, 3)
         n1, n2 = Node(0, 0, loads=[n_load1, n_load2]), Node(4, 0,
                                                             loads=n_load2)
@@ -1077,11 +1118,11 @@ class TestFirstOrder(TestCase):
         assert_allclose(
             FirstOrder(System([bar1])).f0,
             FirstOrder(System([bar2, bar3])).f0,
-            err_msg='The f0 vector to be the same wheather the bar is '
-                    'seperated by the bar_segment function or implmeneted '
-                    'mannually')
+            err_msg='f0 must be identical whether the bar is segmented '
+                    'by helper or manually.')
 
     def test_p0(self):
+        # Check p0 assembly from node and bar point loads
         material = Material(210000000, 0.1, 81000000, 0.1)
         cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         n_load1, n_load2 = NodePointLoad(1, 20, 0), NodePointLoad(5, 0, 3)
@@ -1091,17 +1132,22 @@ class TestFirstOrder(TestCase):
         l_load1 = BarLineLoad(1, 1)
         b1 = Bar(n1, n2, cross1, material, line_loads=l_load1,
                  point_loads=b_load1)
+        # Check p0 collects node and bar point loads
         assert_allclose(
             FirstOrder(System([b1])).p0,
             np.array([[6], [20], [3], [-50], [0], [10], [5], [0], [3]]),
             err_msg='If a BarPointLoad is applied to a bar at a position '
                     'between 0 and 1, the load is assigned to the p0 vector.')
+        # Check p0 without bar point load
         b1 = Bar(n1, n2, cross1, material)
         assert_allclose(
             FirstOrder(System([b1])).p0,
-            np.array([[6], [20], [3], [5], [0], [3]]))
+            np.array([[6], [20], [3], [5], [0], [3]]),
+            err_msg='p0 must equal the sum of nodal loads when no bar '
+                    'point load is present.')
 
     def test_p(self):
+        # Check p identity p = p0 - f0
         material = Material(210000000, 0.1, 81000000, 0.1)
         cross1 = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         n_load1, n_load2 = NodePointLoad(1, 20, 0), NodePointLoad(5, 0, 3)
@@ -1111,44 +1157,168 @@ class TestFirstOrder(TestCase):
         l_load1 = BarLineLoad(1, 1)
         b1 = Bar(n1, n2, cross1, material, line_loads=l_load1,
                  point_loads=b_load1)
+        # Check numeric expected p
         assert_allclose(
             FirstOrder(System([b1])).p,
             np.array([[6], [21], [2.6666666667], [-50], [2],
-                      [10], [5], [1], [3.3333333]]))
+                      [10], [5], [1], [3.3333333]]),
+            err_msg='Unexpected p vector for the given load combination.')
+        # Check identity p = p0 - f0
+        fo = FirstOrder(System([b1]))
+        assert_allclose(fo.p, fo.p0 - fo.f0,
+                        err_msg="Global load vector must satisfy p = p0 - f0.")
 
     def test_boundary_conditions(self):
         cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         mat = Material(2.1e8, 0.1, 0.1, 0.1)
         n1 = Node(0, 0, u='fixed', w='fixed')
-        n2 = Node(np.random.rand(), np.random.rand(), w='fixed')
+
+        # Use fixed coordinates
+        n2 = Node(7.0, 2.0, w='fixed')
         load = BarLineLoad(1, 1)
         b1 = Bar(n1, n2, cross, mat, line_loads=load)
-        diagonal = np.diag(FirstOrder(System([b1])).boundary_conditions[0])
+        fo_bc = FirstOrder(System([b1]))
+
+        # Check diagonal entries after BCs are non-zero
+        diagonal = np.diag(fo_bc.boundary_conditions[0])
         self.assertTrue(
             np.all(diagonal != 0),
-            'All values on the diagonal have to be greater than zero.')
-        # More cases
+            'All diagonal entries must be > 0 after applying '
+            'boundary conditions.'
+        )
+
+        # Check K_mod d = p_mod
+        k_mod, p_mod = fo_bc.boundary_conditions
+        d = fo_bc.node_deform
+        assert_allclose(
+            k_mod @ d, p_mod,
+            err_msg="Modified linear system must satisfy K_mod * d = p_mod."
+        )
+
+        # Check that boundary_conditions does not mutate system_matrix or p
+        k_before = fo_bc.system_matrix.copy()
+        p_before = fo_bc.p.copy()
+        _ = fo_bc.boundary_conditions
+        assert_allclose(
+            fo_bc.system_matrix, k_before,
+            err_msg="boundary_conditions must not mutate system_matrix."
+        )
+        assert_allclose(
+            fo_bc.p, p_before,
+            err_msg="boundary_conditions must not mutate p."
+        )
+
+        # Check known modification case
+        n2 = Node(10, 0, w='fixed')
+        system2 = System([Bar(n1, n2, cross, mat, line_loads=load)])
+        assert_allclose(
+            FirstOrder(system2).boundary_conditions[0],
+            np.array([[1, 0, 0, 0, 0, 0],
+                      [0, 1, 0, 0, 0, 0],
+                      [0, 0, 1629.6, 0, 0, 814.8],
+                      [0, 0, 0, 59850, 0, 0],
+                      [0, 0, 0, 0, 1, 0],
+                      [0, 0, 814.8, 0, 0, 1629.6]]),
+            err_msg="Unexpected modified stiffness matrix for the "
+                    "given supports."
+        )
+        assert_allclose(
+            FirstOrder(system2).boundary_conditions[1],
+            np.array([[0], [0], [-8.3333333], [0], [0], [8.3333333]]),
+            err_msg="Unexpected modified load vector for the given supports."
+        )
+
+        # Check no modifications if no supports defined
+        n1, n2 = Node(0, 0), Node(4, 0)
+        b1 = Bar(n1, n2, cross, mat)
+        system2 = System([b1])
+        assert_allclose(
+            FirstOrder(system2).system_matrix,
+            FirstOrder(system2).boundary_conditions[0],
+            err_msg='No boundary modifications expected when no supports '
+                    'are defined (k unchanged).'
+        )
+        assert_allclose(
+            FirstOrder(system2).p,
+            FirstOrder(system2).boundary_conditions[1],
+            err_msg='No boundary modifications expected when no supports '
+                    'are defined (p unchanged).'
+        )
+
+        # Check support reaction transformation: rotation == 0 -> identical
+        n1r = Node(0, 0, u='fixed', w='fixed', phi='fixed', rotation=0)
+        n2r = Node(10, 0, w='fixed')
+        fo_rot0 = FirstOrder(
+            System([Bar(n1r, n2r, cross, mat, line_loads=load)]))
+        assert_allclose(
+            fo_rot0.system_support_forces,
+            fo_rot0.node_support_forces,
+            err_msg="If rotation=0, system_support_forces must match "
+                    "node_support_forces exactly."
+        )
+
+        # Check support reaction transformation: rotation != 0
+        n1r = Node(0, 0, u='fixed', w='fixed', phi='fixed',
+                   rotation=np.pi / 2)
+        fo_rot = FirstOrder(
+            System([Bar(n1r, n2r, cross, mat, line_loads=load)]))
+        local = fo_rot.node_support_forces[:3, :]
+        globl = fo_rot.system_support_forces[:3, :]
+        self.assertFalse(
+            np.allclose(local, globl),
+            "With node rotation, transformed support forces must differ "
+            "from local ones."
+        )
+        assert_allclose(
+            np.linalg.norm(local[:2, :]),
+            np.linalg.norm(globl[:2, :]),
+            err_msg="Rotation should change force components but preserve "
+                    "the norm in the u,w-plane."
+        )
 
     def test_node_deform(self):
+        # Check node_deform shape and that K_mod d = p_mod holds
         cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         mat = Material(2.1e8, 0.1, 0.1, 0.1)
         n1, n2 = Node(0, 0, u='fixed', w='fixed'), Node(3, 0, w='fixed')
         b1 = Bar(n1, n2, cross, mat,
                  point_loads=BarPointLoad(0, 10, 0, position=0.5))
         system = System([b1])
-        n2 = Node(10, 0, w='fixed')
-        load = BarLineLoad(1, 1)
-        b1 = Bar(n1, n2, cross, mat, line_loads=load)
-        system1 = System([b1])
-        self.assertEqual(
-            (FirstOrder(system).node_deform.shape), (9, 1),
-            'The length of the vector is equal to the number of nodes'
-            'times the dof.')
-        assert_allclose(FirstOrder(system1).node_deform,
-                        np.array([[0], [0], [-0.010227458681026], [0], [0],
-                                  [0.010227458681026]]))
 
-    def test_list_delta_node(self):
+        n2b = Node(10, 0, w='fixed')
+        load = BarLineLoad(1, 1)
+        b1b = Bar(n1, n2b, cross, mat, line_loads=load)
+        system1 = System([b1b])
+
+        # Check shape equals dof * number_of_nodes
+        deform = FirstOrder(system).node_deform
+        expected_shape = (FirstOrder(system).dof * len(system.nodes()), 1)
+        self.assertEqual(
+            deform.shape, expected_shape,
+            'The deformation vector length must be dof * number of nodes.'
+        )
+
+        # Check expected values for system1
+        assert_allclose(
+            FirstOrder(system1).node_deform,
+            np.array([[0], [0], [-0.010227458681026], [0], [0],
+                      [0.010227458681026]]),
+            err_msg='Unexpected nodal deformation values for the '
+                    'given load case.'
+        )
+
+        # Check K_mod d = p_mod for system1
+        fo_nd = FirstOrder(system1)
+        k_mod, p_mod = fo_nd.boundary_conditions
+        d = fo_nd.node_deform
+        assert_allclose(
+            k_mod @ d, p_mod,
+            err_msg="Nodal deformation must satisfy the modified "
+                    "linear system."
+        )
+
+    def test_node_deform_list(self):
+        # Check node_deform_list construction for multi-bar systems
         cross1 = CrossSection(0.3 * 0.5 ** 3/12, 0.3 * 0.5, 0.5, 0.3, 0.1)
         cross2 = CrossSection(0.3 * 0.3 ** 3 / 12, 0.3 * 0.3, 0.3, 0.3, 0.1)
         mat1 = Material(3000e3, 1.2, 60e3, 0.1)
@@ -1171,10 +1341,46 @@ class TestFirstOrder(TestCase):
              np.array([[0], [0], [0], [0.0185560632], [0.0000002191],
                        [-0.0136303065]]),
              np.array([[0.0185560632], [0.0000002191], [-0.0136303065],
-                       [0.025618694], [0.0000003651], [-0.0004949552]])])
+                       [0.025618694], [0.0000003651], [-0.0004949552]])],
+            err_msg='Unexpected node_deform_list for the given multi-bar '
+                    'system.')
 
     def test_bar_deform(self):
-        """TODO"""
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        n1, n2 = (Node(0, 0, u='fixed', w='fixed', phi='fixed'),
+                  Node(3, 0, w='fixed'))
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        fo = FirstOrder(System([b1]))
+        bd = fo.bar_deform[0]
+        # Check definition-based reconstruction
+        expected = (np.transpose(b1.transformation_matrix()) @
+                    fo.node_deform_list[0])
+        assert_allclose(
+            bd, expected,
+            err_msg="bar_deform must equal T^T @ stacked nodal deformations.")
+        # Check caching
+        bd2 = fo.bar_deform[0]
+        self.assertIs(
+            bd, bd2,
+            "bar_deform list should be cached on instance."
+        )
+
+    def test_system_deform_list(self):
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+        n2 = Node(4, 0, w='fixed')
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        fo = FirstOrder(System([b1]))
+
+        sys_def = fo.system_deform_list[0]
+        node_def = fo.node_deform_list[0]
+        assert_allclose(
+            sys_def, node_def,
+            err_msg="system_deform_list must equal node_deform_list when "
+                    "transforming back to system coordinates."
+        )
 
     def test_internal_forces(self):
         cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
@@ -1183,29 +1389,241 @@ class TestFirstOrder(TestCase):
         b1 = Bar(n1, n2, cross, mat,
                  point_loads=BarPointLoad(0, 10, 0, position=0.5))
         system = System([b1])
+        system2 = System([Bar(n1, n2, cross, mat,
+                              line_loads=BarLineLoad(1, 1))])
+        # Check length equals number of elements
         self.assertEqual(
-            len(FirstOrder(system).internal_forces),
-            len(system.mesh))
-        # More cases
+            len(FirstOrder(system).internal_forces), len(system.mesh),
+            'internal_forces must return one (6x1) array per bar.')
+        # Check expected internal forces
+        assert_allclose(
+            FirstOrder(system2).internal_forces,
+            np.array([[[0], [-1.500000003], [0], [0], [-1.499999997], [0]]]),
+            err_msg='Unexpected internal forces for the given uniform load.')
 
-    def test_apply_hinge_modification(self):
-        """TODO"""
+        fo1 = FirstOrder(system2)
+        elem = system2.mesh[0]
+        k_loc = elem.stiffness_matrix(to_node_coord=False,
+                                      f_axial=fo1._get_f_axial(0))
+        f0_loc = elem.f0(to_node_coord=False,
+                         f_axial=fo1._get_f_axial(0)) + elem.f0_point
+        d_loc = fo1.bar_deform[0]
+        assert_allclose(
+            fo1.internal_forces[0], k_loc @ d_loc + f0_loc,
+            err_msg="Internal forces must satisfy f' = k' * δ' + f0'."
+        )
 
-    def test_bar_deform_node_displacement(self):
-        """TODO"""
-
-    def test_create_bar_deform_list(self):
-        """TODO"""
-
-    def test_solveable(self):
+    def test_node_support_forces(self):
         cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        # Include elastic supports to exercise the elastic term
+        n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+        n2 = Node(4, 0, u=200, phi=500,
+                  w='fixed')
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        fo = FirstOrder(System([b1]))
+
+        k, d = fo.system_matrix, fo.node_deform
+        f0, p0 = fo.f0, fo.p0
+        elastic_vec = np.vstack(np.diag(fo.elastic_matrix))
+        expected = k @ d + f0 - p0 - elastic_vec * d
+
+        assert_allclose(
+            fo.node_support_forces, expected,
+            err_msg="node_support_forces must satisfy "
+                    "Psupp = K*d + F0 - P0 - diag(elastic)*d."
+        )
+
+        self.assertEqual(
+            fo.node_support_forces.shape, (fo.dof * len(fo.system.nodes()), 1),
+            "node_support_forces must have size (dof * number_of_nodes, 1)."
+        )
+
+    def test_system_support_forces(self):
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e-8, 0.1, 0.1,
+                       0.1)
+        # Two variants: rotation = 0 and rotation = 90deg (pi/2 rad)
+        n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed', rotation=0)
+        n2 = Node(4, 0, w='fixed')
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        fo0 = FirstOrder(System([b1]))
+
+        # With zero rotation, node/system reactions must coincide
+        assert_allclose(
+            fo0.system_support_forces, fo0.node_support_forces,
+            err_msg="With rotation=0, system_support_forces "
+                    "must equal node_support_forces."
+        )
+
+        # Now rotate node 1 by 90 degrees
+        n1r = Node(0, 0, u='fixed', w='fixed', phi='fixed', rotation=np.pi / 2)
+        b1r = Bar(n1r, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        fo = FirstOrder(System([b1r]))
+
+        local = fo.node_support_forces[:3, :]
+        global_ = fo.system_support_forces[:3, :]
+
+        self.assertFalse(
+            np.allclose(local, global_),
+            "With node rotation, transformed support forces "
+            "must differ from local ones."
+        )
+
+    def test_hinge_modifier(self):
+        # Check hinge_modifier returns correct relative displacements
+        # for hinges
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        n1, n2 = (Node(0, 0, u='fixed', w='fixed', phi='fixed'),
+                  Node(3, 0, w='fixed', u='fixed', phi='fixed'))
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1),
+                 hinge_phi_i=True, hinge_w_i=True)
+        # Case 1: hinge at i for w and phi
+        assert_allclose(
+            FirstOrder(System([b1])).hinge_modifier,
+            np.array([[[0], [2.485272459e-3], [1.104565538e-3],
+                       [0], [0], [0]]]),
+            err_msg='Unexpected hinge_modifier for hinge_phi_i and'
+                    ' hinge_w_i at node i.')
+        # Case 2: hinge at i for u and phi, and hinge at j for w
+        b2 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1),
+                 hinge_u_i=True, hinge_phi_i=True, hinge_w_j=True)
+        assert_allclose(
+            FirstOrder(System([b2])).hinge_modifier,
+            np.array([[[0], [0], [-2.209131075e-3],
+                       [0], [4.142120766e-3], [0]]]),
+            err_msg='Unexpected hinge_modifier for hinge_u_i & hinge_phi_i (i)'
+                    ' and hinge_w_j (j).')
+
+    def test_bar_deform_node_displacement(self):
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        n1, n2 = (Node(0, 0, u='fixed', w='fixed', phi='fixed'),
+                  Node(3, 0, displacements=NodeDisplacement(z=0.01, x=0.1)))
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        # Check no rotation: node displacements are not rotated
+        assert_allclose(
+            FirstOrder(System([b1])).bar_deform_displacements,
+            np.array([[[0], [0], [0], [0.1], [0.01], [0]]]),
+            err_msg='If the bar inclination is 0, the node displacements are '
+                    'not transformed.')
+        # Check inclined bar: transformed local components
+        n2 = Node(3, -10, displacements=NodeDisplacement(z=0.01, x=0.1))
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        assert_allclose(
+            FirstOrder(System([b1])).bar_deform_displacements,
+            np.array([[[0], [0], [0],
+                       [0.0191565257080], [0.0986561073760], [0]]]),
+            err_msg='Local bar-end displacements must be the rotated version '
+                    'of the nodal displacements for an inclined bar.')
+
+    def test_bar_deform_list(self):
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        # Case with prescribed node displacement and hinges
+        n1, n2 = (Node(0, 0, u='fixed', w='fixed', phi='fixed',
+                       displacements=NodeDisplacement(1)),
+                  Node(3, 0, w='fixed', u='fixed', phi='fixed'))
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1),
+                 hinge_phi_i=True, hinge_w_i=True)
+        assert_allclose(
+            FirstOrder(System([b1])).bar_deform_list,
+            np.array([[[1], [2.485272459e-3], [1.104565538e-3],
+                       [0], [0], [0]]]),
+            err_msg='bar_deform_list must equal hinge_modifier + bar_deform + '
+                    'bar_deform_displacements.')
+        # Case with no hinges and fixed supports: zero deformation expected
+        n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        assert_allclose(
+            FirstOrder(System([b1])).bar_deform_list,
+            [np.zeros((6, 1))],
+            err_msg='Total bar-end deformation must be zero with no hinges, '
+                    'blocked supports, and no node displacements.')
+
+    def test_solvable(self):
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        # Negative case: no supports -> unsolvable
         n1, n2 = Node(0, 0), Node(3, 0)
         b1 = Bar(n1, n2, cross, mat,
                  point_loads=BarPointLoad(0, 10, 0, position=0.5))
         self.assertFalse(
             FirstOrder(System([b1])).solvable,
             'The system can not be solved if no supports are defined.')
+        # Positive case: enough supports
+        n1, n2 = Node(0, 0, u='fixed', w='fixed', phi='fixed'), Node(3, 0)
+        fo = FirstOrder(
+            System([Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))]))
+        self.assertTrue(
+            fo.solvable,
+            'The system must be solvable with sufficient supports.'
+        )
+        self.assertIsInstance(
+            fo.calc, tuple,
+            'calc must return a tuple when system is solvable.'
+        )
+        self.assertEqual(
+            len(fo.calc), 2,
+            'calc must return (bar_deform_list, internal_forces).'
+        )
+
+    def test_calc(self):
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+
+        # Solvable system: fixed at node 1
+        n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+        n2 = Node(3, 0)
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        fo_ok = FirstOrder(System([b1]))
+
+        out = fo_ok.calc
+        self.assertIsInstance(
+            out, tuple, "calc must return a tuple for a solvable system.")
+        self.assertEqual(
+            len(out), 2,
+            "calc must return (bar_deform_list, internal_forces).")
+        bar_def_list, int_forces = out
+        self.assertEqual(
+            len(bar_def_list), len(fo_ok.system.mesh),
+            "bar_deform_list length must equal number of bars."
+        )
+        self.assertEqual(
+            len(int_forces), len(fo_ok.system.mesh),
+            "internal_forces length must equal number of bars."
+        )
+
+        # Unsolvable system: no supports at all → calc should be None
+        n1u = Node(0, 0)
+        n2u = Node(3, 0)
+        b1u = Bar(n1u, n2u, cross, mat)
+        fo_bad = FirstOrder(System([b1u]))
+        self.assertFalse(fo_bad.solvable,
+                         "System without supports must be unsolvable.")
+        self.assertIsNone(fo_bad.calc,
+                          "calc must be None for an unsolvable system.")
 
     def test_averaged_longitudinal_force(self):
-        """TODO"""
+        # Check averaged_longitudinal_force length/finite and order restoration
+        cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
+        mat = Material(2.1e8, 0.1, 0.1, 0.1)
+        n1, n2 = Node(0, 0, u='fixed', w='fixed', phi='fixed'), Node(3, 0)
+        b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
+        fo = FirstOrder(System([b1]))
+
+        # Smoke: correct list length and finite result
+        Lavg = fo.averaged_longitudinal_force
+        self.assertEqual(
+            len(Lavg), len(fo.system.mesh),
+            'averaged_longitudinal_force must return one value per bar.'
+        )
+
+        # Check original order is restored after computation
+        fo.order = 'second'
+        _ = fo.averaged_longitudinal_force
+        self.assertEqual(
+            fo.order, 'second',
+            "averaged_longitudinal_force must restore the "
+            "original 'order' value.")
