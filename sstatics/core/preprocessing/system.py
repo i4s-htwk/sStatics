@@ -1376,49 +1376,121 @@ class SystemModifier:
         self.system = System(bars)
         return self.system
 
-    def create_node_load_systems(self):
-        """Generates a set of systems with unit loads applied at modified DOFs.
+    def create_uls_systems(self):
+        """
+        Creates systems for unit load states.
 
-        For each recorded modification (either release of support or insertion
-        of hinge), a system is constructed where a unit point load is applied
-        at the corresponding degree of freedom (x, z, or phi). This is useful
-        for the :py:class:`KGV`.
+        After a modified system has been created, all modifications to bars or
+        nodes are stored in the ``memory_modification`` list.
+
+        This method generates new systems representing unit load states, which
+        are used in the force method. Unit loads are applied at the modified
+        locations according to the type of modification:
+
+        * **Bar modifications (hinges)** – A hinge modification requires
+          applying a load pair (equal magnitude, opposite direction). The
+          negativ load is applied to the modified bar at the hinge location,
+          and the positiv load is applied to a connected bar without a hinge in
+          the same degree of freedom. If all connected bars have a hinge, the
+          first connected bar is used.
+
+        * **Node modifications (supports)** – For a released degree of freedom,
+          a unit load is applied directly to the node in the corresponding
+          direction (horizontal, vertical, or rotational).
 
         Returns
         -------
-        list[:any:`System`]
-            A list of systems, each with one unit node load applied.
+        list of System
+            A list of systems, each containing a single unit load state.
         """
+
         systems = []
 
         for obj, name in self.memory_modification:
             if isinstance(obj, Bar):
-                node = obj.node_i if '_i' in name else obj.node_j
-                dof = 'x' if 'u' in name else 'z' if 'w' in name else 'phi'
+                if not name.startswith("hinge_"):
+                    raise ValueError(
+                        f"Expected a hinge modification for Bar, got '{name}'")
+
+                dof_key = name.removeprefix("hinge_")
+                dof_type, end = dof_key.split("_")
+                dof_map = {"u": "x", "w": "z", "phi": "phi"}
+                if dof_type not in dof_map:
+                    raise ValueError(f"Invalid DOF in hinge: '{dof_type}'")
+
+                dof = dof_map[dof_type]
+                cur_bar = self._get_current_bar(obj)
+                if cur_bar is None:
+                    raise ValueError(
+                        "Modified bar not found in current system.")
+
+                node_orig = obj.node_i if end == "i" else obj.node_j
+                cur_node = self._get_current_node(node_orig)
+                if cur_node is None:
+                    raise ValueError(
+                        "Modified node not found in current system.")
+
+                pos_self = 0.0 if end == "i" else 1.0
+
+                bar_self = replace(
+                    cur_bar,
+                    point_loads=BarPointLoad(**{dof: -1.0}, position=pos_self))
+
+                node_bars = self.system.node_to_bar_map()
+                neighbors = [b for b in node_bars[cur_node] if
+                             b is not cur_bar]
+                idx_map = {"u": (0, 3), "w": (1, 4), "phi": (2, 5)}
+                i0, i1 = idx_map[dof_type]
+                target = next(
+                    (b for b in neighbors
+                     if not b.hinge[i0 if b.node_i == cur_node else i1]),
+                    neighbors[0] if neighbors else None,
+                )
+
+                bar_other = None
+                if target:
+                    pos_other = 0.0 if target.node_i == cur_node else 1.0
+                    bar_other = replace(
+                        target,
+                        point_loads=BarPointLoad(**{dof: 1.0},
+                                                 position=pos_other))
+
+                bars = list(self.system.bars)
+                idx_cur = self._find_bar_index(bars, cur_bar)
+                bars[idx_cur] = bar_self
+                if bar_other is not None and target is not None:
+                    idx_tgt = self._find_bar_index(bars, target)
+                    bars[idx_tgt] = bar_other
+
+                systems.append(System(bars))
+
             elif isinstance(obj, Node):
-                node = obj
-                dof = 'x' if name == 'u' else 'z' if name == 'w' else 'phi'
+                dof = {"u": "x", "w": "z", "phi": "phi"}[name]
+                cur_node = self._get_current_node(obj)
+                load = NodePointLoad(
+                    x=1.0 if dof == "x" else 0.0,
+                    z=1.0 if dof == "z" else 0.0,
+                    phi=1.0 if dof == "phi" else 0.0,
+                )
+                new_node = replace(cur_node, loads=load)
+
+                bars = list(self.system.bars)
+                new_bars = []
+                for bar in bars:
+                    updated = None
+                    if (bar.node_i.x == cur_node.x and
+                            bar.node_i.z == cur_node.z):
+                        updated = replace(bar, node_i=new_node)
+                    elif (bar.node_j.x == cur_node.x and
+                          bar.node_j.z == cur_node.z):
+                        updated = replace(bar, node_j=new_node)
+                    new_bars.append(updated or bar)
+
+                systems.append(System(new_bars))
+
             else:
-                continue
-
-            current_node = self._get_current_node(node)
-
-            load = NodePointLoad(
-                x=1.0 if dof == 'x' else 0.0,
-                z=1.0 if dof == 'z' else 0.0,
-                phi=1.0 if dof == 'phi' else 0.0
-            )
-
-            new_node = replace(current_node, loads=load)
-
-            new_bars = [replace(b,
-                                node_i=new_node if b.node_i == current_node
-                                else b.node_i,
-                                node_j=new_node if b.node_j == current_node
-                                else b.node_j)
-                        for b in self.system.bars]
-
-            systems.append(System(new_bars))
+                raise TypeError(
+                    f"Unsupported object type in modification: {type(obj)}")
 
         return systems
 

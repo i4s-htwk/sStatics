@@ -473,6 +473,23 @@ class FirstOrder:
         ]
 
     @cached_property
+    def system_deform_list(self):
+        """Transforms the bar deformations for each bar into the
+        system deformations.
+
+        Returns
+        -------
+        :any:`list` of numpy.ndarray
+            A list of (6, 1) arrays, each representing the deformation in
+            the system coordinate system.
+        """
+        bar_deform = self.bar_deform
+        return [
+            bar.transformation_matrix(False) @ deform
+            for bar, deform in zip(self.system.mesh, bar_deform)
+        ]
+
+    @cached_property
     def internal_forces(self):
         r"""Calculates the internal forces of the statical system.
 

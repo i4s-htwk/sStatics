@@ -273,7 +273,8 @@ class KGV(RED):
         list[:any:`System`]
             List of systems generated for each unit load case.
         """
-        return self.released_modifier.create_node_load_systems()
+        self.released_modifier.delete_loads()
+        return self.released_modifier.create_uls_systems()
 
     def add_virtual_node_load(self, *args, **kwargs):
         raise ValueError("Virtual node loads are not allowed for this method.")
