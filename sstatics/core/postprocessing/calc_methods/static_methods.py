@@ -1,4 +1,4 @@
-
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Literal
 
@@ -148,7 +148,7 @@ class RED(PVK):
                 * 'phi': Rotation
         """
         self.modifier.modify_support(obj, support)
-        self.released_modifier = self.modifier
+        self.released_modifier = deepcopy(self.modifier)
 
     def modify_bar(
             self, obj: Bar,
@@ -166,7 +166,7 @@ class RED(PVK):
             The hinge to be applied and its location (node i or j).
         """
         self.modifier.insert_hinge(obj, hinge)
-        self.released_modifier = self.modifier
+        self.released_modifier = deepcopy(self.modifier)
 
     def delete_bar(self, obj: Bar):
         """Deletes a bar from the structural system.
@@ -273,8 +273,8 @@ class KGV(RED):
         list[:any:`System`]
             List of systems generated for each unit load case.
         """
-        self.released_modifier.delete_loads()
-        return self.released_modifier.create_uls_systems()
+        self.modifier.delete_loads()
+        return self.modifier.create_uls_systems()
 
     def add_virtual_node_load(self, *args, **kwargs):
         raise ValueError("Virtual node loads are not allowed for this method.")

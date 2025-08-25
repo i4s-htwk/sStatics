@@ -1434,7 +1434,7 @@ class SystemModifier:
 
                 bar_self = replace(
                     cur_bar,
-                    point_loads=BarPointLoad(**{dof: -1.0}, position=pos_self))
+                    point_loads=BarPointLoad(**{dof: 1.0}, position=pos_self))
 
                 node_bars = self.system.node_to_bar_map()
                 neighbors = [b for b in node_bars[cur_node] if
@@ -1452,7 +1452,7 @@ class SystemModifier:
                     pos_other = 0.0 if target.node_i == cur_node else 1.0
                     bar_other = replace(
                         target,
-                        point_loads=BarPointLoad(**{dof: 1.0},
+                        point_loads=BarPointLoad(**{dof: -1.0},
                                                  position=pos_other))
 
                 bars = list(self.system.bars)
