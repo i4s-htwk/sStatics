@@ -91,7 +91,14 @@ class PVK:
         :any:`SystemResult`
             Result object containing internal forces and displacements.
         """
-        return SystemResult(system, *FirstOrder(system).calc)
+        solve = FirstOrder(system)
+        return SystemResult(system=system,
+                            bar_deform_list=solve.bar_deform_list,
+                            bar_internal_forces=solve.internal_forces,
+                            node_deform=solve.node_deform,
+                            node_support_forces=solve.node_support_forces,
+                            system_support_forces=solve.system_support_forces
+                            )
 
     def calc(self):
         """Performs the calculation using the Principle of Virtual Forces.
