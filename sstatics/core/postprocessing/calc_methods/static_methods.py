@@ -7,8 +7,9 @@ from sstatics.core.postprocessing.calc_methods.equation_of_work import (
 )
 from sstatics.core.postprocessing.results import SystemResult
 from sstatics.core.preprocessing.bar import Bar
+from sstatics.core.preprocessing.modifier import SystemModifier
 from sstatics.core.preprocessing.node import Node
-from sstatics.core.preprocessing.system import System, SystemModifier
+from sstatics.core.preprocessing.system import System
 from sstatics.core.solution.first_order import FirstOrder
 
 

@@ -124,8 +124,7 @@ def get_angle(point, center, displacement: float = 1):
     Args:
         point (numpy array): coordinates of the point.
         center (numpy array): coordinates of the center.
-        displacement (float, optional): displacement factor. Defaults
-            to 1.
+        displacement (float, optional): displacement factor. Defaults to 1.
 
     Returns:
         float: angle between the point and the center.
