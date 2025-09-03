@@ -22,13 +22,11 @@ class CrossSection:
         shear_cor: Optional[float] = None,
         geometry: Optional[List[Union[Polygon, CircularSector]]] = None
     ):
-        """
-        Initializes a CrossSection either by geometry or mechanical properties.
+        r"""Initializes a CrossSection either by geometry or mechanical
+        properties.
 
         Parameters
         ----------
-        geometry : Optional[List[Union[Polygon, CircularSector]]], optional
-            List of geometric shapes defining the cross-section.
         mom_of_int : Optional[float], optional
             Moment of inertia.
         area : Optional[float], optional
@@ -39,6 +37,8 @@ class CrossSection:
             Cross-sectional width.
         shear_cor : Optional[float], optional
             Shear correction factor (default 1.0).
+        geometry : Optional[List[Union[Polygon, CircularSector]]], optional
+            List of geometric shapes defining the cross-section.
 
         Raises
         ------

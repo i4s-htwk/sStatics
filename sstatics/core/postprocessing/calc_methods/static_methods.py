@@ -109,7 +109,7 @@ class PVK:
 
         Returns
         -------
-        :any:`np.array`
+        :any:`numpy.array`
             The internal virtual work due to the applied virtual and real
             systems.
         """
@@ -169,7 +169,7 @@ class RED(PVK):
         ----------
         obj : :any:`Bar`
             The bar where the hinge will be inserted.
-        hinge : {'hinge_u_i', 'hinge_w_i', 'hinge_phi_i',
+        hinge : {'hinge_u_i', 'hinge_w_i', 'hinge_phi_i', \
                  'hinge_u_j', 'hinge_w_j', 'hinge_phi_j'}
             The hinge to be applied and its location (node i or j).
         """

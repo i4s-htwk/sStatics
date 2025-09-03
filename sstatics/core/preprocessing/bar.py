@@ -1388,7 +1388,7 @@ class Bar:
 
             .. math::
                 f_4(\mu) = \dfrac{B_s}{2EI} \cdot \dfrac{\big([\frac{B_s}{GA_s
-                 ell^2} \mu^2 + 1] \sin ( \mu) - \mu \big) \cdot \mu}{2 [\frac
+                 \ell^2} \mu^2 + 1] \sin ( \mu) - \mu \big) \cdot \mu}{2 [\frac
                  {B_s}{GA_s \ell^2} \mu^2 + 1] (\cos (\mu) - 1) + \mu \cdot
                  \sin ( \mu)}
 

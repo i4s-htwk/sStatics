@@ -229,7 +229,7 @@ class Polygon:
                 S_y = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)
                 (y_i + y_{i-1})
 
-                These are discrete approximations of the first moments:
+            These are discrete approximations of the first moments:
 
             .. math::
 

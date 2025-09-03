@@ -20,7 +20,7 @@ line load. The goal is to calculate the internal forces of the beam and
 then display the corresponding diagrams.
 
 .. image::
-    tutorial1.png
+    images/tutorial1.png
 
 Pre-Processing
 ==============
@@ -101,13 +101,16 @@ along the beam is plotted.
 
 .. code-block:: python
 
-        from sstatics.core.postprocessing import SystemResults
+        from sstatics.core.postprocessing import SystemResult
         from sstatics.graphic_objects import ResultGraphic
 
-        deform, forces = fo.calc
-        results = SystemResults(system, deform, forces)
+        results = SystemResult(system, fo.bar_deform_list, fo.internal_forces, fo.node_deform, fo.node_support_forces, fo.system_support_forces)
         ResultGraphic(results, 'moment').show()
 
+.. image:: images/tutorial_moment.png
+   :alt: Resulting moment forces
+   :align: center
+
 You have now completed your first analysis: a cantilever beam subjected
-to a uniform line load. This workflow—**Pre-processing → Solution →
-Post-processing**—is the basic structure for all further projects.
+to a uniform line load. This workflow, **Pre-processing → Solution →
+Post-processing**, is the basic structure for all further projects.
