@@ -735,6 +735,7 @@ class SystemModifier:
 
         self._update_bar(bar_obj, None)
         self.system = System(bars)
+        self.memory_modification.append((bar_obj, 'deleted'))
         return self.system
 
     def create_uls_systems(self):
@@ -769,61 +770,100 @@ class SystemModifier:
 
         for obj, name in self.memory_modification:
             if isinstance(obj, Bar):
-                if not name.startswith("hinge_"):
+                if name.startswith("hinge_"):
+                    dof_key = name.removeprefix("hinge_")
+                    dof_type, end = dof_key.split("_")
+                    dof_map = {"u": "x", "w": "z", "phi": "phi"}
+                    if dof_type not in dof_map:
+                        raise ValueError(f"Invalid DOF in hinge: '{dof_type}'")
+
+                    dof = dof_map[dof_type]
+                    cur_bar = self._get_current_bar(obj)
+                    if cur_bar is None:
+                        raise ValueError(
+                            "Modified bar not found in current system.")
+
+                    node_orig = obj.node_i if end == "i" else obj.node_j
+                    cur_node = self._get_current_node(node_orig)
+                    if cur_node is None:
+                        raise ValueError(
+                            "Modified node not found in current system.")
+
+                    pos_self = 0.0 if end == "i" else 1.0
+
+                    bar_self = replace(
+                        cur_bar,
+                        point_loads=BarPointLoad(**{dof: 1.0},
+                                                 position=pos_self))
+                    node_bars = self.system.node_to_bar_map()
+                    cur_key = next(
+                        (n for n in node_bars.keys() if
+                         n.x == cur_node.x and n.z == cur_node.z),
+                        None
+                    )
+                    if cur_key is None:
+                        raise KeyError(
+                            f"Node {cur_node} not found in system node map.")
+                    neighbors = [b for b in node_bars[cur_key] if
+                                 b is not cur_bar]
+                    idx_map = {"u": (0, 3), "w": (1, 4), "phi": (2, 5)}
+                    i0, i1 = idx_map[dof_type]
+                    target = next(
+                        (b for b in neighbors
+                         if not b.hinge[i0 if b.node_i == cur_node else i1]),
+                        neighbors[0] if neighbors else None,
+                    )
+
+                    bar_other = None
+                    if target:
+                        pos_other = 0.0 if target.node_i == cur_node else 1.0
+                        bar_other = replace(
+                            target,
+                            point_loads=BarPointLoad(**{dof: -1.0},
+                                                     position=pos_other))
+
+                    bars = list(self.system.bars)
+                    idx_cur = self._find_bar_index(bars, cur_bar)
+                    bars[idx_cur] = bar_self
+                    if bar_other is not None and target is not None:
+                        idx_tgt = self._find_bar_index(bars, target)
+                        bars[idx_tgt] = bar_other
+
+                    systems.append(System(bars))
+
+                elif name == 'deleted':
+                    node_i, node_j = obj.node_i, obj.node_j
+                    bars = [b for b in self.system.bars if b is not obj]
+
+                    new_nodes = []
+                    for node, sign in ((node_i, -1.0), (node_j, +1.0)):
+                        cur_node = next(
+                            (n for n in self.system.nodes() if
+                             n.x == node.x and n.z == node.z),
+                            None
+                        )
+                        if cur_node is not None:
+                            load = NodePointLoad(x=sign,
+                                                 rotation=obj.inclination)
+                            new_nodes.append(replace(cur_node, loads=load))
+
+                    updated_bars = []
+                    for bar in bars:
+                        updated = None
+                        for new_node in new_nodes:
+                            if (bar.node_i.x == new_node.x
+                                    and bar.node_i.z == new_node.z):
+                                updated = replace(bar, node_i=new_node)
+                            elif (bar.node_j.x == new_node.x
+                                  and bar.node_j.z == new_node.z):
+                                updated = replace(bar, node_j=new_node)
+                        updated_bars.append(updated or bar)
+
+                    systems.append(System(updated_bars))
+                else:
                     raise ValueError(
-                        f"Expected a hinge modification for Bar, got '{name}'")
-
-                dof_key = name.removeprefix("hinge_")
-                dof_type, end = dof_key.split("_")
-                dof_map = {"u": "x", "w": "z", "phi": "phi"}
-                if dof_type not in dof_map:
-                    raise ValueError(f"Invalid DOF in hinge: '{dof_type}'")
-
-                dof = dof_map[dof_type]
-                cur_bar = self._get_current_bar(obj)
-                if cur_bar is None:
-                    raise ValueError(
-                        "Modified bar not found in current system.")
-
-                node_orig = obj.node_i if end == "i" else obj.node_j
-                cur_node = self._get_current_node(node_orig)
-                if cur_node is None:
-                    raise ValueError(
-                        "Modified node not found in current system.")
-
-                pos_self = 0.0 if end == "i" else 1.0
-
-                bar_self = replace(
-                    cur_bar,
-                    point_loads=BarPointLoad(**{dof: 1.0}, position=pos_self))
-
-                node_bars = self.system.node_to_bar_map()
-                neighbors = [b for b in node_bars[cur_node] if
-                             b is not cur_bar]
-                idx_map = {"u": (0, 3), "w": (1, 4), "phi": (2, 5)}
-                i0, i1 = idx_map[dof_type]
-                target = next(
-                    (b for b in neighbors
-                     if not b.hinge[i0 if b.node_i == cur_node else i1]),
-                    neighbors[0] if neighbors else None,
-                )
-
-                bar_other = None
-                if target:
-                    pos_other = 0.0 if target.node_i == cur_node else 1.0
-                    bar_other = replace(
-                        target,
-                        point_loads=BarPointLoad(**{dof: -1.0},
-                                                 position=pos_other))
-
-                bars = list(self.system.bars)
-                idx_cur = self._find_bar_index(bars, cur_bar)
-                bars[idx_cur] = bar_self
-                if bar_other is not None and target is not None:
-                    idx_tgt = self._find_bar_index(bars, target)
-                    bars[idx_tgt] = bar_other
-
-                systems.append(System(bars))
+                        f"Expected a hinge modification or a "
+                        f"Deletion of a Bar, got '{name}'")
 
             elif isinstance(obj, Node):
                 dof = {"u": "x", "w": "z", "phi": "phi"}[name]
@@ -848,7 +888,6 @@ class SystemModifier:
                     new_bars.append(updated or bar)
 
                 systems.append(System(new_bars))
-
             else:
                 raise TypeError(
                     f"Unsupported object type in modification: {type(obj)}")
