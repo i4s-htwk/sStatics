@@ -13,3 +13,6 @@ venv
 
 # test script
 sstatics_test.py
+
+# Jupyter Notebook checkpoints
+**/.ipynb_checkpoints

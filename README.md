@@ -1,5 +1,5 @@
 
-![logo](doc/source/sStatics_Logo.png)
+![logo](doc/source/images/sStatics_Logo.png)
 
 `sStatics` is a Python package for the analysis of planar truss structures 
 using the displacement method. `sStatics` can be used to calculate 
