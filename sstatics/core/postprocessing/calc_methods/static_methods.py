@@ -290,13 +290,17 @@ class KGV(RED):
     def add_virtual_bar_load(self, *args, **kwargs):
         raise ValueError("Virtual bar loads are not allowed for this method.")
 
-    def ULS(self):
-        """
-        Calculates the systems of unit loads.
+    def _mesh_uls(self):
+        uls = []
+        for ul in self._get_uls_systems():
+            ul.create_mesh(self.modifier.division_positions_mesh())
+            uls.append(ul)
+        return uls
 
-        Placeholder for actual implementation.
-        """
-        return
+    def _mesh_rls_system(self):
+        rls = self._get_rls_system()
+        rls.create_mesh(self.modifier.division_positions_mesh())
+        return rls
 
     def vorzahlen(self):
         """
