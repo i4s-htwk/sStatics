@@ -15,7 +15,7 @@ with clear instructions and expected outputs.
 - Support: fixed at the left end (Node 1)
 - Load: :math:`1\> kN` vertical point load at the free end (Node 2)
 
-.. image:: example1_system.png
+.. image:: ../examples/analysis/example1_system.png
    :alt: Cantilever beam system
 
 .. note::
@@ -46,7 +46,7 @@ P1 = (0, 0), P2 = (0.10, 0), P3 = (0.10, 0.20), P4 = (0, 0.20)
     CrossSectionGraphic(cross_section=cross_sec).show()
 
 .. image::
-    example1_cross_section.png
+    ../examples/analysis/example1_cross_section.png
 
 Now we define the material properties:
 
@@ -158,7 +158,7 @@ This gives a graphical overview of the displacement under the applied load.
     ResultGraphic(results, 'w').show()
 
 .. image::
-    example1_result.png
+    ../examples/analysis/example1_result.png
 
 
 **Result:**
