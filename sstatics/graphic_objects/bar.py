@@ -39,6 +39,7 @@ class BarGraphic(MultiGraphicObject):
 
     def __init__(
             self, bar: Bar, bar_number=None, base_scale=None, max_dim=None,
+            show_annotations: bool = True,
             **kwargs
     ):
         if not isinstance(bar, Bar):
@@ -55,6 +56,7 @@ class BarGraphic(MultiGraphicObject):
         self.number = bar_number
         self.base_scale = base_scale
         self.max_dim = max_dim
+        self.show_annotations = show_annotations
 
     @cached_property
     def _annotation_pos(self):
@@ -156,6 +158,8 @@ class BarGraphic(MultiGraphicObject):
 
     @property
     def _annotations(self):
+        if not self.show_annotations or self.number is None:
+            return ()
         x, z = transform(
             self.x_i, self.z_i, *self._annotation_pos, self.rotation,
             self.scale
@@ -192,11 +196,13 @@ class BarGraphic(MultiGraphicObject):
             )
         )
         # TODO: create separate class for bar number
-        traces.extend(
-            EllipseGraphic(
-                *self._annotation_pos, 0.25 * self._base_scale
-            ).transform_traces(self.x_i, self.z_i, self.rotation, self.scale)
-        )
+        if self.show_annotations:
+            traces.extend(
+                EllipseGraphic(
+                    *self._annotation_pos, 0.25 * self._base_scale
+                ).transform_traces(self.x_i, self.z_i, self.rotation,
+                                   self.scale)
+            )
 
         # traces.extend(
         #     BarLine.from_two_points(
