@@ -92,7 +92,8 @@ class PoleplanGraphic(SingleGraphicObject):
 
             if chain.absolute_pole is not None:
                 self._pole.append(
-                    PoleGraphic(pole=chain.absolute_pole, pole_number=i + 1))
+                    PoleGraphic(pole=chain.absolute_pole, pole_number=i + 1,
+                                scale=self._base_scale))
 
         # TODO: displacement_figure in eigene Klasse DisplacementGraphic
         #  auslagern
@@ -237,14 +238,38 @@ class ChainGraphic(SingleGraphicObject):
     def _annotation_pos(self):
         # Mittelpunkt der Scheibe = Schwerpunkt aller Knoten
         x_c, z_c = self.centroid
-        return x_c, z_c
+        offset = 0.5 * self.base_scale
+        return x_c, z_c - offset
 
     @property
     def _annotations(self):
         # TODO: wie bekomme ich die Annotation in den Plot entweder
         #  self._annotations oder self.annotations beides geht nicht!
         x, z = self._annotation_pos
-        return ((x, z, self.number),)
+        return ((x, z, self._int_to_roman(self.number)),)
+
+    @staticmethod
+    def _int_to_roman(number: int) -> str:
+        val = [
+            1000, 900, 500, 400,
+            100, 90, 50, 40,
+            10, 9, 5, 4,
+            1
+        ]
+        syms = [
+            "M", "CM", "D", "CD",
+            "C", "XC", "L", "XL",
+            "X", "IX", "V", "IV",
+            "I"
+        ]
+        roman_num = ""
+        i = 0
+        while number > 0:
+            for _ in range(number // val[i]):
+                roman_num += syms[i]
+                number -= val[i]
+            i += 1
+        return roman_num
 
     @property
     def traces(self):

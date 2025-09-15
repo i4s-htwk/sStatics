@@ -45,6 +45,13 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
 }
 
+nbsphinx_thumbnails = {
+    'examples/cross_section/cross_section_beam':
+        'examples/cross_section/test_thumbnail.png',
+    'examples/analysis/node_deflection': 'example1_result.png'
+}
+
+
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
