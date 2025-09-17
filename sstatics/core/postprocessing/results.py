@@ -608,6 +608,8 @@ class BarResult:
         coef = [self.x_coef[:, 1], self.z_coef[:, 1], self.z_coef[:, 2]]
         return np.vstack([self._eval_poly(c) for c in coef]).T
 
+    # Test 17.09.25
+
 
 @dataclass
 class NodeResult:
