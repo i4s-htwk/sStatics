@@ -99,12 +99,14 @@ class SystemResultGraphic(SingleGraphicObject):
         self.kind = kind
         self.base_scale = base_scale
         self._bar_result_graphic = [
-            BarResultGraphic(
-                bar_result, self.select_result[i], decimals, sig_digits,
-                self._base_scale, self.max_value, rotation=self.rotation,
-                scale=self.scale, scatter_options=self.scatter_kwargs,
-                annotation_options=self.annotation_kwargs
-            ) for i, bar_result in enumerate(self.system_result.bars)
+            BarResultGraphic(bar_result, bar_result._normal_stress()[0],
+                             decimals, sig_digits,
+                             self._base_scale, self.max_value,
+                             rotation=self.rotation,
+                             scale=self.scale,
+                             scatter_options=self.scatter_kwargs,
+                             annotation_options=self.annotation_kwargs)
+            for i, bar_result in enumerate(self.system_result.bars)
         ]
 
     @cached_property
@@ -156,6 +158,9 @@ class BarResultGraphic(SingleGraphicObject):
             decimals: int | None = None, sig_digits: int | None = None,
             base_scale=None, max_value=None, **kwargs
     ):
+        print('BarResultGraphic')
+        print(results)
+        print(type(results))
         if not isinstance(bar_result, BarResult):
             raise TypeError('"bar_result" has to be an instance of BarResult')
         if not isinstance(results, np.ndarray) or results.ndim != 1:

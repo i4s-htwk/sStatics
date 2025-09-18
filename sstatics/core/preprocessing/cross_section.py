@@ -57,14 +57,15 @@ class CrossSection:
         >>> cs = CrossSection(mom_of_int=1.5, area=2.0, height=0.3,
         >>>                     width=0.1,  shear_cor=0.9)
         """
-        mechanics_given = all(x is not None for x in
-                              (mom_of_int, area, height, width, shear_cor))
-        geometry_given = bool(geometry)
+        self.mechanics_given = all(x is not None for x in (mom_of_int,
+                                                           area, height,
+                                                           width, shear_cor))
+        self.geometry_given = bool(geometry)
 
-        if geometry_given and mechanics_given:
+        if self.geometry_given and self.mechanics_given:
             raise ValueError(
                 "Either define geometry OR mechanical properties, not both.")
-        if not geometry_given and not mechanics_given:
+        if not self.geometry_given and not self.mechanics_given:
             raise ValueError(
                 "Either geometry or mechanical properties must be given.")
 
@@ -75,7 +76,7 @@ class CrossSection:
         # TODO: is this default value correct?
         self._shear_cor = shear_cor if shear_cor is not None else 1.0
 
-        if mechanics_given:
+        if self.mechanics_given:
             if self._mom_of_int <= 0:
                 raise ValueError("mom_of_int must be > 0.")
             if self._area <= 0:
@@ -401,3 +402,28 @@ class CrossSection:
             Circular sectors currently not included.
         """
         return self.polygon.width
+
+    @property
+    def z_min(self):
+        r"""
+        Calculates the smallest z-value of the cross-section.
+
+        Returns
+        -------
+
+        Notes
+        -----
+
+        """
+
+        if self.geometry_given:
+            z_coords = []
+            for shape in self.geometry:
+                if isinstance(shape, CircularSector):
+                    shape = shape.convert_to_polygon()
+
+                z_coords.extend(shape.z)
+            return min(z_coords)
+
+        else:
+            return (0)
