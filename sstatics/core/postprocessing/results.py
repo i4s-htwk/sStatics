@@ -612,11 +612,13 @@ class BarResult:
     # BACHELORARBEIT Anton - Spannungsberechnung #
     ###########################################################################
 
+    @property
     def cross_section_height_disc(self):
         n_disc = 10
         h = self.bar.cross_section.height
         return np.linspace(0, h, n_disc + 1)
 
+    @property
     def _normal_stress(self):
         r"""
         Calculates the normal stress at both ends of the bar element.
@@ -662,9 +664,50 @@ class BarResult:
         normal_stress = [stress_normal_i, stress_normal_j]
         return np.vstack(normal_stress).T
 
-    def _shear_stress(self):
+    @property
+    def _shear_stress_max(self):
+        r"""
+        Calculates the maximum of the shear stress at both ends of the bar
+        element.
+        Works ONLY for Cross-sections with mechanics_given or cross-sections
+        with geometry_given with a rectangular shape
+
+        The shear stress is calculated using the formula:
+        τ = (V * Sy) / (Iy * b),
+        where V is the shear force,
+        Sy is the first moment of area (static moment) about the y-axis,
+        Iy is the second moment of area (moment of inertia) about the y-Axis,
+        b is the width of the cross section at the point of interest
+
+
+        Returns
+        -------
+        tuple of numpy.ndarray
+            A tuple containing two arrays:
+            - stress_normal_i : ndarray
+                Normal stress at node i (start of the bar).
+            - stress_normal_j : ndarray
+                Normal stress at node j (end of the bar).
+
+        Notes
+        -----
+        The normal forces are extracted from the force vector:
+        - N_i = -forces[:, 0]
+        - N_j =  forces[:, 3]
+
+        The cross-sectional area is accessed via:
+        self.bar.cross_section.area
+
+        Examples
+        --------
+        >>> bar_result = BarResult(bar, deform, forces)
+        >>> sigma_i, sigma_j = bar_result._normal_stress()
+        >>> print(sigma_i)
+        >>> print(sigma_j)
+        """
+
         # Berechnung der Schubspannung (Shear stress)
-        # τ = (V * Sy) / (Iy * b)
+        #
 
         I_y = self.bar.cross_section.mom_of_int         # momemnt of inertia
         S_y = self.bar.cross_section.static_moment[0]   # static moment
@@ -673,12 +716,27 @@ class BarResult:
         V_i = -forces[1, :]
         V_j = forces[4, :]
 
-        stress_shear_i_max = abs((V_i * S_y) / (I_y * w))
-        stress_shear_j_max = abs((V_j * S_y) / (I_y * w))
+        shear_stress_i_max = abs((V_i * S_y) / (I_y * w))
+        shear_stress_j_max = abs((V_j * S_y) / (I_y * w))
 
-        shear_stress = (stress_shear_i_max, stress_shear_j_max)
-        return np.vstack(shear_stress).T
+        return np.hstack((shear_stress_i_max, shear_stress_j_max))
 
+    @property
+    def shear_stress_disc(self):
+        h = self.bar.cross_section.height
+        cs_height_disc = self.cross_section_height_disc
+        i_max = self._shear_stress_max[0]
+        j_max = self._shear_stress_max[1]
+
+        shear_stress = []
+        for z in cs_height_disc:
+            y_i = -(4 * i_max) / (h ** 2) * (z ** 2) + (4 * i_max) / (h) * z
+            y_j = -(4 * j_max) / (h ** 2) * (z ** 2) + (4 * j_max) / (h) * z
+            shear_stress.append((y_i, y_j))
+        shear_stress_disc = np.array(shear_stress)
+        return shear_stress_disc
+
+    @property
     def _bending_stress(self):
         r"""
         Calculates the bending stress at the top and bottom edges of the
@@ -743,7 +801,7 @@ class BarResult:
     @property
     def stress(self):
 
-        # hier Stress zusammenführen zur ausgabe
+        # hier ggf Stress zusammenführen zur ausgabe
         forces = self.forces
 
         return forces
