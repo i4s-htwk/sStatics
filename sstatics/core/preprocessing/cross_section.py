@@ -1,6 +1,8 @@
+import numpy as np
 
 from dataclasses import dataclass
 from typing import List, Optional, Union
+
 
 from sstatics.core.preprocessing.geometry.objects import (
     CircularSector, Polygon
@@ -427,3 +429,9 @@ class CrossSection:
 
         else:
             return (0)
+
+    @property
+    def height_disc(self):
+        n_disc = 10
+        h = self.height
+        return np.linspace(0, h, n_disc + 1)

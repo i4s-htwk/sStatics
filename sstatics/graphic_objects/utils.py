@@ -81,7 +81,7 @@ class MultiGraphicObject(abc.ABC):
         self.points = points
         self.rotation = rotation
         self.scale = scale
-        self.tranlation = translation
+        self.translation = translation
         self.scatter_kwargs = (
                 self.scatter_options | (scatter_options or {})
         )

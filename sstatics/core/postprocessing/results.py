@@ -613,12 +613,6 @@ class BarResult:
     ###########################################################################
 
     @property
-    def cross_section_height_disc(self):
-        n_disc = 10
-        h = self.bar.cross_section.height
-        return np.linspace(0, h, n_disc + 1)
-
-    @property
     def _normal_stress(self):
         r"""
         Calculates the normal stress at both ends of the bar element.
@@ -661,8 +655,9 @@ class BarResult:
         stress_normal_i = N_i / A
         stress_normal_j = N_j / A
 
-        normal_stress = [stress_normal_i, stress_normal_j]
-        return np.vstack(normal_stress).T
+        return np.array([
+            [np.float64(stress_normal_i), np.float64(stress_normal_j)],
+            [np.float64(stress_normal_i), np.float64(stress_normal_j)]])
 
     @property
     def _shear_stress_max(self):
@@ -706,12 +701,9 @@ class BarResult:
         >>> print(sigma_j)
         """
 
-        # Berechnung der Schubspannung (Shear stress)
-        #
-
-        I_y = self.bar.cross_section.mom_of_int         # momemnt of inertia
-        S_y = self.bar.cross_section.static_moment[0]   # static moment
-        w = self.bar.cross_section.width                # width
+        I_y = self.bar.cross_section.mom_of_int
+        S_y = self.bar.cross_section.static_moment[0]
+        w = self.bar.cross_section.width
         forces = self.forces
         V_i = -forces[1, :]
         V_j = forces[4, :]
@@ -722,19 +714,20 @@ class BarResult:
         return np.hstack((shear_stress_i_max, shear_stress_j_max))
 
     @property
-    def shear_stress_disc(self):
+    def _shear_stress_disc(self):
         h = self.bar.cross_section.height
-        cs_height_disc = self.cross_section_height_disc
+        cs_height_disc = self.bar.cross_section.height_disc
         i_max = self._shear_stress_max[0]
         j_max = self._shear_stress_max[1]
-
+        print(cs_height_disc)
         shear_stress = []
         for z in cs_height_disc:
-            y_i = -(4 * i_max) / (h ** 2) * (z ** 2) + (4 * i_max) / (h) * z
-            y_j = -(4 * j_max) / (h ** 2) * (z ** 2) + (4 * j_max) / (h) * z
+            y_i = np.float64(-(4 * i_max) / (h ** 2) * (z ** 2)
+                             + (4 * i_max) / (h) * z)
+            y_j = np.float64(-(4 * j_max) / (h ** 2) * (z ** 2)
+                             + (4 * j_max) / (h) * z)
             shear_stress.append((y_i, y_j))
-        shear_stress_disc = np.array(shear_stress)
-        return shear_stress_disc
+        return np.array(shear_stress)
 
     @property
     def _bending_stress(self):
@@ -777,8 +770,8 @@ class BarResult:
 
         """
 
-        I_y = self.bar.cross_section.mom_of_int     # Flächenträgheitsmoment
-        h = self.bar.cross_section.height           # height of cs
+        I_y = self.bar.cross_section.mom_of_int
+        h = self.bar.cross_section.height
         z_min = self.bar.cross_section.z_min
         z_com = self.bar.cross_section.center_of_mass_z
         z_t = z_com - z_min
@@ -788,23 +781,13 @@ class BarResult:
         M_i = -forces[2, :]
         M_j = forces[5, :]
 
-        stress_bending_i_t = M_i / I_y * -z_t
-        stress_bending_i_b = M_i / I_y * z_b
-        stress_bending_j_t = M_j / I_y * -z_t
-        stress_bending_j_b = M_j / I_y * z_b
-        bending_stress = (stress_bending_i_t,
-                          stress_bending_i_b,
-                          stress_bending_j_t,
-                          stress_bending_j_b)
-        return np.vstack(bending_stress).T
+        stress_bending_i_t = np.float64(M_i / I_y * -z_t)
+        stress_bending_i_b = np.float64(M_i / I_y * z_b)
+        stress_bending_j_t = np.float64(M_j / I_y * -z_t)
+        stress_bending_j_b = np.float64(M_j / I_y * z_b)
 
-    @property
-    def stress(self):
-
-        # hier ggf Stress zusammenführen zur ausgabe
-        forces = self.forces
-
-        return forces
+        return np.array([[stress_bending_i_t, stress_bending_j_t],
+                         [stress_bending_i_b, stress_bending_j_b]])
 
 
 @dataclass
