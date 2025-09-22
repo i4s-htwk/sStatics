@@ -33,18 +33,18 @@ class Polygon:
 
     Notes
     -----
-    The constructor validates the input geometry to ensure that the polygon
-    is well-defined:
-    - At least three distinct points are required to define a polygon.
-    - The first and last point of the outer boundary (and any hole) must be
-    the same to ensure closure.
-    - All coordinate entries must be tuples of two numeric values.
-    - No two consecutive points may be identical.
+        The constructor validates the input geometry to ensure that the polygon
+        is well-defined:
+        - At least three distinct points are required to define a polygon.
+        - The first and last point of the outer boundary (and any hole) must be
+        the same to ensure closure.
+        - All coordinate entries must be tuples of two numeric values.
+        - No two consecutive points may be identical.
 
-    Internally, the polygon is represented using a Shapely `Polygon` object
-    and re-oriented if necessary.
-    The coordinate arrays `self.y` and `self.z` are extracted for further
-    geometric computations, such as area, centroid, and static moments.
+        Internally, the polygon is represented using a Shapely `Polygon` object
+        and re-oriented if necessary.
+        The coordinate arrays `self.y` and `self.z` are extracted for further
+        geometric computations, such as area, centroid, and static moments.
 
     Examples
     --------
@@ -129,9 +129,9 @@ class Polygon:
 
         Notes
         -----
-        These coordinates are used for geometric computations such as area and
-        moment of inertia. The extraction is performed by traversing the
-        exterior and each interior ring of the polygon sequentially.
+            These coordinates are used for geometric computations such as area
+            and moment of inertia. The extraction is performed by traversing
+            the exterior and each interior ring of the polygon sequentially.
 
         Examples
         --------
@@ -219,20 +219,22 @@ class Polygon:
             The static moments (also called first moments of area) are used
             to compute the centroid of the polygon.
 
-        .. math::
+            .. math::
 
-            S_z = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)(z_i + z_{i-1})
+                S_z = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)
+                (z_i + z_{i-1})
 
-        .. math::
+            .. math::
 
-            S_y = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)(y_i + y_{i-1})
+                S_y = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)
+                (y_i + y_{i-1})
 
-            These are discrete approximations of the first moments:
+                These are discrete approximations of the first moments:
 
-        .. math::
+            .. math::
 
-            S_z = \int_A z \, \mathrm{d}A, \quad
-            S_y = \int_A y \, \mathrm{d}A
+                S_z = \int_A z \, \mathrm{d}A, \quad
+                S_y = \int_A y \, \mathrm{d}A
 
         Examples
         --------
@@ -265,20 +267,20 @@ class Polygon:
 
         Notes
         -----
-        The centroid represents the geometric center of the polygon. It is
-        computed as the ratio of the first moment of area about the z-axis to
-        the total area.
+            The centroid represents the geometric center of the polygon. It is
+            computed as the ratio of the first moment of area about the z-axis
+            to the total area.
 
-        .. math::
+            .. math::
 
-            \bar{y} = \frac{S_y}{A}
+                \bar{y} = \frac{S_y}{A}
 
-        where
+            where
 
-        - :math:`S_y` is the static moment about the z-axis
-        - :math:`A` is the total area of the polygon
+            - :math:`S_y` is the static moment about the z-axis
+            - :math:`A` is the total area of the polygon
 
-        This assumes uniform density and thickness.
+            This assumes uniform density and thickness.
         """
         return self.static_moment[1] / self.area
 
@@ -293,20 +295,20 @@ class Polygon:
 
         Notes
         -----
-        The centroid represents the geometric center of the polygon. It is
-        computed as the ratio of the first moment of area about the y-axis to
-        the total area.
+            The centroid represents the geometric center of the polygon. It is
+            computed as the ratio of the first moment of area about the y-axis
+            to the total area.
 
-        .. math::
+            .. math::
 
-            \bar{z} = \frac{S_z}{A}
+                \bar{z} = \frac{S_z}{A}
 
-        where
+            where
 
-        - :math:`S_z` is the static moment about the y-axis
-        - :math:`A` is the total area of the polygon
+            - :math:`S_z` is the static moment about the y-axis
+            - :math:`A` is the total area of the polygon
 
-        This assumes uniform density and thickness.
+            This assumes uniform density and thickness.
         """
         return self.static_moment[0] / self.area
 
@@ -321,15 +323,15 @@ class Polygon:
 
         Notes
         -----
-        The width is defined as:
+            The width is defined as:
 
-        .. math::
+            .. math::
 
-            w = y_\text{max} - y_\text{min}
+                w = y_\text{max} - y_\text{min}
 
-        where :math:`y_\text{max}` and :math:`y_\text{min}` are the maximum
-        and minimum horizontal coordinates of the polygon's boundary,
-        including holes.
+            where :math:`y_\text{max}` and :math:`y_\text{min}` are the maximum
+            and minimum horizontal coordinates of the polygon's boundary,
+            including holes.
         """
         y = sorted(self.y)
         return y[-1] - y[0]
@@ -345,15 +347,15 @@ class Polygon:
 
         Notes
         -----
-        The height is defined as:
+            The height is defined as:
 
-        .. math::
+            .. math::
 
-            h = z_\text{max} - z_\text{min}
+                h = z_\text{max} - z_\text{min}
 
-        where :math:`z_\text{max}` and :math:`z_\text{min}` are the maximum
-        and minimum vertical coordinates of the polygon's boundary, including
-        holes.
+            where :math:`z_\text{max}` and :math:`z_\text{min}` are the maximum
+            and minimum vertical coordinates of the polygon's boundary,
+            including holes.
         """
         z = sorted(self.z)
         return z[-1] - z[0]
@@ -379,11 +381,12 @@ class Polygon:
 
         Notes
         -----
-        This is used to shift the moment of inertia from the centroidal axis
-        to another parallel axis according to the parallel axis theorem:
+            This is used to shift the moment of inertia from the centroidal
+            axis to another parallel axis according to the parallel axis
+            theorem:
 
-        .. math::
-            I = I_c + A \cdot d^2
+            .. math::
+                I = I_c + A \cdot d^2
         """
         return self.area * center ** 2
 
@@ -399,13 +402,13 @@ class Polygon:
 
         Notes
         -----
-        This calculation is based on Green's Theorem for polygonal shapes:
+            This calculation is based on Green's Theorem for polygonal shapes:
 
-        .. math::
-            I_{yy} = \frac{1}{12} \sum (z_i^2 + z_i z_{i+1} + z_{i+1}^2)
-            (x_i z_{i+1} - x_{i+1} z_i)
+            .. math::
+                I_{yy} = \frac{1}{12} \sum (z_i^2 + z_i z_{i+1} + z_{i+1}^2)
+                (x_i z_{i+1} - x_{i+1} z_i)
 
-        where :math:`(y_i, z_i)` are the polygon vertex coordinates.
+            where :math:`(y_i, z_i)` are the polygon vertex coordinates.
         """
         y1, z1 = np.roll(self.y, -1), np.roll(self.z, -1)
         a = self.y * z1 - y1 * self.z
@@ -423,11 +426,11 @@ class Polygon:
 
         Notes
         -----
-        Uses the polygon area integration formula (Green's Theorem):
+            Uses the polygon area integration formula (Green's Theorem):
 
-        .. math::
-            I_{zz} = \frac{1}{12} \sum (y_i^2 + y_i y_{i+1} + y_{i+1}^2)
-            (y_i z_{i+1} - y_{i+1} z_i)
+            .. math::
+                I_{zz} = \frac{1}{12} \sum (y_i^2 + y_i y_{i+1} + y_{i+1}^2)
+                (y_i z_{i+1} - y_{i+1} z_i)
         """
         y1, z1 = np.roll(self.y, -1), np.roll(self.z, -1)
         a = self.y * z1 - y1 * self.z
@@ -445,13 +448,13 @@ class Polygon:
 
         Notes
         -----
-        This mixed moment measures the coupling between the y and z axes.
+            This mixed moment measures the coupling between the y and z axes.
 
-        Computed as:
+            Computed as:
 
-        .. math::
-            I_{yz} = -\frac{1}{24} \sum (y_i z_{i+1} + 2 y_i z_i +
-            2 y_{i+1} z_{i+1} + y_{i+1} z_i) (y_i z_{i+1} - y_{i+1} z_i)
+            .. math::
+                I_{yz} = -\frac{1}{24} \sum (y_i z_{i+1} + 2 y_i z_i +
+                2 y_{i+1} z_{i+1} + y_{i+1} z_i) (y_i z_{i+1} - y_{i+1} z_i)
         """
         y1, z1 = np.roll(self.y, -1), np.roll(self.z, -1)
         a = self.y * z1 - y1 * self.z
@@ -480,20 +483,20 @@ class Polygon:
 
         Notes
         -----
-        The components are initially computed relative to the origin and
-        then shifted to the centroid using the parallel axis theorem:
+            The components are initially computed relative to the origin and
+            then shifted to the centroid using the parallel axis theorem:
 
-        .. math::
-            I_{yy}^{\text{centroid}} = I_{yy}^0 - A \cdot z_c^2 \\
-            I_{zz}^{\text{centroid}} = I_{zz}^0 - A \cdot y_c^2 \\
-            I_{yz}^{\text{centroid}} = I_{yz}^0 - A \cdot y_c z_c
+            .. math::
+                I_{yy}^{\text{centroid}} = I_{yy}^0 - A \cdot z_c^2 \\
+                I_{zz}^{\text{centroid}} = I_{zz}^0 - A \cdot y_c^2 \\
+                I_{yz}^{\text{centroid}} = I_{yz}^0 - A \cdot y_c z_c
 
-        where:
-          - :math:`A` is the area,
-          - :math:`(y_c, z_c)` is the centroid.
+            where:
+              - :math:`A` is the area,
+              - :math:`(y_c, z_c)` is the centroid.
 
-        This tensor is useful for calculating principal axes and moments,
-        and for evaluating bending behavior in 2D beam cross-sections.
+            This tensor is useful for calculating principal axes and moments,
+            and for evaluating bending behavior in 2D beam cross-sections.
         """
         iyy_0 = self._iyy_origin()
         izz_0 = self._izz_origin()
@@ -518,9 +521,9 @@ class Polygon:
 
         Notes
         -----
-        This value is extracted from the full second moment of inertia
-        tensor and reflects the resistance of the shape to bending
-        about the y-axis.
+            This value is extracted from the full second moment of inertia
+            tensor and reflects the resistance of the shape to bending
+            about the y-axis.
         """
         return self.moments_of_inertia_tensor[0, 0]
 
@@ -537,8 +540,8 @@ class Polygon:
 
         Notes
         -----
-        This quantity indicates the resistance of the shape to bending
-        about the z-axis and is derived from the inertia tensor.
+            This quantity indicates the resistance of the shape to bending
+            about the z-axis and is derived from the inertia tensor.
         """
         return self.moments_of_inertia_tensor[1, 1]
 
@@ -554,9 +557,9 @@ class Polygon:
 
         Notes
         -----
-        A nonzero product moment of inertia indicates that the principal
-        axes of the shape are rotated relative to the coordinate system.
-        This value is symmetric, i.e., :math:`I_{yz} = I_{zy}`.
+            A nonzero product moment of inertia indicates that the principal
+            axes of the shape are rotated relative to the coordinate system.
+            This value is symmetric, i.e., :math:`I_{yz} = I_{zy}`.
         """
         return self.moments_of_inertia_tensor[0, 1]
 

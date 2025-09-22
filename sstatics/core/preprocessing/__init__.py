@@ -11,8 +11,10 @@ from sstatics.core.preprocessing.loads import (
     PointLoad,
 )
 from sstatics.core.preprocessing.material import Material
+from sstatics.core.preprocessing.modifier import SystemModifier
 from sstatics.core.preprocessing.node import Node
-from sstatics.core.preprocessing.system import Mesh, System, SystemModifier
+from sstatics.core.preprocessing.system import Mesh, System
+from sstatics.core.preprocessing.poleplan import objects, operation
 from sstatics.core.preprocessing.temperature import BarTemp
 
 
@@ -29,6 +31,8 @@ __all__ = [
     'Node',
     'NodeDisplacement',
     'NodePointLoad',
+    'objects',
+    'operation',
     'PointLoad',
     'System',
     'SystemModifier',
