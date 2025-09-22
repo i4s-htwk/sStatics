@@ -15,9 +15,10 @@ class ResultGraphic(SingleGraphicObject):
 
     def __init__(
             self, system_result: SystemResult,
-            kind: (
-                Literal['normal', 'shear', 'moment', 'u', 'w', 'phi']
-            ) = 'normal',
+            kind: (Literal[
+                'normal', 'shear', 'moment', 'u', 'w', 'phi', 'normal_stress',
+                'shear_stress', 'bending_stress_top', 'bending_stress_bottom',
+                'bending_stress_all']) = 'normal',
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
             result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
             decimals: int | None = None, sig_digits: int | None = None,
@@ -55,18 +56,32 @@ class ResultGraphic(SingleGraphicObject):
 
     @property
     def annotations(self):
-        return tuple(
-            ann for rg in self._result_graphics for ann in rg.annotations
-        )
+        ann = []
+        for rg in self._result_graphics:
+            ann.extend(rg.annotations)
+        return tuple(ann)
+
+    # @property
+    # def annotations(self):
+    #     return tuple(
+    #         ann for rg in self._result_graphics for ann in rg.annotations
+    #     )
 
     @property
     def traces(self):
-        return [
-            trace
-            for rg in self._result_graphics
-            for trace in
-            rg.transform_traces(self.x, self.z, self.rotation, self.scale)
-        ]
+        all_traces = []
+        for rg in self._result_graphics:
+            all_traces.extend(rg.traces)
+        return tuple(all_traces)
+
+    # @property
+    # def traces(self):
+    #     return [
+    #         trace
+    #         for rg in self._result_graphics
+    #         for trace in
+    #         rg.transform_traces(self.x, self.z, self.rotation, self.scale)
+    #     ]
 
 
 class SystemResultGraphic(SingleGraphicObject):
@@ -81,25 +96,37 @@ class SystemResultGraphic(SingleGraphicObject):
             raise TypeError(
                 '"system_result" has to be an instance of SystemResult'
             )
-        if kind not in ('normal', 'shear', 'moment', 'u', 'w', 'phi'):
+        if kind not in (
+                'normal', 'shear', 'moment', 'u', 'w', 'phi',
+                'normal_stress', 'shear_stress', 'bending_stress_top',
+                'bending_stress_bottom', 'bending_stress_all'):
             raise ValueError(
                 '"kind" must be one of: '
-                '"normal", "shear", "moment", "u", "w", "phi"'
+                '"normal", "shear", "moment", "u", "w", "phi", '
+                '"normal_stress", "bending_stress_top", '
+                '"bending_stress_bottom", bending_stress_all'
+                '"shear_stress"'
             )
         if mesh_type not in {'bars', 'user_mesh', 'mesh'}:
             raise ValueError(
                 '"mesh_type" must be one of ["bars", "user_mesh", "mesh"]'
             )
+
+        for _key in ('mesh_type', 'decimals', 'sig_digits', 'base_scale'):
+            kwargs.pop(_key, None)
+
         super().__init__(
             system_result.bars[0].bar.node_i.x,
             system_result.bars[0].bar.node_i.z,
             **kwargs
         )
+        self.mesh_type = mesh_type
         self.system_result = system_result
         self.kind = kind
         self.base_scale = base_scale
+
         self._bar_result_graphic = [
-            BarResultGraphic(bar_result, bar_result._normal_stress()[0],
+            BarResultGraphic(bar_result, self.select_result[i],
                              decimals, sig_digits,
                              self._base_scale, self.max_value,
                              rotation=self.rotation,
@@ -119,6 +146,10 @@ class SystemResultGraphic(SingleGraphicObject):
     def select_result(self):
         forces = self.system_result.forces_disc
         deforms = self.system_result.deforms_disc
+        n_stress = self.system_result.normal_stress_disc
+        v_stress = self.system_result.shear_stress_disc
+        m_stress_t = self.system_result.bending_stress_top_disc
+        m_stress_b = self.system_result.bending_stress_bottom_disc
         result_lists = {
             'normal': [f[:, 0] for f in forces],
             'shear': [f[:, 1] for f in forces],
@@ -126,6 +157,10 @@ class SystemResultGraphic(SingleGraphicObject):
             'u': [d[:, 0] for d in deforms],
             'w': [d[:, 1] for d in deforms],
             'phi': [d[:, 2] for d in deforms],
+            'normal_stress': n_stress,
+            'bending_stress_top': m_stress_t,
+            'bending_stress_bottom': m_stress_b,
+            'shear_stress': v_stress,
         }
         return result_lists[self.kind]
 
@@ -136,19 +171,38 @@ class SystemResultGraphic(SingleGraphicObject):
 
     @property
     def annotations(self):
-        annotations = []
+        system_anno = SystemGraphic(
+            self.system_result.system,
+            mesh_type=self.mesh_type,
+            base_scale=self.base_scale,
+        )
+        system_anno = system_anno.transform_anno(
+            self.x, self.z, self.rotation, self.scale
+        )
+        result_anno = []
         for brg in self._bar_result_graphic:
-            annotations.extend(brg.annotations)
-        return tuple(annotations)
+            result_anno.extend(
+                brg.transform_anno(self.x, self.z, self.rotation, self.scale)
+            )
+        return (*system_anno, *result_anno)
 
     @property
     def traces(self):
-        traces = []
+        system_traces = SystemGraphic(
+            system=self.system_result.system,
+            mesh_type=self.mesh_type,
+            base_scale=self.base_scale,
+        )
+        system_traces = system_traces.transform_traces(
+            self.x, self.z, self.rotation, self.scale
+        )
+
+        result_traces = []
         for brg in self._bar_result_graphic:
-            traces.extend(
+            result_traces.extend(
                 brg.transform_traces(self.x, self.z, self.rotation, self.scale)
             )
-        return traces
+        return (*system_traces, *result_traces)
 
 
 class BarResultGraphic(SingleGraphicObject):
@@ -197,6 +251,7 @@ class BarResultGraphic(SingleGraphicObject):
             return f"{value:.{self.sig_digits}g}"
         return np.round(value, 2)
 
+    # TODO d ggf anpassen
     @cached_property
     def _annotation_pos(self) -> List[Tuple[float, float]]:
         d = 0.15 * self._max_value
@@ -230,7 +285,7 @@ class BarResultGraphic(SingleGraphicObject):
     @cached_property
     def _base_scale(self):
         return self.base_scale / self._max_value if self.base_scale \
-            else 0.08 * self._max_dim / self._max_value  # TODO: + 0.02
+            else 0.08 * self._max_dim / self._max_value
 
     @property
     def _annotations(self):

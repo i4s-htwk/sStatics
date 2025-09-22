@@ -145,7 +145,7 @@ class CombiHinge(SingleGraphicObject):
             hinge_obj = hinge_cls(
                 x, self.z, scatter_options=self.scatter_kwargs
             ).transform_traces(
-                self.x, self.z, self.rotation, self.scale, self.tranlation
+                self.x, self.z, self.rotation, self.scale, self.translation
             )
             traces.extend(hinge_obj)
         return traces

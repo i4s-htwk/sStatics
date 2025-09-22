@@ -228,7 +228,25 @@ class SystemResult:
         """
         return [result.forces_disc for result in self.bars]
 
+    def normal_stress_disc(self):
+        return [bar.normal_stress_disc for bar in self.bars]
 
+    @cached_property
+    def shear_stress_disc(self):
+        return [bar.shear_stress_disc for bar in self.bars]
+
+    @cached_property
+    def bending_stress_top_disc(self):
+        return [bs[:, 0] for bs in
+                (bar.bending_stress_disc for bar in self.bars)]
+
+    @cached_property
+    def bending_stress_bottom_disc(self):
+        return [bs[:, 1] for bs in
+                (bar.bending_stress_disc for bar in self.bars)]
+
+
+# ----------------------------------------------------------------------------
 @dataclass
 class BarResult:
     r"""Calculates discrete result vector for the provided bar.
@@ -713,10 +731,12 @@ class BarResult:
 
         return np.hstack((shear_stress_i_max, shear_stress_j_max))
 
-    @property
-    def _shear_stress_disc(self):
+    def _shear_stress_height_disc(self, disc):
+        '''
+        shear stress on discretiziced points on the cross-section
+        '''
         h = self.bar.cross_section.height
-        cs_height_disc = self.bar.cross_section.height_disc
+        cs_height_disc = self.bar.cross_section.height_disc(disc=disc)
         i_max = self._shear_stress_max[0]
         j_max = self._shear_stress_max[1]
         print(cs_height_disc)
@@ -788,6 +808,43 @@ class BarResult:
 
         return np.array([[stress_bending_i_t, stress_bending_j_t],
                          [stress_bending_i_b, stress_bending_j_b]])
+
+    @cached_property
+    def normal_stress_disc(self) -> np.ndarray:
+        """
+
+        """
+        N = self.forces_disc[:, 0]
+        A = self.bar.cross_section.area
+        return N / A
+
+    @cached_property
+    def shear_stress_disc(self) -> np.ndarray:
+        """
+
+        """
+        V = self.forces_disc[:, 1]
+        I_y = self.bar.cross_section.mom_of_int
+        S_y = self.bar.cross_section.static_moment[0]
+        w = self.bar.cross_section.width
+        return (V * S_y) / (I_y * w)
+
+    @cached_property
+    def bending_stress_disc(self) -> np.ndarray:
+        """
+
+        """
+        M = self.forces_disc[:, 2]
+        I_y = self.bar.cross_section.mom_of_int
+        h = self.bar.cross_section.height
+        z_min = self.bar.cross_section.z_min
+        z_com = self.bar.cross_section.center_of_mass_z
+        z_t = z_com - z_min
+        z_b = h + z_min - z_com
+
+        top = M / (I_y * -z_t)
+        bottom = M / (I_y * z_b)
+        return np.stack((top, bottom), axis=1)
 
 
 @dataclass

@@ -8,7 +8,8 @@ from typing import Literal, Tuple, List, Any, Union
 from sstatics.core.preprocessing import Bar, CrossSection
 from sstatics.core.postprocessing.results import SystemResult
 
-from sstatics.graphic_objects.utils import SingleGraphicObject, transform
+from sstatics.graphic_objects.utils import (SingleGraphicObject,
+                                            transform, translate)
 from sstatics.graphic_objects.geometry import LineGraphic
 from sstatics.graphic_objects.cross_section import CrossSectionGraphic
 
@@ -21,6 +22,7 @@ class CrossSectionStressGraphic(SingleGraphicObject):
             bar: Bar,
             position: float,
             side: Literal['left', 'right'],
+            discretization: int = 20,
             kind: Union[
                 Literal['normal', 'shear', 'bending'],
                 List[Literal['normal', 'shear', 'bending']]
@@ -116,15 +118,23 @@ class CrossSectionStressGraphic(SingleGraphicObject):
         if 'normal' in kind:
             n_stress = bar_result._normal_stress[:, column]
             print('Normalspannung: ', n_stress)
-            which_stress.append((n_stress, cross_section, 'normal', 'blue'))
+            which_stress.append((
+                n_stress, cross_section, 'normal', 'blue', discretization)
+            )
         if 'bending' in kind:
             m_stress = bar_result._bending_stress[:, column]
             print('Biegemomentspannung: ', m_stress)
-            which_stress.append((m_stress, cross_section, 'bending', 'green'))
+            which_stress.append((
+                m_stress, cross_section, 'bending', 'green', discretization)
+            )
         if 'shear' in kind:
-            v_stress = bar_result._shear_stress_disc[:, column]
+            v_stress = bar_result._shear_stress_height_disc(
+                discretization
+            )[:, column]
             print('Schubspannung: ', v_stress)
-            which_stress.append((v_stress, cross_section, 'shear', 'red'))
+            which_stress.append((
+                v_stress, cross_section, 'shear', 'red', discretization)
+            )
 
         # Check if 'which_stress' is not empty
         if not which_stress:
@@ -134,21 +144,24 @@ class CrossSectionStressGraphic(SingleGraphicObject):
             )
 
         # Calculate total maximum stress-value
-        max_vals = [np.max(np.abs(vals)) for (vals, _, _, _) in which_stress]
+        max_vals = [
+            np.max(np.abs(vals)) for (vals, _, _, _, _) in which_stress
+        ]
         global_max = np.max(max_vals)
 
         # Create a list to fill with the StressGraphic-objects
         self._stress_plot = []
 
         # Fill the list '_stress_plot' with StressGraphic-objects
-        for stress, cross_section, kind, color in which_stress:
+        for stress, cross_section, kind, color, disc in which_stress:
             self._stress_plot.append(
                 StressGraphic(
                     stress=stress,
                     cross_section=cross_section,
                     kind=kind,
                     color=color,
-                    max_value=global_max
+                    max_value=global_max,
+                    disc=disc,
                 )
             )
 
@@ -157,10 +170,23 @@ class CrossSectionStressGraphic(SingleGraphicObject):
         ]
 
     @property
-    def annotations(self):
-        return tuple(
-            ann for rg in self._stress_plot for ann in rg.annotations
-        )
+    def _annotations(self):
+        anno = []
+        for i, plot in enumerate(self._stress_plot):
+            for ann in plot._annotations:
+                x, z = ann[0], ann[1]
+                text = ann[2]
+                x, z = translate(
+                    0, 0, x, z,
+                    translation=(i * self.bar_of_interest.cross_section.width,
+                                 0)
+                )
+                anno.append((x, z, text))
+
+        return anno
+        # return tuple(
+        #     ann for rg in self._stress_plot for ann in rg.annotations
+        # )
 
     @property
     def traces(self):
@@ -186,7 +212,7 @@ class CrossSectionStressGraphic(SingleGraphicObject):
 class StressGraphic(SingleGraphicObject):
 
     def __init__(self, stress, cross_section: CrossSection, kind,
-                 color,
+                 color, disc,
                  decimals: (int | None) = None,
                  sig_digits: int | None = None,
                  base_scale=None,
@@ -205,6 +231,7 @@ class StressGraphic(SingleGraphicObject):
         self.width = self.cross_section.width
         self.kind = kind
         self.color = color
+        self.disc = disc
         self.decimals = decimals
         self.sig_digits = sig_digits
         self.base_scale = base_scale
@@ -306,7 +333,7 @@ class StressGraphic(SingleGraphicObject):
             # shear stress is parabolic and is plotted by n_disc+1 points to be
             # more accurate
             z = self.stress * self._base_scale
-            y = self.cross_section.height_disc
+            y = self.cross_section.height_disc(disc=self.disc)
             points = list(zip(z, y))
             points.append((0, 0))
 

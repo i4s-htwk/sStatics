@@ -430,8 +430,7 @@ class CrossSection:
         else:
             return (0)
 
-    @property
-    def height_disc(self):
-        n_disc = 10
+    def height_disc(self, disc):
+        n_disc = disc
         h = self.height
         return np.linspace(0, h, n_disc + 1)

@@ -101,6 +101,17 @@ class MultiGraphicObject(abc.ABC):
             for x, y, text in self._annotations
         )
 
+    def transform_anno(
+            self, ox, oz, rotation=0, scale=1.0, translation=(0, 0)
+    ):
+        transf_anno = []
+        for anno in self.annotations:
+            x, z = np.array(anno.x), np.array(anno.y)
+            x, z = transform(ox, oz, x, z, rotation, scale, translation)
+            anno.update(x=x, y=z)
+            transf_anno.append(anno)
+        return tuple(transf_anno)
+
     @property
     @abc.abstractmethod
     def traces(self):
