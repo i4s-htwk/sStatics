@@ -228,6 +228,7 @@ class SystemResult:
         """
         return [result.forces_disc for result in self.bars]
 
+    @cached_property
     def normal_stress_disc(self):
         return [bar.normal_stress_disc for bar in self.bars]
 
@@ -246,7 +247,6 @@ class SystemResult:
                 (bar.bending_stress_disc for bar in self.bars)]
 
 
-# ----------------------------------------------------------------------------
 @dataclass
 class BarResult:
     r"""Calculates discrete result vector for the provided bar.
@@ -630,53 +630,19 @@ class BarResult:
     # BACHELORARBEIT Anton - Spannungsberechnung #
     ###########################################################################
 
+    # TODO Kommentar anpassen
     @property
     def _normal_stress(self):
-        r"""
-        Calculates the normal stress at both ends of the bar element.
-
-        The normal stress is calculated using the formula:
-        σ = N / A,
-        where N is the normal force and A is the cross-sectional area.
-
-        Returns
-        -------
-        tuple of numpy.ndarray
-            A tuple containing two arrays:
-            - stress_normal_i : ndarray
-                Normal stress at node i (start of the bar).
-            - stress_normal_j : ndarray
-                Normal stress at node j (end of the bar).
-
-        Notes
-        -----
-        The normal forces are extracted from the force vector:
-        - N_i = -forces[:, 0]
-        - N_j =  forces[:, 3]
-
-        The cross-sectional area is accessed via:
-        self.bar.cross_section.area
-
-        Examples
-        --------
-        >>> bar_result = BarResult(bar, deform, forces)
-        >>> sigma_i, sigma_j = bar_result._normal_stress()
-        >>> print(sigma_i)
-        >>> print(sigma_j)
-        """
-
-        A = self.bar.cross_section.area     # area of cs
-        forces = self.forces
-        N_i = -forces[0, :]
-        N_j = forces[3, :]
-
-        stress_normal_i = N_i / A
-        stress_normal_j = N_j / A
+        # returns the normal stress values at i j and top bottom of cs
+        normal_stress_i = self.normal_stress_disc[0]
+        normal_stress_j = self.normal_stress_disc[-1]
 
         return np.array([
-            [np.float64(stress_normal_i), np.float64(stress_normal_j)],
-            [np.float64(stress_normal_i), np.float64(stress_normal_j)]])
+            [np.float64(normal_stress_i), np.float64(normal_stress_i)],
+            [np.float64(normal_stress_j), np.float64(normal_stress_j)]
+        ])
 
+    # TODO Kommentar anpassen
     @property
     def _shear_stress_max(self):
         r"""
@@ -719,18 +685,12 @@ class BarResult:
         >>> print(sigma_j)
         """
 
-        I_y = self.bar.cross_section.mom_of_int
-        S_y = self.bar.cross_section.static_moment[0]
-        w = self.bar.cross_section.width
-        forces = self.forces
-        V_i = -forces[1, :]
-        V_j = forces[4, :]
+        shear_stress_max_i = self.shear_stress_disc[0]
+        shear_stress_max_j = self.shear_stress_disc[-1]
 
-        shear_stress_i_max = abs((V_i * S_y) / (I_y * w))
-        shear_stress_j_max = abs((V_j * S_y) / (I_y * w))
+        return np.hstack((shear_stress_max_i, shear_stress_max_j))
 
-        return np.hstack((shear_stress_i_max, shear_stress_j_max))
-
+    # TODO Kommentar anpassen
     def _shear_stress_height_disc(self, disc):
         '''
         shear stress on discretiziced points on the cross-section
@@ -739,7 +699,6 @@ class BarResult:
         cs_height_disc = self.bar.cross_section.height_disc(disc=disc)
         i_max = self._shear_stress_max[0]
         j_max = self._shear_stress_max[1]
-        print(cs_height_disc)
         shear_stress = []
         for z in cs_height_disc:
             y_i = np.float64(-(4 * i_max) / (h ** 2) * (z ** 2)
@@ -749,6 +708,7 @@ class BarResult:
             shear_stress.append((y_i, y_j))
         return np.array(shear_stress)
 
+    # TODO Kommentar anpassen
     @property
     def _bending_stress(self):
         r"""
@@ -790,38 +750,60 @@ class BarResult:
 
         """
 
-        I_y = self.bar.cross_section.mom_of_int
-        h = self.bar.cross_section.height
-        z_min = self.bar.cross_section.z_min
-        z_com = self.bar.cross_section.center_of_mass_z
-        z_t = z_com - z_min
-        z_b = h + z_min - z_com
+        bending_stress_i_t = self.bending_stress_disc[0, 0]
+        bending_stress_i_b = self.bending_stress_disc[0, 1]
+        bending_stress_j_t = self.bending_stress_disc[-1, 0]
+        bending_stress_j_b = self.bending_stress_disc[-1, 1]
 
-        forces = self.forces
-        M_i = -forces[2, :]
-        M_j = forces[5, :]
+        return np.array([[bending_stress_i_t, bending_stress_j_t],
+                         [bending_stress_i_b, bending_stress_j_b]
+                         ]
+                        )
 
-        stress_bending_i_t = np.float64(M_i / I_y * -z_t)
-        stress_bending_i_b = np.float64(M_i / I_y * z_b)
-        stress_bending_j_t = np.float64(M_j / I_y * -z_t)
-        stress_bending_j_b = np.float64(M_j / I_y * z_b)
-
-        return np.array([[stress_bending_i_t, stress_bending_j_t],
-                         [stress_bending_i_b, stress_bending_j_b]])
-
+    # TODO Kommentar anpassen
     @cached_property
-    def normal_stress_disc(self) -> np.ndarray:
-        """
+    def normal_stress_disc(self):
+        r"""
+        Calculates the normal stress at both ends of the bar element.
 
+        The normal stress is calculated using the formula:
+        σ = N / A,
+        where N is the normal force and A is the cross-sectional area.
+
+        Returns
+        -------
+        tuple of numpy.ndarray
+            A tuple containing two arrays:
+            - stress_normal_i : ndarray
+                Normal stress at node i (start of the bar).
+            - stress_normal_j : ndarray
+                Normal stress at node j (end of the bar).
+
+        Notes
+        -----
+        The normal forces are extracted from the force vector:
+        - N_i = -forces[:, 0]
+        - N_j =  forces[:, 3]
+
+        The cross-sectional area is accessed via:
+        self.bar.cross_section.area
+
+        Examples
+        --------
+        >>> bar_result = BarResult(bar, deform, forces)
+        >>> sigma_i, sigma_j = bar_result._normal_stress()
+        >>> print(sigma_i)
+        >>> print(sigma_j)
         """
         N = self.forces_disc[:, 0]
         A = self.bar.cross_section.area
         return N / A
 
+    # TODO Kommentar anpassen
     @cached_property
-    def shear_stress_disc(self) -> np.ndarray:
+    def shear_stress_disc(self):
         """
-
+        returns max shear stress at the disc points
         """
         V = self.forces_disc[:, 1]
         I_y = self.bar.cross_section.mom_of_int
@@ -829,8 +811,9 @@ class BarResult:
         w = self.bar.cross_section.width
         return (V * S_y) / (I_y * w)
 
+    # TODO Kommentar anpassen
     @cached_property
-    def bending_stress_disc(self) -> np.ndarray:
+    def bending_stress_disc(self):
         """
 
         """
@@ -842,8 +825,8 @@ class BarResult:
         z_t = z_com - z_min
         z_b = h + z_min - z_com
 
-        top = M / (I_y * -z_t)
-        bottom = M / (I_y * z_b)
+        top = M / I_y * -z_t
+        bottom = M / I_y * z_b
         return np.stack((top, bottom), axis=1)
 
 

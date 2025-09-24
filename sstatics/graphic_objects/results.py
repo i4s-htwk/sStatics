@@ -4,6 +4,7 @@ import math
 from functools import cached_property
 from typing import Literal, Tuple, List, Any
 
+# from sstatics import BarGraphic
 from sstatics.core.postprocessing.results import BarResult, SystemResult
 
 from sstatics.graphic_objects.utils import SingleGraphicObject, transform
@@ -18,7 +19,7 @@ class ResultGraphic(SingleGraphicObject):
             kind: (Literal[
                 'normal', 'shear', 'moment', 'u', 'w', 'phi', 'normal_stress',
                 'shear_stress', 'bending_stress_top', 'bending_stress_bottom',
-                'bending_stress_all']) = 'normal',
+                'bending_stress']) = 'normal',
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
             result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
             decimals: int | None = None, sig_digits: int | None = None,
@@ -61,27 +62,12 @@ class ResultGraphic(SingleGraphicObject):
             ann.extend(rg.annotations)
         return tuple(ann)
 
-    # @property
-    # def annotations(self):
-    #     return tuple(
-    #         ann for rg in self._result_graphics for ann in rg.annotations
-    #     )
-
     @property
     def traces(self):
         all_traces = []
         for rg in self._result_graphics:
             all_traces.extend(rg.traces)
         return tuple(all_traces)
-
-    # @property
-    # def traces(self):
-    #     return [
-    #         trace
-    #         for rg in self._result_graphics
-    #         for trace in
-    #         rg.transform_traces(self.x, self.z, self.rotation, self.scale)
-    #     ]
 
 
 class SystemResultGraphic(SingleGraphicObject):
@@ -99,12 +85,12 @@ class SystemResultGraphic(SingleGraphicObject):
         if kind not in (
                 'normal', 'shear', 'moment', 'u', 'w', 'phi',
                 'normal_stress', 'shear_stress', 'bending_stress_top',
-                'bending_stress_bottom', 'bending_stress_all'):
+                'bending_stress_bottom', 'bending_stress'):
             raise ValueError(
                 '"kind" must be one of: '
                 '"normal", "shear", "moment", "u", "w", "phi", '
                 '"normal_stress", "bending_stress_top", '
-                '"bending_stress_bottom", bending_stress_all'
+                '"bending_stress_bottom", "bending_stress"'
                 '"shear_stress"'
             )
         if mesh_type not in {'bars', 'user_mesh', 'mesh'}:
@@ -125,16 +111,60 @@ class SystemResultGraphic(SingleGraphicObject):
         self.kind = kind
         self.base_scale = base_scale
 
-        self._bar_result_graphic = [
-            BarResultGraphic(bar_result, self.select_result[i],
-                             decimals, sig_digits,
-                             self._base_scale, self.max_value,
-                             rotation=self.rotation,
-                             scale=self.scale,
-                             scatter_options=self.scatter_kwargs,
-                             annotation_options=self.annotation_kwargs)
-            for i, bar_result in enumerate(self.system_result.bars)
-        ]
+        n_bars = len(self.system_result.bars)
+
+        self._bar_result_graphic = []
+
+        for i, bar_result in enumerate(self.system_result.bars):
+            if self.kind == 'bending_stress':
+                top_results = self.select_result[i]
+                bottom_results = self.select_result[i + n_bars]
+
+                bar_result_graphic_top = BarResultGraphic(
+                    bar_result=bar_result,
+                    results=top_results,
+                    color='blue',
+                    decimals=decimals,
+                    sig_digits=sig_digits,
+                    base_scale=self._base_scale,
+                    max_value=self.max_value,
+                    rotation=self.rotation,
+                    scale=self.scale,
+                    scatter_options=self.scatter_kwargs,
+                    annotation_options=self.annotation_kwargs
+                )
+                bar_result_graphic_bottom = BarResultGraphic(
+                    bar_result=bar_result,
+                    results=bottom_results,
+                    color='red',
+                    decimals=decimals,
+                    sig_digits=sig_digits,
+                    base_scale=self._base_scale,
+                    max_value=self.max_value,
+                    rotation=self.rotation,
+                    scale=self.scale,
+                    scatter_options=self.scatter_kwargs,
+                    annotation_options=self.annotation_kwargs
+                )
+
+                self._bar_result_graphic.append(bar_result_graphic_top)
+                self._bar_result_graphic.append(bar_result_graphic_bottom)
+            else:
+                # if kind is not bending_stress
+                bar_result_graphic = BarResultGraphic(
+                    bar_result=bar_result,
+                    results=self.select_result[i],
+                    color='blue',
+                    decimals=decimals,
+                    sig_digits=sig_digits,
+                    base_scale=self._base_scale,
+                    max_value=self.max_value,
+                    rotation=self.rotation,
+                    scale=self.scale,
+                    scatter_options=self.scatter_kwargs,
+                    annotation_options=self.annotation_kwargs
+                )
+                self._bar_result_graphic.append(bar_result_graphic)
 
     @cached_property
     def _base_scale(self):
@@ -147,9 +177,15 @@ class SystemResultGraphic(SingleGraphicObject):
         forces = self.system_result.forces_disc
         deforms = self.system_result.deforms_disc
         n_stress = self.system_result.normal_stress_disc
+        print('n_stress', n_stress)
         v_stress = self.system_result.shear_stress_disc
+        print('v_stress', v_stress)
         m_stress_t = self.system_result.bending_stress_top_disc
+        print('m_stress_t', m_stress_t)
         m_stress_b = self.system_result.bending_stress_bottom_disc
+        print('m_stress_b', m_stress_b)
+        m_stress = m_stress_t + m_stress_b
+        print('m_stress', m_stress)
         result_lists = {
             'normal': [f[:, 0] for f in forces],
             'shear': [f[:, 1] for f in forces],
@@ -158,6 +194,7 @@ class SystemResultGraphic(SingleGraphicObject):
             'w': [d[:, 1] for d in deforms],
             'phi': [d[:, 2] for d in deforms],
             'normal_stress': n_stress,
+            'bending_stress': m_stress,
             'bending_stress_top': m_stress_t,
             'bending_stress_bottom': m_stress_b,
             'shear_stress': v_stress,
@@ -208,13 +245,17 @@ class SystemResultGraphic(SingleGraphicObject):
 class BarResultGraphic(SingleGraphicObject):
 
     def __init__(
-            self, bar_result: BarResult, results: np.ndarray,
-            decimals: int | None = None, sig_digits: int | None = None,
-            base_scale=None, max_value=None, **kwargs
+            self,
+            bar_result: BarResult,
+            results: np.ndarray,
+            color,
+            decimals: int | None = None,
+            sig_digits: int | None = None,
+            base_scale=None,
+            max_value=None,
+            **kwargs
     ):
-        print('BarResultGraphic')
-        print(results)
-        print(type(results))
+
         if not isinstance(bar_result, BarResult):
             raise TypeError('"bar_result" has to be an instance of BarResult')
         if not isinstance(results, np.ndarray) or results.ndim != 1:
@@ -239,6 +280,7 @@ class BarResultGraphic(SingleGraphicObject):
         self.sig_digits = sig_digits
         self.base_scale = base_scale
         self.max_value = max_value
+        self.color = color
 
     @cached_property
     def _bound_results(self) -> Tuple[float, float]:
@@ -251,7 +293,6 @@ class BarResultGraphic(SingleGraphicObject):
             return f"{value:.{self.sig_digits}g}"
         return np.round(value, 2)
 
-    # TODO d ggf anpassen
     @cached_property
     def _annotation_pos(self) -> List[Tuple[float, float]]:
         d = 0.15 * self._max_value
@@ -310,6 +351,8 @@ class BarResultGraphic(SingleGraphicObject):
         ]
         return (
             LineGraphic.from_points(
-                points, scatter_options=self.scatter_kwargs
+                points,
+                scatter_options=self.scatter_kwargs
+                | {'line_color': self.color}
             ).transform_traces(0, 0, self.inclination, self.scale, self.origin)
         )

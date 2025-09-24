@@ -430,6 +430,30 @@ class CrossSection:
         else:
             return (0)
 
+    @property
+    def y_min(self):
+        r"""
+        Calculates the smallest y-value of the cross-section.
+
+        Returns
+        -------
+
+        Notes
+        -----
+
+        """
+
+        if self.geometry_given:
+            y_coords = []
+            for shape in self.geometry:
+                if isinstance(shape, CircularSector):
+                    shape = shape.convert_to_polygon()
+                y_coords.extend(shape.y)
+            return min(y_coords)
+
+        else:
+            return (0)
+
     def height_disc(self, disc):
         n_disc = disc
         h = self.height
