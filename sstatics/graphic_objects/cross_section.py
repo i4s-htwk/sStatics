@@ -55,11 +55,37 @@ class CrossSectionGraphic(SingleGraphicObject):
         cs = self.cross_section
         if cs.polygon:
             if self.merged:
-                geometry = PolygonMerge(
-                    [cs.polygon, *[
-                        c.convert_to_polygon()for c in cs.circular_sector
-                    ]]
-                )()
+                if cs.polygon.positive:
+                    positive = [cs.polygon]
+                    negative = []
+                else:
+                    positive = []
+                    negative = [cs.polygon]
+                for sec in (
+                        c.convert_to_polygon() for c in cs.circular_sector):
+                    if sec.positive:
+                        positive.append(sec)
+                    else:
+                        negative.append(sec)
+
+                geometry = PolygonMerge(positive=positive, negative=negative)()
+                return self._draw_poly(geometry)
+            else:
+                traces = []
+                [traces.extend(self._draw_poly(g)) for g in cs.geometry]
+                return traces
+        elif cs.circular_sector:
+            if self.merged:
+                positive = []
+                negative = []
+                for sec in (
+                        c.convert_to_polygon() for c in cs.circular_sector):
+                    if sec.positive:
+                        positive.append(sec)
+                    else:
+                        negative.append(sec)
+
+                geometry = PolygonMerge(positive=positive, negative=negative)()
                 return self._draw_poly(geometry)
             else:
                 traces = []
