@@ -137,23 +137,20 @@ class CrossSectionStressGraphic(SingleGraphicObject):
 
         # Fills list 'which_stress' depending on the given kind(s)
         if 'normal' in kind:
-            n_stress = bar_result._normal_stress[:, column]
-            print('Normalspannung: ', n_stress)
+            n_stress = bar_result.normal_stress_barend[:, column]
             which_stress.append((
                 n_stress, self.cross_section, 'normal', 'blue', discretization)
             )
         if 'bending' in kind:
-            m_stress = bar_result._bending_stress[:, column]
-            print('Biegemomentspannung: ', m_stress)
+            m_stress = bar_result.bending_stress_barend[:, column]
             which_stress.append((
                 m_stress, self.cross_section, 'bending', 'green',
                 discretization)
             )
         if 'shear' in kind:
-            v_stress = bar_result._shear_stress_height_disc(
+            v_stress = bar_result.shear_stress_barend_height_disc(
                 discretization
             )[:, column]
-            print('Schubspannung: ', v_stress)
             which_stress.append((
                 v_stress, self.cross_section, 'shear', 'red', discretization)
             )

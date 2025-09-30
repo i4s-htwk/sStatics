@@ -1,4 +1,4 @@
-from sstatics.core.preprocessing.geometry import Polygon
+# from sstatics.core.preprocessing.geometry import Polygon
 
 from sstatics.core.preprocessing import (Material, Node, Bar, System,
                                          CrossSection, BarPointLoad,
@@ -13,11 +13,11 @@ from sstatics.graphic_objects import SystemResultGraphic
 
 # -------------------------- Cross-Section --------------------------------- #
 cross_sec = CrossSection(
-    # 0.003125, 0.15, 0.5, 0.3, 0.1
-    geometry=[
-        # Polygon([(-0.1, -0.2), (0.1, -0.2),
-        # (0.2, 0.2), (-0.2, 0.2), (-0.1, -0.2)])]
-        Polygon([(-1, -2), (1, -2), (2, 2), (-2, 2), (-1, -2)])]
+    0.0833333, 1, 1, 1, 0.1
+    # geometry=[
+    # Polygon([(-0.1, -0.2), (0.1, -0.2),
+    # (0.2, 0.2), (-0.2, 0.2), (-0.1, -0.2)])]
+    # Polygon([(-1, -2), (1, -2), (2, 2), (-2, 2), (-1, -2)])]
     # [Polygon([(6, 7), (6, 5.5), (-6, 5.5), (-6, 7), (6, 7)]),
     # Polygon([(0.5, 5.5), (0.5, -5.5), (-0.5, -5.5), (-0.5, 5.5),
     # (0.5, 5.5)]),
@@ -47,12 +47,8 @@ bar_1 = Bar(n1, n2, cross_sec, material,
             # line_loads=[line_load_1]
             )
 
-bar_2 = Bar(n2, n3, cross_sec, material,
-            line_loads=[line_load_2]
-            )
-
 # Create system
-system = System([bar_1, bar_2])
+system = System([bar_1])
 
 # divide Bar
 system.create_mesh({bar_1: [0.5]})
@@ -81,9 +77,9 @@ deforms, forces = solution.calc
 # ----------------------------- Spannungen --------------------------------- #
 for i, b in enumerate(bar_result, start=1):
     print("----------------Teilstab ", i, '---------------')
-    n = b._normal_stress
-    v_max = b._shear_stress_max
-    m = b._bending_stress
+    n = b.normal_stress_barend
+    v_max = b._shear_stress_barend
+    m = b.bending_stress_barend
     n_disc = b.normal_stress_disc
     v_disc = b.shear_stress_disc
     m_disc = b.bending_stress_disc
@@ -99,7 +95,7 @@ for i, b in enumerate(bar_result, start=1):
 SystemResultGraphic(
     system_result=results,
     kind='shear_stress',
-    mesh_type='mesh'
+    mesh_type='bars'
 ).show()
 
 CrossSectionStressGraphic(
@@ -107,15 +103,15 @@ CrossSectionStressGraphic(
     bar=bar_1,
     position=0.8,
     side='left',
-    kind=['normal', 'bending', 'shear'],
+    kind=['shear', 'normal', 'bending'],
     discretization=20
 ).show()
 
-CrossSectionStressGraphic(
-    system_result=results,
-    bar=bar_1,
-    position=0.8,
-    side='right',
-    kind=['normal', 'bending', 'shear'],
-    discretization=20
-).show()
+# CrossSectionStressGraphic(
+#     system_result=results,
+#     bar=bar_1,
+#     position=0.8,
+#     side='right',
+#     kind=['normal', 'bending', 'shear'],
+#     discretization=20
+# ).show()

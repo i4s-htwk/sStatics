@@ -177,15 +177,10 @@ class SystemResultGraphic(SingleGraphicObject):
         forces = self.system_result.forces_disc
         deforms = self.system_result.deforms_disc
         n_stress = self.system_result.normal_stress_disc
-        print('n_stress', n_stress)
         v_stress = self.system_result.shear_stress_disc
-        print('v_stress', v_stress)
         m_stress_t = self.system_result.bending_stress_top_disc
-        print('m_stress_t', m_stress_t)
         m_stress_b = self.system_result.bending_stress_bottom_disc
-        print('m_stress_b', m_stress_b)
         m_stress = m_stress_t + m_stress_b
-        print('m_stress', m_stress)
         result_lists = {
             'normal': [f[:, 0] for f in forces],
             'shear': [f[:, 1] for f in forces],
