@@ -702,42 +702,6 @@ class SystemModifier:
         self.system = System(bars)
         return self.system
 
-    def delete_bar(self, bar_obj: Bar):
-        """Removes a bar from the system.
-
-        Updates the internal `bar_map` to mark the bar as deleted and
-        reconstructs the system without the specified bar.
-
-        Parameters
-        ----------
-        bar_obj : :any:`Bar`
-            The bar to be removed.
-
-        Returns
-        -------
-        :any:`System`
-            The system without the specified bar.
-
-        Raises
-        ------
-        ValueError
-            If the bar has already been deleted or cannot be found.
-        """
-        if self.bar_map.get(bar_obj) is None:
-            raise ValueError("Bar has already been deleted.")
-
-        bars = list(self.system.bars)
-        try:
-            bars.remove(self._get_current_bar(bar_obj))
-        except ValueError:
-            raise ValueError("The specified bar was not found in the "
-                             "current system.")
-
-        self._update_bar(bar_obj, None)
-        self.system = System(bars)
-        self.memory_modification.append((bar_obj, 'deleted'))
-        return self.system
-
     def create_uls_systems(self):
         """
         Creates systems for unit load states.
@@ -894,6 +858,42 @@ class SystemModifier:
 
         return systems
 
+    def delete_bar(self, bar_obj: Bar):
+        """Removes a bar from the system.
+
+        Updates the internal `bar_map` to mark the bar as deleted and
+        reconstructs the system without the specified bar.
+
+        Parameters
+        ----------
+        bar_obj : :any:`Bar`
+            The bar to be removed.
+
+        Returns
+        -------
+        :any:`System`
+            The system without the specified bar.
+
+        Raises
+        ------
+        ValueError
+            If the bar has already been deleted or cannot be found.
+        """
+        if self.bar_map.get(bar_obj) is None:
+            raise ValueError("Bar has already been deleted.")
+
+        bars = list(self.system.bars)
+        try:
+            bars.remove(self._get_current_bar(bar_obj))
+        except ValueError:
+            raise ValueError("The specified bar was not found in the "
+                             "current system.")
+
+        self._update_bar(bar_obj, None)
+        self.system = System(bars)
+        self.memory_modification.append((bar_obj, 'deleted'))
+        return self.system
+
     def division_positions_mesh(self):
         """
         Returns a dictionary mapping each bar to a
@@ -913,4 +913,44 @@ class SystemModifier:
             if bar not in result:
                 result[bar] = []
             result[bar].extend(positions)
+        return result
+
+    def division_positions_for(self, system: System) -> dict[Bar, list[float]]:
+        """
+        Return a division map for the given system based on the stored
+        point load positions (memory_bar_point_load) of this modifier.
+
+        Each bar in the target system is matched to the corresponding bar
+        of the modifier using the node coordinates. If matching bars are
+        found and division positions exist, these positions are assigned
+        to the new bar.
+
+        Parameters
+        ----------
+        system : :any:`System`
+            The structural system for which the division map should be created.
+
+        Returns
+        -------
+        dict[Bar, list[float]]
+            A dictionary mapping each matching bar in the given system to
+            its division positions along the bar length.
+        """
+        result: dict[Bar, list[float]] = {}
+
+        def same_geom(a: Bar, b: Bar) -> bool:
+            return (a.node_i.x == b.node_i.x and a.node_i.z == b.node_i.z and
+                    a.node_j.x == b.node_j.x and a.node_j.z == b.node_j.z)
+
+        for original_bar, positions in self.memory_bar_point_load.items():
+            try:
+                cur_bar = self._get_current_bar(original_bar)
+            except ValueError:
+                continue
+
+            for bar in system.bars:
+                if same_geom(bar, cur_bar):
+                    if positions:
+                        result[bar] = list(positions)
+                    break
         return result
