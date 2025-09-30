@@ -769,7 +769,8 @@ class CircularSector:
 
         Examples
         --------
-        >>> from sstatics.core.preprocessing.geometry.objects import CircularSector
+        >>> from sstatics.core.preprocessing.geometry.objects import
+        >>>     CircularSector
         >>> import numpy as np
         >>> c = CircularSector(center = (0,0), radius = 1, angle = np.pi/4,
         >>>                    start_angle = np.pi/8, positive = True
@@ -811,9 +812,8 @@ class CircularSector:
         """
         return (
                 2 * self.radius *
-                (np.sin(self.angle + self.start_angle) -
-                np.sin(self.start_angle)) / (3 * self.angle) +
-                self.center[0]
+                (np.sin(self.angle + self.start_angle) - np.sin(
+                    self.start_angle)) / (3 * self.angle) + self.center[0]
                 )
 
     @property
@@ -848,8 +848,8 @@ class CircularSector:
         """
         return (
                 2 * self.radius *
-                (np.cos(self.start_angle) -
-                np.cos(self.angle + self.start_angle)) / (3 * self.angle) +
+                (np.cos(self.start_angle) - np.cos(
+                    self.angle + self.start_angle)) / (3 * self.angle) +
                 self.center[1]
                 )
 
@@ -880,7 +880,8 @@ class CircularSector:
 
         Examples
         --------
-        >>> from sstatics.core.preprocessing.geometry.objects import CircularSector
+        >>> from sstatics.core.preprocessing.geometry.objects import
+        >>>     CircularSector
         >>> import numpy as np
         >>> c = CircularSector(center = (0,0), radius = 1, angle = np.pi/2,
         >>>                    start_angle = 0, positive = True
@@ -959,10 +960,14 @@ class CircularSector:
         - :math:`z_0` is the z-coordinate of the center of the circular sector
         """
         iy_center = (
-                    self.radius ** 4 * (abs(self.angle) - 0.5 * (
-                    np.sin(2 * (self.angle + self.start_angle)) -
-                    np.sin(2 * self.start_angle))) / 8
-                    )
+            self.radius ** 4 * (
+                abs(self.angle)
+                - 0.5 * (
+                    np.sin(2 * (self.angle + self.start_angle))
+                    - np.sin(2 * self.start_angle)
+                )
+            ) / 8
+            )
         iy = (
              iy_center -
              self.mom_of_int_steiner(self.center_of_mass_z - self.center[1])
@@ -1005,10 +1010,14 @@ class CircularSector:
         - :math:`y_0` is the z-coordinate of the center of the circular sector
         """
         iz_center = (
-                    self.radius ** 4 * (abs(self.angle) + 0.5 * (
-                    np.sin(2 * (self.angle + self.start_angle)) -
-                    np.sin(2 * self.start_angle))) / 8
-                    )
+            self.radius ** 4 * (
+                abs(self.angle)
+                + 0.5 * (
+                    np.sin(2 * (self.angle + self.start_angle))
+                    - np.sin(2 * self.start_angle)
+                )
+            ) / 8
+        )
         iz = (
              iz_center -
              self.mom_of_int_steiner(self.center_of_mass_y - self.center[0])
@@ -1065,7 +1074,6 @@ class CircularSector:
         z_boundary = self.boundary()[1]
 
         return z_boundary[1] - z_boundary[0]
-
 
     def boundary(self):
         r"""
@@ -1179,7 +1187,8 @@ class CircularSector:
         --------
         The positive :math:`z'`-axis lies in the area of the circular
         sector.
-        >>> from sstatics.core.preprocessing.geometry.objects import CircularSector
+        >>> from sstatics.core.preprocessing.geometry.objects import
+        >>>     CircularSector
         >>> import numpy as np
         >>> c = CircularSector(center = (0,0), radius = 1, angle = np.pi/2,
         >>>                    start_angle = np.pi/4, positive = True

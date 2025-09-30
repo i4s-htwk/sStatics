@@ -2,8 +2,6 @@
 from dataclasses import dataclass
 from typing import List, Optional, Union
 
-from numpy.matlib import empty
-
 from sstatics.core.preprocessing.geometry.objects import (
     CircularSector, Polygon
 )
@@ -285,7 +283,7 @@ class CrossSection:
         (np.float64(1.0), np.float64(2.0))
         """
         if self.polygon or self.circular_sector:
-            sm = [0,0]
+            sm = [0, 0]
             if self.polygon:
                 sm = tuple(value * (1 if self.polygon.positive else -1)
                            for value in self.polygon.static_moment)
@@ -352,7 +350,7 @@ class CrossSection:
                 1 if self.polygon.positive else -1)
         if self.circular_sector:
             for c in self.circular_sector:
-                area += c.area *(1 if c.positive else -1)
+                area += c.area * (1 if c.positive else -1)
         return area
 
     def _mom_of_int_polygon(self) -> float:
@@ -368,8 +366,8 @@ class CrossSection:
         if self.polygon:
             dy = self.center_of_mass_z - self.polygon.center_of_mass_z
             sign = 1 if self.polygon.positive else -1
-            return (self.polygon.iyy +
-                     self.polygon.mom_of_int_steiner(dy)) * sign
+            return ((self.polygon.iyy + self.polygon.mom_of_int_steiner(dy))
+                    * sign)
         return 0.0
 
     def _mom_of_int_circular_sectors(self) -> float:
@@ -385,10 +383,11 @@ class CrossSection:
         if self.circular_sector:
             mom_total = 0.0
             for c in self.circular_sector:
-                mom = (
-                      c.mom_of_int_y + c.mom_of_int_steiner(
-                      self.center_of_mass_z - c.center_of_mass_z)
-                      )
+                mom = (c.mom_of_int_y +
+                       c.mom_of_int_steiner(
+                           self.center_of_mass_z - c.center_of_mass_z
+                       )
+                       )
                 mom_total += mom if c.positive else -mom
             return mom_total
         return 0

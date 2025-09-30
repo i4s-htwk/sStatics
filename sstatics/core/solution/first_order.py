@@ -473,6 +473,23 @@ class FirstOrder:
         ]
 
     @cached_property
+    def system_deform_list(self):
+        """Transforms the bar deformations for each bar into the
+        system deformations.
+
+        Returns
+        -------
+        :any:`list` of numpy.ndarray
+            A list of (6, 1) arrays, each representing the deformation in
+            the system coordinate system.
+        """
+        bar_deform = self.bar_deform
+        return [
+            bar.transformation_matrix(False) @ deform
+            for bar, deform in zip(self.system.mesh, bar_deform)
+        ]
+
+    @cached_property
     def internal_forces(self):
         r"""Calculates the internal forces of the statical system.
 
@@ -595,7 +612,8 @@ class FirstOrder:
 
             The internal bar forces are given by:
 
-            .. math:: f^{'} = k^{'} \cdot \delta^{'} + f^{(0)'}
+            .. math::
+                f^{'} = k^{'} \cdot \delta^{'} + f^{(0)'}
 
             When a hinge is present, the deformation at the node is no longer
             equal to the bar deformation. For instance, in the case of a
@@ -603,7 +621,8 @@ class FirstOrder:
             of the known nodal rotation :math:\varphi_{j}^{n} and the relative
             rotation :math:`\Delta \varphi_{j}`:
 
-            .. math:: \varphi_{j} = \varphi_{j}^{n} + \Delta \varphi_{j}
+            .. math::
+                \varphi_{j} = \varphi_{j}^{n} + \Delta \varphi_{j}
 
             The nodal deformation :math:`\delta^{(n)'}` is already known via
             the attribute :py:attr:`bar_deform`. The algorithm then calculates
@@ -617,7 +636,6 @@ class FirstOrder:
             both known nodal and relative deformations:
 
             .. math::
-
                 f^{'} = k^{'} \cdot (\delta^{(n)'} + \Delta \delta^{'}) \
                         + f^{(0)'}
 
@@ -625,13 +643,13 @@ class FirstOrder:
             From this relationship, a linear system of equations is derived:
 
             .. math::
-            A \cdot x = b
+                A \cdot x = b
 
             where:
 
             .. math::
-            A = k'{red_n}
-            b = -k'{red} \cdot \delta^{(n)'} - f^{(0)'}
+                A = k'{red_n}
+                b = -k'{red} \cdot \delta^{(n)'} - f^{(0)'}
 
             The solution vector :math:x represents the total relative
             deformations caused by the hinges.
@@ -775,6 +793,7 @@ class FirstOrder:
             multiple segments, which improves the accuracy of the calculation.
         """
         original_order = self.order
+        original_approach = self.approach
         self.order = 'first'
 
         l_avg = [
@@ -789,4 +808,5 @@ class FirstOrder:
         ]
 
         self.order = original_order
+        self.approach = original_approach
         return l_avg

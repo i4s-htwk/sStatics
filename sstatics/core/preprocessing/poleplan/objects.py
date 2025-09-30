@@ -1,9 +1,11 @@
 
 from dataclasses import dataclass, field
+from typing import Optional, Type
 import numpy as np
+
 from sstatics.core.preprocessing.bar import Bar
 from sstatics.core.preprocessing.node import Node
-from sstatics.core.utils import get_intersection_point, validate_point_on_line
+from sstatics.core.preprocessing.system import System
 
 
 @dataclass(eq=False)
@@ -76,9 +78,10 @@ class Chain:
     relative_pole: set = field(default_factory=set)
     absolute_pole: Pole = None
     connection_nodes: set = field(default_factory=set)
-    stiff: bool = False
-    angle_factor: float = 0
-    angle: float = 0
+
+    _stiff: bool = field(init=False, default=False)
+    _angle_factor: float = field(init=False, default=0)
+    _angle: float = field(init=False, default=0)
 
     def __post_init__(self):
         if len(self.bars) == 0:
@@ -127,6 +130,43 @@ class Chain:
     #                     return False
     #     return True
 
+    # Other properties
+    @property
+    def angle(self):
+        return self._angle
+
+    @angle.setter
+    def angle(self, value: float) -> None:
+        if not isinstance(value, (int, float)):
+            raise TypeError("Angle must be a number")
+        self._angle = float(value)
+
+    @property
+    def angle_factor(self):
+        return self._angle_factor
+
+    @angle_factor.setter
+    def angle_factor(self, value: float) -> None:
+        if not isinstance(value, (int, float)):
+            raise TypeError("Angle factor must be a number")
+        self._angle_factor = float(value)
+
+    @property
+    def stiff(self):
+        return self._stiff
+
+    @stiff.setter
+    def stiff(self, value: bool) -> None:
+        if not isinstance(value, bool):
+            raise TypeError("Stiff must be bool.")
+        self._stiff = bool(value)
+
+    @property
+    def nodes(self):
+        return list(
+            {node for bar in self.bars for node in (bar.node_i, bar.node_j)}
+        )
+
     def add_connection_node(self, node: Node | set[Node]):
         if isinstance(node, Node):
             self.connection_nodes.add(node)
@@ -143,6 +183,9 @@ class Chain:
             if overwrite:
                 self.absolute_pole = pole
             else:
+                from sstatics.core.preprocessing.poleplan.operation import (
+                    get_intersection_point, validate_point_on_line
+                )
                 if (self.absolute_pole.same_location and
                         pole.same_location):
                     # Fall 1: Vorhandener Pol hat Punkt, neuer Pol hat Punkt
@@ -217,7 +260,7 @@ class Chain:
         self.bars.update(bars)
 
     @property
-    def absolute_pole_lines_dict(self):
+    def apole_lines(self):
         # kann nur aufgestellt werden,
         #   wenn die Koordinaten des Absolutpols bekannt sind
         if self.absolute_pole.same_location:
@@ -256,9 +299,8 @@ class Chain:
                         node=self.absolute_pole.node)
             return line_dict
 
-    # Drehwinkel
     @property
-    def vec_aPole_rPole_dict(self):
+    def displacement_to_rpoles(self):
         # Stellt einen Vektor zwischen aPole und rPole auf
         #   -> kann nur aufgestellt werden, wenn der aPole nicht im
         #      Unendlichen liegt
@@ -279,8 +321,144 @@ class Chain:
                     vec_dict[rPole] = (rPole.coords - aPole_coords)
             return vec_dict
 
-    def set_angle_factor(self, factor):
-        self.angle_factor = factor
 
-    def set_angle(self, angle):
-        self.angle = angle
+@dataclass(eq=False)
+class Poleplan:
+
+    system: System
+
+    _node_to_chains: Optional[dict] = field(init=False, default=None)
+    _node_to_multiple_chains: Optional[dict] = field(init=False, default=None)
+
+    def __post_init__(self):
+        from sstatics.core.preprocessing.poleplan.operation import (
+            ChainIdentifier, PoleIdentifier, Validator
+        )
+
+        steps: list[Type] = [
+            ChainIdentifier,
+            PoleIdentifier,
+            Validator,
+        ]
+
+        results = {}
+        for i, step_class in enumerate(steps):
+            if i == 0:
+                step = step_class(self.system)
+            else:
+                step = step_class(results.get('chains'),
+                                  results.get('node_to_chains'))
+            step()
+            results['chains'] = step.chains
+
+            self.node_to_chains = step.node_to_chains
+
+            results['node_to_chains'] = self.node_to_multiple_chains
+
+            if i == 2:
+                results['solved'] = step.solved
+
+        self.chains = results['chains']
+        self.solved = results['solved']
+
+    @property
+    def node_to_chains(self):
+        return self._node_to_chains
+
+    @node_to_chains.setter
+    def node_to_chains(self, value):
+        if not isinstance(value, dict):
+            raise TypeError("Angle must be a dict")
+        self._node_to_chains = value
+
+    @property
+    def node_to_multiple_chains(self):
+        if self._node_to_multiple_chains is None:
+            self._node_to_multiple_chains = (
+                self._filter_multiple_chains(self.node_to_chains))
+        return self._node_to_multiple_chains
+
+    @staticmethod
+    def _filter_multiple_chains(conn):
+        return {key: chains for key, chains in conn.items() if len(chains) > 1}
+
+    def set_angle(self, target_chain, target_angle):
+        from sstatics.core.preprocessing.poleplan.operation import (
+            AngleCalculator
+        )
+        angle_calculator = AngleCalculator(self.chains,
+                                           self.node_to_multiple_chains)
+        angle_calculator.calculate_angles(target_chain, target_angle)
+
+    def get_displacement_figure(self):
+        from sstatics.core.preprocessing.poleplan.operation import (
+            DisplacementCalculator
+        )
+        return DisplacementCalculator(
+            self.chains, self.system.bars, self.node_to_multiple_chains
+        )()
+
+    def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
+        # TODO: Simplify get_chain to accept a single Bar object.
+        #   Original:
+        #     def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
+        #         """Returns chain containing any given bars."""
+        #         return next((chain for chain in self.chains
+        #                      if bars & chain.bars), None)
+        #   Simplified:
+        #     def get_chain(self, bar: Bar) -> Optional[Chain]:
+        #         """Returns chain containing the given bar."""
+        #         return next((chain for chain in self.chains
+        #                      if bar in chain.bars), None)
+        #   Add a separate method for multiple Bar objects:
+        #     def get_chain_containing_any(self, bars: set[Bar]):
+        #         """Returns chain containing any given bars."""
+        #         return next((chain for chain in self.chains
+        #                      if bars & chain.bars), None)
+        """Returns the chain that contains any of the given bars."""
+        return next(
+            (chain for chain in self.chains if bars & chain.bars), None
+        )
+
+    def get_chain_node(self, node) -> Optional[Chain]:
+        """Returns the chain that is connected to the given node."""
+        return next(
+            (chain for chain in self.chains
+             if any(node.same_location(n)
+                    for n in chain.connection_nodes)), None
+        )
+
+    def find_adjacent_chain(self, node, chain):
+        # TODO: Refactor this method and get_chain_and_angle(…) of
+        #  InfluenceLine class together.
+        conn_chain = self.node_to_multiple_chains.get(node, [])
+
+        if len(conn_chain) > 1:
+            print(' -> es gibt angrenzende Scheiben')
+
+            print('Gibt es Starre Scheiben?')
+            for c in conn_chain:
+                if c == chain:
+                    continue
+                print(
+                    self.chains.index(c))
+                if c.stiff:
+                    print('starr')
+                    continue
+
+                # Falls nicht starr,
+                # die absoluten Koordinaten speichern
+                aPole_coords = c.absolute_pole.coords
+
+                # Die relative Pol-Koordinate ermitteln,
+                # falls der Knoten nicht übereinstimmt
+                for rPole in c.relative_pole:
+                    if not rPole.is_infinite:
+                        node_coords = rPole.coords
+                    else:
+                        node_coords = aPole_coords = np.array([
+                            [rPole.node.x],
+                            [rPole.node.z]
+                        ])
+                    return aPole_coords, node_coords, c
+        return None, None, None

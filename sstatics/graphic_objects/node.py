@@ -1,6 +1,5 @@
 
 import numpy as np
-import plotly.graph_objs as go
 
 from sstatics.core.preprocessing.node import Node
 
@@ -12,12 +11,14 @@ from sstatics.graphic_objects.supports import (
 
 
 class NodeGraphic(SingleGraphicObject):
-    def __init__(self, node: Node, node_number=None, **kwargs):
+    def __init__(self, node: Node, node_number=None,
+                 show_annotations: bool = True, **kwargs):
         if not isinstance(node, Node):
             raise TypeError('"node" has to be an instance of Node')
         super().__init__(node.x, node.z, **kwargs)
         self.node = node
         self.number = node_number
+        self.show_annotations = show_annotations
 
     @property
     def select_support(self):
@@ -38,18 +39,16 @@ class NodeGraphic(SingleGraphicObject):
         support = support_classes.get((u, w, phi), FreeNode)
         if (support is RollerSupport and
                 u == 'fixed' and w == 'free' and phi == 'free'):
-            return support(x, z, rotation=-np.pi/2, **self.scatter_kwargs)
-        return support(x, z, **self.scatter_kwargs)
+            return support(
+                x, z, scatter_options=self.scatter_kwargs, rotation=-np.pi/2
+            )
+        return support(x, z, scatter_options=self.scatter_kwargs)
 
     @property
-    def annotations(self):
-        if self.number is not None:
-            d = 0.25 * self.scale
-            x, z = self.x, self.z - d
-            return (go.layout.Annotation(
-                x=x, y=z, text=self.number, showarrow=False,
-                font=dict(size=20, family='Times New Roman'), textangle=None
-            ),)
+    def _annotations(self):
+        if self.show_annotations and self.number is not None:
+            d = 0.3 * self.scale
+            return ((self.x, self.z - d, self.number),)
         return ()
 
     @property

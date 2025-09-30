@@ -56,6 +56,24 @@ class LineGraphic(MultiGraphicObject):
         x, z = points[0]
         return cls(x, z, points, **kwargs)
 
+    @classmethod
+    def from_slope_intercept(cls, m, n, boundary=(-5, 5, -5, 5), **kwargs):
+        # TODO: hier über boundary nachdenken
+        x0, x1, z0, z1 = boundary
+        if m is None:
+            # vertical Line x = n
+            p0 = (n, z0)
+            p1 = (n, z1)
+        elif m == 0:
+            # horizontal Line y = n
+            p0 = (x0, n)
+            p1 = (x1, n)
+        else:
+            # y = m * x + n
+            p0 = (x0, m * x0 + n)
+            p1 = (x1, m * x1 + n)
+        return cls.from_points([p0, p1], **kwargs)
+
     @property
     def traces(self):
         x, z = np.array(list(zip(*self.points)))
@@ -126,8 +144,11 @@ class PolygonGraphic(MultiGraphicObject):
 
         point = (
             PointGraphic(
-                self.x, self.z, marker=dict(size=10),
-                line_color=self._point_line_color
+                self.x, self.z,
+                scatter_options={
+                    'marker': dict(size=10),
+                    'line_color': self._point_line_color
+                }
             ).traces if self.show_center_of_mass else ()
         )
         return (go.Scatter(x=x, y=z, **self.scatter_kwargs),) + point
@@ -157,10 +178,10 @@ class RectangleGraphic(SingleGraphicObject):
 
     @property
     def traces(self):
-        polygon = PolygonGraphic(Polygon(self._points), **self.scatter_kwargs)
-        return polygon.transform_traces(
-            self.x, self.z, rotation=self.rotation, scale=self.scale
-        )
+        return PolygonGraphic(
+            Polygon(self._points), scatter_options=self.scatter_kwargs,
+            rotation=self.rotation, scale=self.scale
+        ).traces
 
 
 class IsoscelesTriangleGraphic(SingleGraphicObject):
@@ -196,10 +217,12 @@ class IsoscelesTriangleGraphic(SingleGraphicObject):
 
     @property
     def traces(self):
-        return PolygonGraphic(
-            Polygon(self._points), rotation=self.rotation, scale=self.scale,
-            **self.scatter_kwargs
-        ).traces
+        triangle = PolygonGraphic(
+            Polygon(self._points), scatter_options=self.scatter_kwargs
+        )
+        return triangle.transform_traces(
+            self.x, self.z, rotation=self.rotation, scale=self.scale
+        )
 
 
 class EllipseGraphic(SingleGraphicObject):
@@ -246,7 +269,7 @@ class EllipseGraphic(SingleGraphicObject):
         return go.Scatter(x=x, y=z, **self.scatter_kwargs),
 
 
-class CircularSector(EllipseGraphic):
+class CircularSectorGraphic(EllipseGraphic):
 
     def __init__(
         self, x, z, a, b=None, angle_range=(0, 2 * np.pi), n_points=100,
@@ -266,9 +289,11 @@ class CircularSector(EllipseGraphic):
     @property
     def traces(self):
         start_line = LineGraphic.from_points(
-            [(self.x, self.z), self.start_points], **self.scatter_kwargs
+            [(self.x, self.z), self.start_points],
+            scatter_options=self.scatter_kwargs
         ).traces
         end_line = LineGraphic.from_points(
-            [(self.x, self.z), self.end_points], **self.scatter_kwargs
+            [(self.x, self.z), self.end_points],
+            scatter_options=self.scatter_kwargs
         ).traces
         return self.sector, *start_line, *end_line
