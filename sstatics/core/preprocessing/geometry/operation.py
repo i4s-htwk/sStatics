@@ -93,6 +93,7 @@ class PolygonMerge:
             If the resulting geometry is a `MultiPolygon`, which is
             currently not supported.
         """
+        positive_flag = True
         if self.unary_pos:
             result = self.unary_pos
             positive_flag = True
@@ -205,7 +206,8 @@ class SectorToPolygonHandler:
         )
 
     @staticmethod
-    def bounding_boxes_overlap_circ(a: CircularSector, b: CircularSector) -> bool:
+    def bounding_boxes_overlap_circ(a: CircularSector, b: CircularSector) \
+            -> bool:
         [a_miny, a_maxy], [a_minz, a_maxz] = a.boundary()
         [b_miny, b_maxy], [b_minz, b_maxz] = b.boundary()
         return (
@@ -250,7 +252,9 @@ class SectorToPolygonHandler:
         circular_sector_remaining = []
 
         if len(self.circular_sector) > 1:
-            circ_to_poly = [i.convert_to_polygon() for i in self.circular_sector]
+            circ_to_poly = [
+                i.convert_to_polygon() for i in self.circular_sector
+            ]
             circ_to_poly_shapely = [i.polygon for i in circ_to_poly]
 
             combined, contained = (
@@ -286,8 +290,6 @@ class SectorToPolygonHandler:
                 polygons_extended.append(sec_as_polygon)
             else:
                 circular_sector_remaining.append(i)
-
-
         return polygons_extended, circular_sector_remaining
 
     def __call__(self) -> Tuple[List[Polygon], List[CircularSector]]:
@@ -351,4 +353,3 @@ class SectorToPolygonHandler:
         print('Geometries treated as polygons with indices:', combined)
 
         return combined, contained
-
