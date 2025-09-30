@@ -1,11 +1,11 @@
+
 from dataclasses import dataclass, replace
-from functools import cached_property
 from typing import Literal
 
 import numpy as np
 
+from sstatics.core.preprocessing.modifier import SystemModifier
 from sstatics.core.solution.first_order import FirstOrder
-from sstatics.core.preprocessing.system import SystemModifier
 
 
 @dataclass(eq=False)
@@ -58,7 +58,7 @@ class SecondOrder(FirstOrder):
         self.order = 'second'
         self.approach = self.calc_approach
 
-    @cached_property
+    @property
     def calc(self):
         r"""Entry point for second-order analysis.
 
@@ -195,7 +195,10 @@ class SecondOrder(FirstOrder):
         ----------
         system : :any:`System`
             Geometry state for this iteration.
-        acc_bar, acc_node, acc_system, acc_forces : list[np.ndarray]
+        total_deltas_bar : list[np.ndarray]
+        total_deltas_node : list[np.ndarray]
+        total_deltas_system : list[np.ndarray]
+        total_internal_forces : list[np.ndarray]
             Running accumulators for bar, node, system displacements and
             internal forces.
 
@@ -274,19 +277,20 @@ class SecondOrder(FirstOrder):
         list[np.ndarray]
             List of (6×1) force vectors per bar in local bar coordinates.
         """
-        out = []
-        for deform, force in zip(self.bar_deform_list, self.internal_forces):
+        forces_list = []
+        for deform, force in zip(
+                self.bar_deform_list,
+                self.internal_forces):
             phi_i, phi_j = deform[2, 0], deform[5, 0]
             l_i, l_j = -force[0, 0], force[3, 0]
             t_i, t_j = -force[1, 0], force[4, 0]
-
-            def rot(l_force, t, phi):
-                return np.array([
-                    [-(l_force * np.cos(phi) - t * np.sin(phi))],
-                    [-(t * np.cos(phi) + l_force * np.sin(phi))]
-                ])
-
-            ri = rot(l_i, t_i, phi_i)
-            rj = -rot(-l_j, -t_j, phi_j)
-            out.append(np.vstack([ri, [[force[2, 0]]], rj, [[force[5, 0]]]]))
-        return out
+            force_sec = np.array([
+                [-(l_i * np.cos(phi_i) - t_i * np.sin(phi_i))],
+                [-(t_i * np.cos(phi_i) + l_i * np.sin(phi_i))],
+                [force[2, 0]],
+                [l_j * np.cos(phi_j) - t_j * np.sin(phi_j)],
+                [t_j * np.cos(phi_j) + l_j * np.sin(phi_j)],
+                [force[5, 0]]
+            ])
+            forces_list.append(force_sec)
+        return forces_list

@@ -161,6 +161,12 @@ class Chain:
             raise TypeError("Stiff must be bool.")
         self._stiff = bool(value)
 
+    @property
+    def nodes(self):
+        return list(
+            {node for bar in self.bars for node in (bar.node_i, bar.node_j)}
+        )
+
     def add_connection_node(self, node: Node | set[Node]):
         if isinstance(node, Node):
             self.connection_nodes.add(node)

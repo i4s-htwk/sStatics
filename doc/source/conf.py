@@ -10,7 +10,7 @@ project = 'sStatics'
 copyright = '2024'
 author = 'Paul Brassel'
 release = '0.0.0'
-html_logo = 'sStatics_Logo_transparent.png'
+html_logo = 'sStatics_Logo.png'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -20,6 +20,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
+    'sphinx_copybutton',
 ]
 exclude_patterns = []
 html_static_path = ['.']
@@ -47,4 +48,4 @@ intersphinx_mapping = {
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinx_book_theme'

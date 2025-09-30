@@ -1613,7 +1613,6 @@ class TestFirstOrder(TestCase):
         b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
         fo = FirstOrder(System([b1]))
 
-        # Smoke: correct list length and finite result
         Lavg = fo.averaged_longitudinal_force
         self.assertEqual(
             len(Lavg), len(fo.system.mesh),
