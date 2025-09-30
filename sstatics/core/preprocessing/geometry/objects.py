@@ -696,21 +696,17 @@ class CircularSector:
         y_0, z_0 = self.center
         points = []
 
-        # Prüfen, ob Vollkreis
         is_full_circle = abs(abs(self.angle) - 2 * np.pi) < 1e-12
 
-        # Mittelpunkt nur hinzufügen, wenn kein Vollkreis
         if not is_full_circle:
             points.append((y_0, z_0))
 
-        # Punkte entlang des Bogens
         for i in range(num_points + 1):
             theta = self.start_angle + i * self.angle / num_points
             y = y_0 + self.radius * np.cos(theta)
             z = z_0 + self.radius * np.sin(theta)
             points.append((y, z))
 
-        # Endpunkt explizit hinzufügen, um Rundungsfehler zu vermeiden
         end_point = (
             round(y_0 + self.radius * np.cos(self.start_angle + self.angle),
                   12),
@@ -721,28 +717,8 @@ class CircularSector:
         if end_point != points[-1]:
             points.append(end_point)
 
-        # Mittelpunkt am Ende hinzufügen, wenn kein Vollkreis
         if not is_full_circle:
             points.append((y_0, z_0))
-        # y_0, z_0 = self.center
-        # points = [(y_0, z_0)]
-        # for i in range(num_points + 1):
-        #     theta = self.start_angle + i * self.angle / num_points
-        #     y = y_0 + self.radius * np.cos(theta)
-        #     z = z_0 + self.radius * np.sin(theta)
-        #     points.append((y, z))
-        #
-        # end_point = (
-        #     round(y_0 + self.radius * np.cos(self.start_angle + self.angle),
-        #           12),
-        #     round(z_0 + self.radius * np.sin(self.start_angle + self.angle),
-        #           12)
-        # )
-        #
-        # if end_point not in points:
-        #     points.append(end_point)
-        #
-        # points.append((y_0, z_0))
         return Polygon(points, positive=self.positive)
 
     @property
