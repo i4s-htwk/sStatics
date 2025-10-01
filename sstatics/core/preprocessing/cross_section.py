@@ -22,13 +22,11 @@ class CrossSection:
         shear_cor: Optional[float] = None,
         geometry: Optional[List[Union[Polygon, CircularSector]]] = None
     ):
-        """
-        Initializes a CrossSection either by geometry or mechanical properties.
+        r"""Initializes a CrossSection either by geometry or mechanical
+        properties.
 
         Parameters
         ----------
-        geometry : Optional[List[Union[Polygon, CircularSector]]], optional
-            List of geometric shapes defining the cross-section.
         mom_of_int : Optional[float], optional
             Moment of inertia.
         area : Optional[float], optional
@@ -39,6 +37,8 @@ class CrossSection:
             Cross-sectional width.
         shear_cor : Optional[float], optional
             Shear correction factor (default 1.0).
+        geometry : Optional[List[Union[Polygon, CircularSector]]], optional
+            List of geometric shapes defining the cross-section.
 
         Raises
         ------
@@ -103,13 +103,15 @@ class CrossSection:
 
         Raises
         ------
-            ValueError
-                If a single negative polygon is used as cross-section.
+        ValueError
+            If a single negative circular sector is used as cross-section.
+        ValueError
+            If a single negative polygon is used as cross-section.
 
         Notes
         -----
-            Circular sectors that overlap with polygons are converted
-            internally to polygons for computation purposes.
+        Circular sectors that overlap with polygons are converted
+        internally to polygons for computation purposes.
         """
         poly = [e for e in self.geometry if isinstance(e, Polygon)]
         circ = [e for e in self.geometry if isinstance(e, CircularSector)]
@@ -118,17 +120,29 @@ class CrossSection:
             poly, circ = SectorToPolygonHandler(poly, circ)()
 
         self.circular_sector = circ
+        self.polygon = poly
 
-        if len(poly) == 1 and not self.circular_sector:
+        if not self.polygon:
+            c_positive = 0
+            for c in circ:
+                c_positive += 1 if c.positive else 0
+            if c_positive == 0:
+                raise ValueError(
+                    "At least one positive circular sector is required.")
+        elif len(poly) == 1 and not self.circular_sector:
             if not poly[0].positive:
                 raise ValueError(
                     "A single negative polygon cannot be used as a "
                     "cross-section.")
             self.polygon = poly[0]
-        else:
+        elif self.polygon:
             positive = [p for p in poly if p.positive]
             negative = [p for p in poly if not p.positive]
             self.polygon = PolygonMerge(positive, negative)()
+        else:
+            raise ValueError("This definition of geometry consisting of"
+                             "polygons and circular sectors was not taken"
+                             "into account.")
 
     @property
     def mom_of_int(self) -> float:
@@ -137,8 +151,8 @@ class CrossSection:
 
         Returns
         -------
-            float
-                Moment of inertia (Iyy), either from input or calculated.
+        float
+            Moment of inertia (Iyy), either from input or calculated.
 
         Examples
         --------
@@ -158,8 +172,8 @@ class CrossSection:
 
         Returns
         -------
-            float
-                Cross-sectional area.
+        float
+            Cross-sectional area.
 
         Examples
         --------
@@ -179,12 +193,12 @@ class CrossSection:
 
         Returns
         -------
-            float
-                Cross-section height.
+        float
+            Cross-section height.
 
         Notes
         -----
-            Calculated from polygon geometry; circular sectors are ignored.
+        Calculated from polygon and circular sector geometry.
 
         Examples
         --------
@@ -204,12 +218,12 @@ class CrossSection:
 
         Returns
         -------
-            float
-                Cross-section width.
+        float
+            Cross-section width.
 
         Notes
         -----
-            Calculated from polygon geometry; circular sectors are ignored.
+        Calculated from polygon and circular sector geometry.
 
         Examples
         --------
@@ -229,12 +243,12 @@ class CrossSection:
 
         Returns
         -------
-            float
-                Shear correction factor (default 1.0).
+        float
+            Shear correction factor (default 1.0).
 
         Notes
         -----
-            Currently a fixed value; automatic calculation is not implemented.
+        Currently a fixed value; automatic calculation is not implemented.
 
         Examples
         --------
@@ -243,22 +257,23 @@ class CrossSection:
         >>> sc = cs.shear_cor
         float(0.85)
         """
-        # TODO:
+        # TODO:...
         return self._shear_cor
 
     @property
     def static_moment(self) -> tuple:
         """
-        Returns the static moments (first moments of area) about z and y axes.
+        Returns the static moments (first moments of area) about y and z axes
+        if a geometry is defined.
 
         Returns
         -------
-            tuple of floats
-                (S_z, S_y) static moments.
+        tuple of floats
+            (S_y, S_z) static moments.
 
         Notes
         -----
-            Includes contributions from polygons and circular sectors.
+        Includes contributions from polygons and circular sectors.
 
         Examples
         --------
@@ -267,15 +282,20 @@ class CrossSection:
         >>> sz, sy = cs.static_moment
         (np.float64(1.0), np.float64(2.0))
         """
-        if self.polygon is None:
-            return (self._width * self._height ** 2 / 2,
-                    self._height * self._width ** 2 / 2)
-        else:
-            sm = self.polygon.static_moment
+        if self.polygon or self.circular_sector:
+            sm = [0, 0]
+            if self.polygon:
+                sm = tuple(value * (1 if self.polygon.positive else -1)
+                           for value in self.polygon.static_moment)
             if self.circular_sector:
                 for c in self.circular_sector:
-                    sm = tuple(s + c_s for s, c_s in zip(sm, c.static_moment))
+                    factor = 1 if c.positive else -1
+                    signed_moment = tuple(factor * x for x in c.static_moment)
+                    sm = tuple(s + c_s for s, c_s in zip(sm, signed_moment))
             return sm
+        else:
+            raise ValueError("Either a polygon or a circular sector must be"
+                             " defined.")
 
     @property
     def center_of_mass_y(self) -> float:
@@ -321,27 +341,34 @@ class CrossSection:
 
         Returns
         -------
-            float
-                Cross-sectional area.
+        float
+            Cross-sectional area.
         """
-        area = self.polygon.area
+        area = 0.0
+        if self.polygon:
+            area += self.polygon.area * (
+                1 if self.polygon.positive else -1)
         if self.circular_sector:
             for c in self.circular_sector:
-                area += c.area if c.positive else -c.area
+                area += c.area * (1 if c.positive else -1)
         return area
 
     def _mom_of_int_polygon(self) -> float:
-        r"""
+        """
         Calculates moment of inertia of polygonal parts including centroid
         offset correction.
 
         Returns
         -------
-            float
-                Polygon moment of inertia.
+        float
+            Polygon moment of inertia.
         """
-        dy = self.center_of_mass_z - self.polygon.center_of_mass_z
-        return self.polygon.iyy + self.polygon.mom_of_int_steiner(dy)
+        if self.polygon:
+            dy = self.center_of_mass_z - self.polygon.center_of_mass_z
+            sign = 1 if self.polygon.positive else -1
+            return ((self.polygon.iyy + self.polygon.mom_of_int_steiner(dy))
+                    * sign)
+        return 0.0
 
     def _mom_of_int_circular_sectors(self) -> float:
         """
@@ -350,15 +377,19 @@ class CrossSection:
 
         Returns
         -------
-            float
-                Circular sectors moment of inertia.
+        float
+            Circular sectors moment of inertia.
         """
         if self.circular_sector:
-            return sum(
-                c.mom_of_int_y + c.mom_of_int_steiner(
-                    self.center_of_mass_z - c.center_of_mass_z)
-                for c in self.circular_sector
-            )
+            mom_total = 0.0
+            for c in self.circular_sector:
+                mom = (c.mom_of_int_y +
+                       c.mom_of_int_steiner(
+                           self.center_of_mass_z - c.center_of_mass_z
+                       )
+                       )
+                mom_total += mom if c.positive else -mom
+            return mom_total
         return 0
 
     def _calc_mom_of_int(self) -> float:
@@ -367,37 +398,83 @@ class CrossSection:
 
         Returns
         -------
-            float
-                Total moment of inertia.
+        float
+            Total moment of inertia.
         """
         return self._mom_of_int_polygon() + self._mom_of_int_circular_sectors()
 
     def _calc_height(self) -> float:
-        r"""
-        Calculates height of the cross-section from polygon geometry.
+        """
+        Calculates the height of the cross-section in the z-direction.
 
         Returns
         -------
-            float
-                Height.
+        float
+            The vertical extent (height) of the entire cross-section.
 
         Notes
         -----
-        Circular sectors currently not included.
+        The height is defined as the difference between the maximum and minimum
+        z-coordinates of all geometric components in the cross-section.
+
+        - If the cross-section contains circular sectors, their individual
+          z-boundaries are evaluated using their `boundary()` method.
+        - If a polygon is present, its z-extent is also included in the
+          calculation.
+        - If no circular sectors are present, the height is determined directly
+          from the polygon.
         """
+        if self.circular_sector:
+            if self.polygon:
+                z_min = min(self.polygon.z)
+                z_max = max(self.polygon.z)
+            else:
+                z_min = self.circular_sector[0].boundary()[1][0]
+                z_max = self.circular_sector[0].boundary()[1][1]
+
+            for c in self.circular_sector:
+                if c.positive:
+                    z_boundary = c.boundary()[1]
+                    z_min = min(z_min, z_boundary[0])
+                    z_max = max(z_max, z_boundary[1])
+            return z_max - z_min
+
         return self.polygon.height
 
     def _calc_width(self) -> float:
-        r"""
-        Calculates width of the cross-section from polygon geometry.
+        """
+        Calculates the width of the cross-section in the y-direction.
 
         Returns
         -------
-            float
-                Width.
+        float
+            The horizontal extent (width) of the entire cross-section.
 
         Notes
         -----
-            Circular sectors currently not included.
+        The width is defined as the difference between the maximum and minimum
+        y-coordinates of all geometric components in the cross-section.
+
+        - If the cross-section contains circular sectors, their individual
+          y-boundaries are evaluated using their `boundary()` method.
+        - If a polygon is present, its y-extent is also included in the
+          calculation.
+        - If no circular sectors are present, the width is determined directly
+          from the polygon.
         """
+        if self.circular_sector:
+            if self.polygon:
+                y_min = min(self.polygon.y)
+                y_max = max(self.polygon.y)
+            else:
+                y_min = self.circular_sector[0].boundary()[0][0]
+                y_max = self.circular_sector[0].boundary()[0][1]
+
+            for c in self.circular_sector:
+                if c.positive:
+                    y_boundary = c.boundary()[0]
+                    y_min = min(y_min, y_boundary[0])
+                    y_max = max(y_max, y_boundary[1])
+            return y_max - y_min
+
         return self.polygon.width

@@ -55,8 +55,8 @@ Contents
     :maxdepth: 2
 
 
-    tutorials
+    getting_started
     howtoguide
+    examples
     explanation
     api
-

@@ -1,3 +1,22 @@
 code.literal {
     color: #111111 !important;
 }
+div.prompt {
+    display: none;
+}
+
+/* Input-Zellen */
+div.nbinput {
+    background-color: #f0f0f0;   /* hellgrau */
+    border-left: 5px solid #4CAF50;  /* grüne Leiste links */
+    padding: 10px;
+    border-radius: 5px;
+}
+
+/* Output-Zellen */
+div.nboutput {
+    background-color: #fff8dc;   /* hellgelb */
+    border-left: 5px solid #FF9800; /* orange Leiste */
+    padding: 10px;
+    border-radius: 5px;
+}
