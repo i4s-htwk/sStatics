@@ -247,11 +247,6 @@ class EllipseGraphic(SingleGraphicObject):
                     'Both angles in "angle_range" have to be in the interval '
                     '[0, 2 * pi].'
                 )
-        if angle_range[0] >= angle_range[1]:
-            raise ValueError(
-                'The lower bound of "angle_range" has to be less than the '
-                'upper bound.'
-            )
         super().__init__(x, z, **kwargs)
         self.a = a
         self.b = b

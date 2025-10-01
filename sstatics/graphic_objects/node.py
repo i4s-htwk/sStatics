@@ -1,3 +1,4 @@
+from functools import cached_property
 
 import numpy as np
 
@@ -8,17 +9,24 @@ from sstatics.graphic_objects.supports import (
     FreeNode, RollerSupport, PinnedSupport, FixedSupportUW, FixedSupportUPhi,
     FixedSupportWPhi, ChampedSupport
 )
+from sstatics.graphic_objects.loads import PointLoadGraphic
 
 
 class NodeGraphic(SingleGraphicObject):
-    def __init__(self, node: Node, node_number=None,
+    def __init__(self, node: Node, node_number=None, base_scale=None,
                  show_annotations: bool = True, **kwargs):
         if not isinstance(node, Node):
             raise TypeError('"node" has to be an instance of Node')
         super().__init__(node.x, node.z, **kwargs)
         self.node = node
         self.number = node_number
+        self.base_scale = base_scale
         self.show_annotations = show_annotations
+        self._point_load_graphic = [
+            PointLoadGraphic(
+                self.x, self.z, pl, scale=self._base_scale / 2
+            ) for pl in self.node.loads
+        ]
 
     @property
     def select_support(self):
@@ -44,12 +52,19 @@ class NodeGraphic(SingleGraphicObject):
             )
         return support(x, z, scatter_options=self.scatter_kwargs)
 
+    @cached_property
+    def _base_scale(self):
+        return self.base_scale if self.base_scale else 1
+
     @property
     def _annotations(self):
+        annotations = []
+        for lg in self._point_load_graphic:
+            annotations.extend(lg._annotations)
         if self.show_annotations and self.number is not None:
-            d = 0.3 * self.scale
-            return ((self.x, self.z - d, self.number),)
-        return ()
+            d = 0.3 * self._base_scale
+            annotations.append((self.x, self.z - d, self.number))
+        return tuple(annotations)
 
     @property
     def traces(self):
@@ -57,12 +72,17 @@ class NodeGraphic(SingleGraphicObject):
 
         traces.extend(
             self.select_support.transform_traces(
-                self.x, self.z, self.node.rotation, self.scale
+                self.x, self.z, self.node.rotation, self._base_scale
             )
         )
 
-        # TODO: displacment
+        # TODO: displacement
 
         # TODO: load
+        print(self.scale)
+        for lg in self._point_load_graphic:
+            traces.extend(
+                lg.transform_traces(self.x, self.z, self.rotation, self.scale)
+            )
 
         return traces

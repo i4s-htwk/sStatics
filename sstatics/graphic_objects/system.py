@@ -31,7 +31,7 @@ class SystemGraphic(SingleGraphicObject):
         self.base_scale = base_scale
         self._node_graphic = [
             NodeGraphic(
-                node, i+1, scale=self._base_scale,
+                node, i+1, self._base_scale,
                 scatter_options=self.scatter_kwargs,
                 annotation_options=self.annotation_kwargs
             ) for i, node in enumerate(self.nodes)
