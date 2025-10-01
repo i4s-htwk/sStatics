@@ -79,7 +79,6 @@ class NodeGraphic(SingleGraphicObject):
         # TODO: displacement
 
         # TODO: load
-        print(self.scale)
         for lg in self._point_load_graphic:
             traces.extend(
                 lg.transform_traces(self.x, self.z, self.rotation, self.scale)
