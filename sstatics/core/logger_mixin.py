@@ -123,10 +123,10 @@ class LoggerMixin:
             Initializes the LoggerMixin using the subclass's 'debug' field,
             and then calls the original `__post_init__` method (if present).
             """
-            # 1️⃣ Initialize LoggerMixin with the subclass's 'debug' value
+            # 1 Initialize LoggerMixin with the subclass's 'debug' value
             LoggerMixin.__init__(self, debug=getattr(self, "debug", False))
 
-            # 2️⃣ Execute subclass-specific post-initialization logic
+            # 2 Execute subclass-specific post-initialization logic
             if orig_post is not None:
                 orig_post(self, *a, **k)
 
