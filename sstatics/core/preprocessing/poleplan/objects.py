@@ -128,18 +128,6 @@ class Chain:
         return all(pole.same_location or pole.is_infinite
                    for pole in self.relative_pole)
 
-    # @property
-    # def solved_relation_aPole_rPole(self):
-    #     if self.absolute_pole.is_infinite:
-    #         for rPole in self.relative_pole:
-    #             print(rPole)
-    #             if rPole.same_location:
-    #                 if not validate_point_on_line(
-    #                         self.absolute_pole.line(), (rPole.x, rPole.z)):
-    #                     self.stiff = True
-    #                     return False
-    #     return True
-
     # Other properties
     @property
     def angle(self):
