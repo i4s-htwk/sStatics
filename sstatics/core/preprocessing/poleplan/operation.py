@@ -1,3 +1,4 @@
+
 from collections import defaultdict
 
 import numpy as np
@@ -5,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Set, Optional, Tuple
 from itertools import combinations
 
+from sstatics.core.logger_mixin import LoggerMixin
 from sstatics.core.preprocessing.bar import Bar
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.system import System
@@ -161,38 +163,35 @@ def print_chains(chains, bars):
               f'\n -> starr: {chain.stiff}')
 
 
-def print_dict_key_value(dictionary, bars, all_chains):
-    # Only for Debugging
-    print('# # # # # # # # # # # # # # # # # # # # # ')
+def dict_key_value_to_string(dictionary, all_chains) -> str:
+    lines = []
     for node, chains in dictionary.items():
-        print(f"Node: ({node.x}, {node.z})")
-        print('---------------------------')
+        lines.append(f"\nNode ({node.x}|{node.z})")
+        lines.append("-" * 60)
         for chain in chains:
             i = all_chains.index(chain)
-            index = []
-            conn = []
-            for bar in chain.bars:
-                index.append(bars.index(bar))
-            for n in chain.connection_nodes:
-                conn.append((n.x, n.z))
+            lines.append(f"  Chain {i}:\n{chain}")
+    return "\n".join(lines)
 
-            print(f'  Chain: {i}, bars: {index}, \n   -> conn_nodes: {conn}, '
-                  f'\n   -> rPol: {chain.relative_pole}, '
-                  f'\n   -> mPol: {chain.absolute_pole}'
-                  f'\n   -> starr: {chain.stiff}')
-        print()
-        print('---------------------------')
+
+def chains_to_str(chains):
+    lines = ["Identify chains:"]
+    for i, chain in enumerate(chains):
+        lines.append(f"Chain {i}:\n{chain}")
+    return "\n".join(lines)
 
 
 @dataclass(eq=False)
-class ChainIdentifier:
+class ChainIdentifier(LoggerMixin):
     system: System
+    debug: bool = False
 
     _node_to_chains: Optional[dict] = field(init=False, default=defaultdict)
     _chains: list[Chain] = field(init=False, default_factory=list)
 
     def __post_init__(self):
         self.bars = self.system.bars
+        self.logger.debug("ChainIdentifier post‑init completed")
 
     @property
     def node_to_chains(self):
@@ -203,30 +202,76 @@ class ChainIdentifier:
         return self._chains
 
     def run(self):
+        """Main entry point – graph traversal and chain identification."""
         nodes = self.system.nodes(mesh_type='bars')
         to_visit, visited = [nodes[0]], []
+
+        self.logger.info(
+            f"Starting graph traversal with {len(nodes)} nodes.")
+        self.logger.debug(
+            f"Initial node to visit: ({nodes[0].x}, {nodes[0].z})")
+
         while to_visit:
             current_node = to_visit.pop(0)
+
             if current_node not in visited:
+                self.logger.debug(
+                    f"Visiting node ({current_node.x}, {current_node.z})"
+                )
                 visited.append(current_node)
-                to_visit += (
+
+                connected = (
                     self.system.connected_nodes(mesh_type='bars')
                 )[current_node]
+                self.logger.debug(
+                    f"Connected nodes found: "
+                    f"{[f'({n.x}, {n.z})' for n in connected]}"
+                )
+
+                # Add connected nodes to visit list
+                to_visit += connected
+                self.logger.debug(
+                    f"Nodes to visit updated. Remaining: {len(to_visit)}"
+                )
+
+                # Identify new chains from the current node
+                self.logger.info(
+                    f"Identifying chains starting from node "
+                    f"({current_node.x}, {current_node.z})"
+                )
                 self._identify_chains_from_node(current_node)
+                self.logger.info(chains_to_str(self._chains))
+                # print_chains(self._chains, self.bars)
 
-                print_chains(self._chains, self.bars)
-
+                # Check for shared chains and merge if necessary
                 if shared_chains := self._find_shared_chains():
+                    self.logger.info(
+                        f"Found {len(shared_chains)} shared chains — "
+                        f"merging..."
+                    )
                     self._merge_chains(shared_chains)
+                    self.logger.debug("Shared chains merged successfully.")
+
+                # Try identifying triangular connections
+                self.logger.debug("Attempting to identify triangles.")
                 self._identify_triangle()
 
+        self.logger.info(
+            f"Graph traversal completed. Visited {len(visited)} "
+            f"nodes in total."
+        )
+
+        # Re‑run triangle detection until no further triangles are found.
         while self._identify_triangle():
+            self.logger.debug("Another triangle was merged – re‑checking")
             continue
 
-    def _identify_triangle(self):
-        print('Dreieckssuche')
+        self.logger.info("Chain identification finished")
+
+    def _identify_triangle(self) -> bool:
+        """Detect a closed triangle of three chains and merge them."""
+        self.logger.info('Starting Identify Triangle.')
         self.find_all_conn()
-        print_chains(self._chains, self.bars)
         chains = [chain for chain in self._chains if
                   len(chain.connection_nodes) >= 2]
         if len(chains) >= 3:
@@ -242,35 +287,19 @@ class ChainIdentifier:
                 valid_triangle_nodes = [node for node, count in
                                         node_counts.items() if count == 2]
                 if len(valid_triangle_nodes) == 3:
-                    print('--> gefunden!')
+                    self.logger.debug(
+                        "Valid triangle found between chains:\n"
+                        + chains_to_str([c1, c2, c3])
+                    )
                     self._merge_chains([c1, c2, c3])
-                    print_chains(self._chains, self.bars)
+                    self.logger.info("Triangle merged into a new chain")
                     return True
+        self.logger.debug("No triangle found in this iteration")
         return False
 
     def find_all_conn(self):
-        # conn = {}
-        # for chain in self._chains:
-        #     # node - chain zuweisung
-        #     for n in chain.connection_nodes:
-        #         if n not in conn:
-        #             conn[n] = []
-        #         conn[n].append(chain)
-        #     # jeder Stab hat 2 Knoten, es kann aber sein, dass nur der
-        #     # Anfangs oder Endknoten des Stabes bereits als
-        #     # Verbindungsknoten in der Scheibe hinterlegt ist, der jeweils
-        #     # andere kann aber ggf. ebenfalls ein Verbindungsknoten zu einer
-        #     # Anderen Scheibe haben (das wird dann ersichtlich, wenn dieser
-        #     # im dict 'conn' enthalten ist.
-        #     # -> diese Knoten sollen müssen gefunden werden!
-        #     for bar in chain.bars:
-        #         for node in (bar.node_i, bar.node_j):
-        #             if node not in chain.connection_nodes and node in conn:
-        #                 # der Knoten muss nun der Scheibe hinzugefügt werden
-        #                 self._add_node_to_chain(chain, node)
-        # print_dict_key_value(conn, self.bars)
-        # # return conn
-        node_to_chains = {}
+        """Populate the node‑to‑chains dictionary for the current chain set."""
+        node_to_chains: dict[Node, List[Chain]] = {}
         for chain in self._chains:
             for node in chain.connection_nodes:
                 node_to_chains.setdefault(node, []).append(chain)
@@ -280,244 +309,289 @@ class ChainIdentifier:
                             node in node_to_chains):
                         self._add_node_to_chain(chain, node)
         self._node_to_chains = node_to_chains
-        print_dict_key_value(node_to_chains, self.bars, self._chains)
+        self.logger.debug(
+            "Node‑to‑chains mapping created:\n"
+            + dict_key_value_to_string(node_to_chains, self._chains)
+        )
 
     def _identify_chains_from_node(self, current_node: Node):
-        print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
-        print(f'({current_node.x},{current_node.z})')
+        """Create new chains starting at the supplied node."""
         unassigned_bars = []
         connected_bars = (
             self.system.node_to_bar_map(segmented=False))[current_node]
-
+        self.logger.debug(
+            "Processing %d bars connected to node (%s, %s)",
+            len(connected_bars), current_node.x, current_node.z,
+        )
+        self.logger.debug('Iteration over all bars that are connected with '
+                          'this node')
         for bar in connected_bars:
-            print('---------------------------------------------')
-            print(f'Stabnr: {self.bars.index(bar)}')
+            bar_idx = self.bars.index(bar)
+            self.logger.debug(f"Connected Bar: {bar_idx}")
+
             if self._has_hinge(bar, current_node):
-                print(' -> Gelenk')
-                print('   -> hier beginnt eine neue Scheibe')
+                self.logger.debug("Hinge detected – starting a new chain")
                 self._new_chain({bar}, current_node)
             else:
-                print(' -> kein Gelenk')
+                self.logger.debug("No hinge – bar will be stored for later")
                 unassigned_bars.append(bar)
 
-        print('Gibt es noch unverarbeitete angrenzende Stäbe?')
+        self.logger.debug("Checking for unprocessed adjacent bars")
         if unassigned_bars:
-            print(f' -> Ja, folgende Stäbe sind noch nicht zugewiesen: '
-                  f'{[self.bars.index(b) for b in unassigned_bars]}')
+            indices = [self.bars.index(b) for b in unassigned_bars]
+            self.logger.debug(
+                "Unassigned bars remain: %s", ", ".join(map(str, indices))
+            )
             self._new_chain(set(unassigned_bars), current_node)
+        else:
+            self.logger.debug("All connected bars have been assigned")
 
     def _new_chain(self, bars: Set[Bar], current_node: Node):
-        existing_chain = self._get_chain(bars)
-        if existing_chain:
-            existing_chain.add_bars(bars)
-            self._add_node_to_chain(existing_chain, current_node)
+        """Create a new chain or extend an existing one."""
+        existing = self._get_chain(bars)
+        if existing:
+            self.logger.debug(
+                "Extending existing chain (now %d bars)", len(existing.bars)
+            )
+            existing.add_bars(bars)
+            self._add_node_to_chain(existing, current_node)
         else:
+            self.logger.info(
+                "Creating new chain with %d bars at node (%s, %s)",
+                len(bars), current_node.x, current_node.z,
+            )
             new_chain = Chain(bars)
             self._add_node_to_chain(new_chain, current_node)
             self._chains.append(new_chain)
 
     @staticmethod
     def _has_hinge(bar: Bar, node: Node):
+        """Return True if the bar has a hinge at the given node."""
         if bar.node_i == node:
             return any(bar.hinge[0:3])
         else:
             return any(bar.hinge[4:6])
 
     def _get_chain(self, bars: Set[Bar]):
+        """Find a chain that already contains any of the supplied bars."""
         for chain in self._chains:
             if bars & chain.bars:
                 return chain
         return None
 
     def _add_node_to_chain(self, chain: Chain, node: Node):
-        # TODO: das muss vereinfacht werden!
-        print('...')
-        print(f'Aktueller Knoten ({node.x},{node.z}) '
-              f'wird zur Scheibe hinzugefügt')
-        # potenzieller Verbindungspunkte zwischen weiteren Scheiben
+        # TODO: simplify
+        """Add a node (and possibly poles) to a chain."""
+        self.logger.debug(
+            "Adding node (%s, %s) to chain (currently %d nodes)",
+            node.x, node.z, len(chain.connection_nodes),
+        )
+
         connected_bars = self.system.node_to_bar_map(segmented=False)[node]
         chain.add_connection_node(node)
 
-        # Absolutpol oder Linie des Absolutpols
-        if node.u == 'fixed' and node.w == 'fixed' and node.phi == 'free':
-            print(' -> zweiwertiges Auflager')
+        # Determine pole type based on support conditions
+        if node.u == "fixed" and node.w == "fixed" and node.phi == "free":
+            self.logger.info(
+                "Node is a two‑degree‑of‑freedom support – absolute pole added"
+            )
             chain.set_absolute_pole(Pole(node, same_location=True))
-        elif (node.u == 'fixed' or node.w == 'fixed') and node.phi == 'free':
-            print(' -> einwertiges Auflager')
-            print('  -> haben angrenzende Stäbe Gelenke')
-            for bar in connected_bars:
-                # das geht auch nicht? WARUM?
 
-                for end, hinge_phi, hinge_w, hinge_u in [
-                    (bar.node_i,
-                     bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i),
-                    (bar.node_j,
-                     bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j),
-                ]:
-                    if node == end:
-                        if bar not in chain.bars:
-                            if hinge_w:
-                                chain.set_absolute_pole(
-                                    Pole(node, same_location=True))
-                            continue
-                        # if hinge_w or hinge_u and hinge_phi:
-                        #     print(f'   -> am Knoten ({node.x}, {node.z}) '
-                        #           f'hat Stab {self.bars.index(bar)} '
-                        #           f'ein Normal-oder Querkraftgelenk')
-                        #     print('     -> wird Relativpol')
-                        #     direction = np.pi - bar.inclination if hinge_w \
-                        #         else np.pi / 2 - bar.inclination
-                        #     chain.add_relative_pole(
-                        #         Pole(node,is_infinite=True,
-                        #              direction=direction))
-                        if hinge_phi:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)} '
-                                  f'ein Momentengelenk')
-                            print('     -> wird Relativpol')
-                            chain.add_relative_pole(
-                                Pole(node, same_location=True))
-                        if hinge_w or hinge_u:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)} '
-                                  f'ein Normal-oder Querkraftgelenk')
-                            print('     -> wird Relativpol')
-                            direction = np.pi - bar.inclination if hinge_w \
-                                else np.pi / 2 - bar.inclination
-                            chain.add_relative_pole(
-                                Pole(node, is_infinite=True,
-                                     direction=direction))
-                        else:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)} '
-                                  f'kein Gelenk')
-                            print('     -> wird Absolutpol')
-                            direction = np.pi / 2 - node.rotation \
-                                if node.w == 'fixed' else np.pi - node.rotation
-                            # bei overwrite = True gehts nicht! WARUM?!?!?
-                            chain.set_absolute_pole(
-                                Pole(node, direction=direction))
-        # Starre Scheibe mit Gelenkprüfung
-        #  -> kann durch Gelenke zum Absolutpol werden!
-        elif node.u == 'fixed' and node.w == 'fixed' and node.phi == 'fixed':
+        elif (node.u == "fixed" or node.w == "fixed") and node.phi == "free":
+            self.logger.info(
+                "Node is a one‑degree‑of‑freedom support – checking attached"
+                "bars"
+            )
             for bar in connected_bars:
-                for end, hinge_phi, hinge_w, hinge_u in [
-                    (bar.node_i,
-                     bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i),
-                    (bar.node_j,
-                     bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j),
-                ]:
-                    if node == end:
-                        if hinge_phi:
-                            chain.set_absolute_pole(
-                                Pole(node, same_location=True))
-                        elif hinge_w or hinge_u:
-                            direction = np.pi - bar.inclination if hinge_w \
-                                else np.pi / 2 - bar.inclination
-                            chain.set_absolute_pole(
-                                Pole(node, is_infinite=True,
-                                     direction=direction))
-                        else:
-                            chain.stiff = True
-                            chain.set_absolute_pole(
-                                Pole(node, same_location=True))
+                for end, hinge_phi, hinge_w, hinge_u in \
+                        [
+                            (bar.node_i,
+                             bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i
+                             ),
+                            (bar.node_j,
+                             bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j
+                             )
+                        ]:
+                    if node != end:
+                        continue
 
-        # Wenn mindestens 2 Stäbe an den Knoten Anschließen
-        # könnte es ein Verbindungsknoten sein:
+                    if hinge_phi:
+                        self.logger.debug(
+                            "Moment hinge found on bar %d – adding relative "
+                            "pole",
+                            self.bars.index(bar),
+                        )
+                        chain.add_relative_pole(Pole(node, same_location=True))
+
+                    if hinge_w or hinge_u:
+                        direction = (
+                            np.pi - bar.inclination
+                            if hinge_w
+                            else np.pi / 2 - bar.inclination
+                        )
+                        self.logger.debug(
+                            "Normal/shear hinge on bar %d – adding infinite "
+                            "relative pole",
+                            self.bars.index(bar),
+                        )
+                        chain.add_relative_pole(
+                            Pole(node, is_infinite=True, direction=direction)
+                        )
+                    else:
+                        direction = (
+                            np.pi / 2 - node.rotation
+                            if node.w == "fixed"
+                            else np.pi - node.rotation
+                        )
+                        self.logger.debug(
+                            "No hinge – setting absolute pole with "
+                            "direction %.3f",
+                            direction,
+                        )
+                        chain.set_absolute_pole(
+                            Pole(node, direction=direction))
+
+        elif node.u == "fixed" and node.w == "fixed" and node.phi == "fixed":
+            self.logger.info(
+                "Fully fixed node – checking for stiff or pole conditions")
+            for bar in connected_bars:
+                for end, hinge_phi, hinge_w, hinge_u in \
+                        [
+                            (bar.node_i,
+                             bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i
+                             ),
+                            (bar.node_j,
+                             bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j
+                             )
+                        ]:
+                    if node != end:
+                        continue
+
+                    if hinge_phi:
+                        chain.set_absolute_pole(Pole(node, same_location=True))
+                    elif hinge_w or hinge_u:
+                        direction = (
+                            np.pi - bar.inclination
+                            if hinge_w
+                            else np.pi / 2 - bar.inclination
+                        )
+                        chain.set_absolute_pole(
+                            Pole(node, is_infinite=True, direction=direction)
+                        )
+                    else:
+                        chain.stiff = True
+                        chain.set_absolute_pole(Pole(node, same_location=True))
+
+        # If more than one bar meets at the node, it may become a connection
+        # node
         if len(connected_bars) > 1:
-            # notwendig für zum finden eines Dreiecks
-            # chain.add_connection_node(node)
             for bar in connected_bars:
-                # if bar not in chain.bars:
-                #     continue
-                for end, hinge_phi, hinge_w, hinge_u in [
-                    (bar.node_i,
-                     bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i),
-                    (bar.node_j,
-                     bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j),
-                ]:
-                    if node == end:
-                        # if hinge_w or hinge_u and hinge_phi:
-                        #     print(f'   -> am Knoten ({node.x}, {node.z}) '
-                        #           f'hat Stab {self.bars.index(bar)} '
-                        #           f'ein Normal-oder Querkraftgelenk')
-                        #     print('     -> wird Relativpol')
-                        #     direction = np.pi - bar.inclination if hinge_w \
-                        #         else np.pi / 2 - bar.inclination
-                        #     chain.add_relative_pole(
-                        #         Pole(node,is_infinite=True,
-                        #              direction=direction))
-                        if hinge_phi:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)}'
-                                  f' ein Momentengelenk')
-                            print('     -> wird Relativpol')
-                            chain.add_relative_pole(
-                                Pole(node, same_location=True))
-                        elif hinge_w or hinge_u:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)} '
-                                  f'ein Normal-oder Querkraftgelenk')
-                            print('     -> wird Relativpol')
-                            direction = np.pi - bar.inclination if hinge_w \
-                                else np.pi / 2 - bar.inclination
-                            chain.add_relative_pole(
-                                Pole(node, is_infinite=True,
-                                     direction=direction))
+                for end, hinge_phi, hinge_w, hinge_u in \
+                        [
+                            (bar.node_i,
+                             bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i
+                             ),
+                            (bar.node_j,
+                             bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j
+                             )
+                        ]:
+                    if node != end:
+                        continue
+
+                    if hinge_phi:
+                        self.logger.debug(
+                            "Moment hinge on bar %d at connection node – "
+                            "relative pole",
+                            self.bars.index(bar),
+                        )
+                        chain.add_relative_pole(Pole(node, same_location=True))
+                    elif hinge_w or hinge_u:
+                        direction = (
+                            np.pi - bar.inclination
+                            if hinge_w
+                            else np.pi / 2 - bar.inclination
+                        )
+                        self.logger.debug(
+                            "Normal/shear hinge on bar %d at connection node "
+                            "– infinite relative pole",
+                            self.bars.index(bar),
+                        )
+                        chain.add_relative_pole(
+                            Pole(node, is_infinite=True, direction=direction)
+                        )
 
     def _find_shared_chains(self):
+        """Return a flat list of chains that share at least one bar."""
         bar_to_chains = {}
         for chain in self._chains:
             for bar in chain.bars:
                 bar_to_chains.setdefault(bar, []).append(chain)
-        return [
-            chain for chains in bar_to_chains.values() if len(chains) > 1 for
-            chain in chains
+
+        shared = [
+            chain
+            for chains in bar_to_chains.values()
+            if len(chains) > 1
+            for chain in chains
         ]
+        self.logger.debug(
+            "Shared chains detection yielded %d entries", len(shared)
+        )
+        return shared
 
-    def _merge_chains(self, chains: list[Chain]):
-        # Prüfe, ob alle zu mergen-Ketten in self._chains vorhanden sind
-        missing_chains = [chain for chain in chains if
-                          chain not in self._chains]
-        if missing_chains:
-            raise ValueError(
-                f"Chain: {missing_chains} is not in self._chains.")
+    def _merge_chains(self, chains: List[Chain]):
+        """Merge the supplied chains into a single new chain."""
+        missing = [c for c in chains if c not in self._chains]
+        if missing:
+            msg = f"Chain(s) {missing} not present in self._chains"
+            self.logger.error(msg)
+            raise ValueError(msg)
 
-        # Finde den kleinsten Index der vorkommenden Chains
-        insertion_index = min(self._chains.index(chain) for chain in chains)
+        insertion_index = min(self._chains.index(c) for c in chains)
+        self.logger.debug(
+            "Merging %d chains at insertion index %d", len(chains),
+            insertion_index
+        )
 
-        # Sammle alle Bars aus den zu mergen-Ketten
-        bars = set(bar for chain in chains for bar in chain.bars)
+        combined_bars = {bar for chain in chains for bar in chain.bars}
+        self.logger.debug("Combined bar count: %d", len(combined_bars))
 
-        # Entferne die Ketten direkt aus self._chains
+        # Remove the old chains
         for chain in chains:
-            print('Index: ')
-            print(self._chains.index(chain))
-        for chain in chains:
+            self.logger.debug("Removing chain with %d bars", len(chain.bars))
             self._chains.remove(chain)
 
-        remaining_connection_nodes = set()
-        for chain in chains:
-            for node in chain.connection_nodes:
-                remaining_connection_nodes.add(node)
+        # Gather all distinct connection nodes
+        remaining_nodes = {node for chain in chains for node in
+                           chain.connection_nodes}
+        self.logger.debug("Remaining connection nodes count: %d",
+                          len(remaining_nodes))
 
-        # Neue Dreiecksscheibe erstellen
-        new_triangle_chain = Chain(bars)
-        new_triangle_chain.add_connection_node(remaining_connection_nodes)
+        # Build the new chain
+        new_chain = Chain(combined_bars)
+        new_chain.add_connection_node(remaining_nodes)
+        self.logger.info(
+            "Creating new chain with %d bars",
+            len(combined_bars)
+        )
 
         for chain in chains:
             if chain.absolute_pole:
-                new_triangle_chain.set_absolute_pole(chain.absolute_pole)
+                new_chain.set_absolute_pole(chain.absolute_pole)
 
-        for n in remaining_connection_nodes:
-            self._add_node_to_chain(new_triangle_chain, n)
+        for node in remaining_nodes:
+            self._add_node_to_chain(new_chain, node)
 
-        # Neue Chain an ursprünglicher Stelle einfügen
-        self._chains.insert(insertion_index, new_triangle_chain)
-
-        print_chains(self._chains, self.bars)
+        self._chains.insert(insertion_index, new_chain)
+        self.logger.info(
+            "Merged %d chains into a new chain (now %d total chains) \n"
+            "new chain:\n%s",
+            len(chains), len(self._chains), new_chain
+        )
 
     def __call__(self):
+        """Convenient entry point so the class can be called like a
+        function."""
+        self.logger.debug("ChainIdentifier called")
         return self.run()
 
 
