@@ -392,6 +392,7 @@ class Poleplan(LoggerMixin):
                 step = step_class(
                     results.get("chains"),
                     results.get("node_to_chains"),
+                    debug=self.debug
                 )
                 self.logger.debug(
                     f"Created {step_name} with previous results: "

@@ -32,11 +32,9 @@ def get_intersection_point(line1, line2):
     is_identical, is_parallel = _check_lines(m1, n1, m2, n2)
 
     if is_identical:
-        print(u' -> z0 = z1 identische Geraden!')
         return float('inf'), float('inf')
 
     elif is_parallel:
-        print(u' -> z0 und z1 sind parallele Geraden')
         return None, None
 
     # Handle vertical lines
@@ -147,22 +145,7 @@ def get_angle(point, center, displacement: float = 1):
         return displacement / length
 
 
-def print_chains(chains, bars):
-    for chain in chains:
-        i = chains.index(chain)
-        index = []
-        conn = []
-        for bar in chain.bars:
-            index.append(bars.index(bar))
-        for n in chain.connection_nodes:
-            conn.append((n.x, n.z))
-
-        print(f'Chain: {i}, bars: {index}, \n -> conn_nodes: {conn}, '
-              f'\n -> rPol: {chain.relative_pole}, '
-              f'\n -> mPol: {chain.absolute_pole}'
-              f'\n -> starr: {chain.stiff}')
-
-
+# help functions for logger messages
 def dict_key_value_to_string(dictionary, all_chains) -> str:
     lines = []
     for node, chains in dictionary.items():
@@ -241,7 +224,6 @@ class ChainIdentifier(LoggerMixin):
                 )
                 self._identify_chains_from_node(current_node)
                 self.logger.info(chains_to_str(self._chains))
-                # print_chains(self._chains, self.bars)
 
                 # Check for shared chains and merge if necessary
                 if shared_chains := self._find_shared_chains():
@@ -591,217 +573,264 @@ class ChainIdentifier(LoggerMixin):
     def __call__(self):
         """Convenient entry point so the class can be called like a
         function."""
-        self.logger.debug("ChainIdentifier called")
+        self.logger.debug("ChainIdentifier invoked via __call__")
         return self.run()
 
 
 @dataclass(eq=False)
-class PoleIdentifier:
+class PoleIdentifier(LoggerMixin):
+    """
+    Analyze kinematic chains and determine missing absolute poles.
+
+    Traverses all chains, identifies missing absolute poles, and infers
+    their positions from geometric or kinematic relationships between
+    adjacent chains.
+
+    Attributes
+    ----------
+    chains : List[Chain]
+        List of chain objects to be analyzed.
+    node_to_chains : Dict[Node, List[Chain]]
+        Mapping from each node to the chains connected to it.
+    debug : bool, optional
+        Enables verbose debugging if True (default: False).
+    """
+
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
+    debug: bool = False
 
     def run(self):
+        """
+        Iterate over all chains and resolve absolute poles.
+
+        Checks each chain for missing absolute pole information and infers
+        absolute poles by analyzing relationships between adjacent chains.
+        """
+        self.logger.info(
+            "Pole identification started – %d chains to process",
+            len(self.chains)
+        )
+
         for i, chain in enumerate(self.chains):
-            print('------------------------------')
-            print(f'///////// Scheibe {i} \\\\\\\\\\\\\\\\\\\\')
-            print('Ist Scheibe vollständig?')
+            self.logger.info("Processing chain %d", i)
+
             if chain.solved:
-                print(f'-> Scheibe {i} ist vollständig!')
-                print(' -> sind angrenzende Scheiben unverschieblich?')
-                break_outer_loop = False
-                for rPole in list(chain.relative_pole):
-                    if break_outer_loop:
-                        break
-                    connected_chain = (
-                        self.node_to_chains.get(rPole.node, []))
-                    if (len(connected_chain) > 1 and
-                            any(c.stiff for c in connected_chain
-                                if c != chain)):
-                        print(' -> Ja, es gibt Starre Scheiben')
-                        for conn_chain in connected_chain:
-                            if conn_chain != chain and conn_chain.stiff:
-                                self._set_aPole_connected_chain_is_stiff(
-                                    chain, conn_chain, rPole)
-                                break_outer_loop = True
-                                break
-                    else:
-                        print(' -> Nein, es gibt keine Starren Scheiben')
-                print('...Prüfung abgeschlossen!')
+                self.logger.info("Chain %d is already solved", i)
+                self._check_adjacent_stiff_chains(i, chain)
+                self.logger.debug("Verification for chain %d completed", i)
                 continue
 
-            print(f'-> Scheibe {i} ist unvollständig!')
+            self.logger.debug("Chain %d is incomplete", i)
+
             if not chain.solved_absolute_pole:
-                print('  -> Absolutpolangaben sind nicht vollständig.')
+                self.logger.debug(
+                    "Absolute pole data missing for chain %d", i
+                )
+
                 if chain.absolute_pole is None:
-                    print('   -> Lage des Absolutpol unbekannt')
-                    # Bildung von Absolut-Pollinien zweier angrenzenden
-                    #  Scheiben (a) & (b)
-                    # Im Schnittpunkt dieser Absolut-Pollinien liegt
-                    #  der Absolutpol (i)
-                    #   (a) - (a|i) -> (i)
-                    #   (b) - (i|b) -> (i)
+                    self.logger.info(
+                        "Absolute pole unknown – attempting inference from "
+                        "connected chains"
+                    )
                     self._find_absolute_pole(chain)
                 else:
-                    print('   -> Koordinaten des Absolutpol unbekannt.')
-                    print('    -> Absolutpol befindet sich auf bekannter '
-                          'Pollinie')
-                    # Scheibe wird durch ein bewegliches Lager gestützt:
-                    #   -> der Absolutpol liegt auf einer Geraden senkrecht zur
-                    #      möglichen Bewegungsrichtung des Lagers
-                    absolute_pole_line = chain.absolute_pole.line()
+                    self.logger.info(
+                        "Absolute pole exists but coordinates unknown"
+                    )
+                    abs_line = chain.absolute_pole.line()
+                    self._find_absolute_pole(chain, [abs_line])
 
-                    # Bildung von Absolut-Pollinien einer angrenzenden Scheibe
-                    # Im Schnittpunkt der beiden Geraden liegt der Absolutpol
-                    self._find_absolute_pole(chain,
-                                             [absolute_pole_line])
+    def _check_adjacent_stiff_chains(self, i: int, chain: Chain):
+        """
+        Check whether any adjacent chain connected to the given chain is stiff.
+        """
+        self.logger.debug("Checking adjacent stiff chains for chain %s", i)
+
+        for r_pole in list(chain.relative_pole):
+            connected = self.node_to_chains.get(r_pole.node, [])
+            if (len(connected) > 1 and
+                    any(c.stiff for c in connected if c != chain)):
+                self.logger.info(
+                    "Stiff adjacent chain detected for chain %s "
+                    "via node(%s, %s)",
+                    i, r_pole.node.x, r_pole.node.z
+                )
+                for adj in connected:
+                    if adj != chain and adj.stiff:
+                        self._set_aPole_connected_chain_is_stiff(
+                            chain, adj, r_pole)
+                        return
+            else:
+                self.logger.debug(
+                    "No stiff adjacent chains found at node (%s, %s)",
+                    r_pole.node.x, r_pole.node.z
+                )
 
     def _find_absolute_pole(self, chain: Chain, lines: list = None):
+        """
+        Infer the absolute pole of a chain by analyzing intersections of
+        absolute pole lines.
+        """
         i = self.chains.index(chain)
         if lines is None:
             lines = []
         else:
-            print(f'     -> g({i}): z(x) = {lines[0][0]} * x + {lines[0][1]}')
-        # Finden der angrenzenden Scheiben und deren Pol-Linien
-        print('Finden der angrenzenden Scheiben...')
+            self.logger.debug(
+                "Chain %s: Using existing line equation z(x) = %s * x + %s",
+                i, lines[0][0], lines[0][1]
+            )
+
+        self.logger.debug("Searching for adjacent chains for chain %s", i)
+
+        intersection = set()
         for rPole in chain.relative_pole:
             connected_chain = self.node_to_chains[rPole.node]
-            intersection = set()
-            print(f'Scheiben mit dem gleichen Verbindungsknoten '
-                  f'({rPole.node.x} | {rPole.node.z}):')
+            self.logger.debug(
+                "Node (%s | %s) connects %s chains",
+                rPole.node.x, rPole.node.z, len(connected_chain)
+            )
+
             for conn_chain in connected_chain:
-                if conn_chain != chain:
-                    j = self.chains.index(conn_chain)
-                    print('==================================================')
-                    print(f' -> angrenzende Scheibe: {j}')
-                    print(f'Ist Scheibe {j} eine starre Scheibe?')
-                    if conn_chain.stiff:
-                        self._set_aPole_connected_chain_is_stiff(
-                            chain, conn_chain, rPole)
-                        return True
-                    print(f' -> Scheibe {j} ist keine starre Scheibe.')
-                    print(f'Hat Scheibe {j} eine Absolutpollinie?')
-                    if conn_chain.solved_absolute_pole:
-                        line_dict = conn_chain.apole_lines
-                        if line_dict:
-                            print(f' -> Absolutpollinie: ({j}) - ({i}|{j}):'
-                                  f' z(x) = {line_dict[rPole.node][0]} * x '
-                                  f'+ {line_dict[rPole.node][1]}')
-                            lines.append(line_dict[rPole.node])
-                else:
+                if conn_chain == chain:
                     continue
 
-                print('gespeicherte Geraden:')
-                for nr, line in enumerate(lines):
-                    print(f'  z{nr}(x) = {line[0]} * x + {line[1]}')
+                j = self.chains.index(conn_chain)
+                self.logger.debug(
+                    "Evaluating adjacent chain %s for chain %s", j, i
+                )
+
+                if conn_chain.stiff:
+                    self.logger.info(
+                        "Adjacent chain %s is stiff – using for absolute pole "
+                        "identification", j
+                    )
+                    self._set_aPole_connected_chain_is_stiff(
+                        chain, conn_chain, rPole
+                    )
+                    return True
+
+                if conn_chain.solved_absolute_pole:
+                    line_dict = conn_chain.apole_lines
+                    if line_dict:
+                        line = line_dict[rPole.node]
+                        self.logger.debug(
+                            "Adding absolute pole line from chain %s: "
+                            "z(x) = %s * x + %s",
+                            j, line[0], line[1]
+                        )
+                        lines.append(line)
 
                 if len(lines) == 2:
-                    print('Haben die beiden Geraden eine Schnittpunkt?')
                     x, z = get_intersection_point(lines[0], lines[1])
-                    print(f' -> Schnittpunkt: ({x},{z})')
                     intersection.add((x, z))
-                    print(f'  -> Hinzufügen des Schnittpunktes zur '
-                          f'Schnittpunktsliste: {intersection}')
+                    self.logger.debug("Intersection found: (%s, %s)", x, z)
                     lines.pop()
-                    print('  -> letzte Gerade aus Geradenliste entfernen')
                 else:
-                    print(' -> aus einer Gerade kann kein Schnittpunkt '
-                          'gebildet werden!')
-            print('Wieviele Schnittpunkte liegen in der Schnittpunktliste?')
-            if len(intersection) == 1:
-                print(' -> ein schnittpunkt gefunden')
-                x, z = intersection.pop()
-                print(f'  -> Schnittpunkt ({x},{z}) als Absolutpol der Scheibe'
-                      f' {i} hinzufügen.')
-                if x is not None:
-                    print('   -> Koordinaten des Absolutpols sind bekannt.')
-                    if x == float('inf'):
-                        aPole = chain.absolute_pole
-                        x = aPole.node.x
-                        z = aPole.node.z
-                    chain.set_absolute_pole(
-                        Pole(Node(x=x, z=z), same_location=True),
-                        overwrite=True)
-                elif x is None:
-                    print('   -> Koordinaten des Absolutpols sind unbekannt.')
-                    direction = lines[0][0]
-                    if direction is None:
-                        # für vertikale Linien muss None in 90°
-                        #  umgewandelt werden!
-                        direction = np.pi / 2
-                    if chain.absolute_pole is None:
-                        # Wenn für den Absolutpol noch keine Informationen
-                        #  abgespeichert sind
-                        p = next(iter(chain.relative_pole))
-                        node = p.node
-                    else:
-                        # Wenn für den Absolutpol schon ein Knoten gespeichert
-                        #  wurde
-                        node = chain.absolute_pole.node
-                    chain.set_absolute_pole(
-                        Pole(node, is_infinite=True, direction=direction),
-                        overwrite=True)
-            elif len(intersection) > 1:
-                print(' -> mehrere Schnittpunkte gefunden!!! \n'
-                      '    -> Ein Absolutpol kann nur einen Koordinatenpunkt '
-                      'haben \n'
-                      '       -> Widerspruch im Polplan!')
-            elif len(intersection) == 0:
-                print(' -> keinen Schnittpunkt gefunden!')
+                    self.logger.debug(
+                        "Not enough lines to form an intersection "
+                        "(need 2, have %s)",
+                        len(lines)
+                    )
+
+        if len(intersection) == 1:
+            x, z = intersection.pop()
+            self.logger.info(
+                "Single intersection found for chain %s at (%s, %s)", i, x, z
+            )
+            if x is not None:
+                if x == float('inf'):
+                    aPole = chain.absolute_pole
+                    x, z = aPole.node.x, aPole.node.z
+                chain.set_absolute_pole(
+                    Pole(Node(x=x, z=z), same_location=True), overwrite=True
+                )
+            else:
+                direction = lines[0][0] or np.pi / 2
+                node = chain.absolute_pole.node if chain.absolute_pole \
+                    else next(iter(chain.relative_pole)).node
+                chain.set_absolute_pole(
+                    Pole(node, is_infinite=True, direction=direction),
+                    overwrite=True
+                )
+        elif len(intersection) > 1:
+            self.logger.warning(
+                "Multiple intersection points found for chain %s – "
+                "inconsistent pole geometry",
+                i
+            )
+        else:
+            self.logger.debug("No intersection found for chain %s", i)
 
     def _set_aPole_connected_chain_is_stiff(
-            self, chain: Chain, conn_chain: Chain, rPole: Pole):
+            self, chain: Chain, conn_chain: Chain, rPole: Pole
+    ):
+        """
+        Assign the absolute pole of a chain if a connected chain is stiff.
+        """
         j = self.chains.index(conn_chain)
         i = self.chains.index(chain)
         pole = None
-        print(f' -> Scheibe {j} ist eine starre Scheibe!')
-        aPole = chain.absolute_pole
-        print(f' -> Hat Scheibe {i} einen Absolutpol?')
-        print(f'    -> aPole: {aPole}')
+
+        self.logger.info(
+            "Connected chain %s is stiff – setting absolute pole for chain %s",
+            j, i
+        )
 
         for rPole_conn_chain in conn_chain.relative_pole:
-            print(f'  -> Ist der rPole ({i}|{j}) der Scheibe ({i}) '
-                  f'gleich der Scheibe ({j})?')
             if rPole_conn_chain.node == rPole.node:
-                if (not rPole_conn_chain.same_location
-                        and rPole.same_location):
-                    print(f'   -> Nein, rPole der Scheibe ({j}) '
-                          f'liegt im Unendlichen')
+                if not rPole_conn_chain.same_location and rPole.same_location:
+                    self.logger.debug(
+                        "Relative pole (%s|%s) of connected chain lies at "
+                        "infinity", i, j
+                    )
                     pole = rPole_conn_chain
                     break
-                elif (rPole_conn_chain.same_location
-                      and not rPole.same_location):
-                    print(f'   -> Nein, rPole der Scheibe ({i}) '
-                          'liegt im Unendlichen')
+                elif (rPole_conn_chain.same_location and
+                      not rPole.same_location):
+                    self.logger.debug(
+                        "Relative pole (%s|%s) of current chain lies at "
+                        "infinity", i, j
+                    )
                     pole = rPole
                     break
                 else:
-                    print('   -> Ja, sind identisch')
                     pole = rPole
 
         if pole.is_infinite:
             chain.set_absolute_pole(
                 Pole(pole.node, direction=pole.direction, is_infinite=True),
-                overwrite=False)
+                overwrite=False
+            )
         else:
-            print(f'  -> rPole ({i}|{j}) wird aPole ({i}) der Scheibe {i}')
             chain.set_absolute_pole(
-                Pole(pole.node, same_location=True),
-                overwrite=False)
-        print(f'   -> rPole ({i}|{j}) wird aus Scheibe ({i}) entfernt')
+                Pole(pole.node, same_location=True), overwrite=False
+            )
 
         chain.relative_pole.remove(rPole)
 
         if len(chain.relative_pole) == 0:
             chain.add_relative_pole(Pole(pole.node, same_location=True))
 
+        self.logger.debug(
+            "Relative pole (%s|%s) removed and absolute pole assigned for "
+            "chain %s",
+            i, j, i
+        )
+
     def __call__(self):
+        """
+        Run pole identification directly via callable instance syntax.
+        """
+        self.logger.debug("PoleIdentifier invoked via __call__()")
         return self.run()
 
 
 @dataclass(eq=False)
-class Validator:
+class Validator(LoggerMixin):
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
+    debug: bool = False
 
     _solved: Optional[bool] = field(init=False, default=False)
 
@@ -985,9 +1014,11 @@ class Validator:
 
 
 @dataclass(eq=False)
-class AngleCalculator:
+class AngleCalculator(LoggerMixin):
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
+
+    debug: bool = False
 
     def calculate_angles(self, target_chain: Chain, target_angle: float) -> \
             None:
@@ -1112,10 +1143,12 @@ class AngleCalculator:
 
 
 @dataclass(eq=False)
-class DisplacementCalculator:
+class DisplacementCalculator(LoggerMixin):
     chains: List[Chain]
     bars: List[Bar]
     node_to_chains: Dict[Node, List[Chain]]
+
+    debug: bool = False
 
     def run(self):
         displacement_bar_list: List[np.ndarray] = \
