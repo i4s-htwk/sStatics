@@ -504,7 +504,8 @@ class Poleplan(LoggerMixin):
         )
         try:
             fig = DisplacementCalculator(
-                self.chains, self.system.bars, self.node_to_multiple_chains
+                self.chains, self.system.bars, self.node_to_multiple_chains,
+                debug=self.debug
             )()
             self.logger.debug("Displacement figure created")
             return fig

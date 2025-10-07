@@ -1137,99 +1137,157 @@ class Validator(LoggerMixin):
 
 @dataclass(eq=False)
 class AngleCalculator(LoggerMixin):
+    """
+    Compute rotation angles for all chains such that a target chain attains a
+    prescribed angle.
+
+    Parameters
+    ----------
+    chains : List[Chain]
+        Ordered list of chain objects.
+    node_to_chains : Dict[Node, List[Chain]]
+        Mapping from each node to the chains that contain it.
+    debug : bool, optional
+        Enable verbose debugging output. Default is ``False``.
+    """
+
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
-
     debug: bool = False
 
-    def calculate_angles(self, target_chain: Chain, target_angle: float) -> \
-            None:
-        print('---------------------------')
-        print('Schritt 4: Winkelberechnung')
-        print('---------------------------')
-        print(f'Die Drehwinkel aller Scheiben sollen so bestimmt werden, '
-              f'dass die Scheibe {self.chains.index(target_chain)} den '
-              f'Winkel von {target_angle} hat.')
+    def calculate_angles(self, target_chain: Chain,
+                         target_angle: float) -> None:
+        """
+        Public entry point – orchestrates backward and forward angle
+        propagation.
 
-        angle, target_chain_index = (self._init_target_chain(
-            target_chain, target_angle
-        ))
+        Parameters
+        ----------
+        target_chain : Chain
+            Chain whose angle must become ``target_angle``.
+        target_angle : float
+            Desired angle for ``target_chain`` (in the same unit as the model).
+        """
+        self.logger.info("Angle calculation starts")
 
-        print('Berechnung des Winkels von Scheibe 0, so dass,')
-        print(f'Scheibe {target_chain_index} den Winkel {angle} hat.')
+        idx = self.chains.index(target_chain)
+        self.logger.info(
+            "Target chain %d should receive angle %.3f",
+            idx, target_angle,
+        )
 
-        if target_chain_index != 0:
-            self._backward_calc(target_chain_index, angle)
+        angle, target_idx = self._init_target_chain(target_chain,
+                                                    target_angle)
+
+        self.logger.info(
+            "Calculating angle for chain 0 so that chain %d obtains %.3f",
+            target_idx, angle,
+        )
+
+        if target_idx != 0:
+            self._backward_calc(target_idx, angle)
         else:
-            print(' -> Keine Rückwärtsberechnung nötig, da die ausgewählte '
-                  'Scheibe Scheibe 0 ist!')
+            self.logger.info(
+                "No backward propagation needed – target is chain 0"
+            )
+
         self._forward_calc()
+        self.logger.info("Angle calculation completed")
 
-        print('-----------------------')
-        print('Schritt 4 abgeschlossen')
-        print('-----------------------')
+    def _init_target_chain(self, target_chain: Chain,
+                           target_angle: float) -> Tuple[float, int]:
+        """
+        Prepare the target chain and sanity‑check chain ``0``.
 
-    def _init_target_chain(self, target_chain: Chain, target_angle: float):
-        # Behandlung der ersten Scheibe, falls sie nicht Ziel ist und nicht
-        # starr
-        target_chain_index = self.chains.index(target_chain)
+        Returns
+        -------
+        Tuple[float, int]
+            The (possibly modified) target angle and the index of the target
+            chain after any adjustments.
+        """
+        target_idx = self.chains.index(target_chain)
         chain_0 = self.chains[0]
+
+        # Ensure chain 0 has a valid factor if it is not the target.
         if chain_0 != target_chain and not chain_0.stiff:
             chain_0.angle_factor = 1
-            print('Set angle_factor=1 for chain 0')
+            self.logger.debug("Set angle_factor=1 for chain 0")
 
-        # Behandlung, falls target_chain starr ist
+        # If the requested chain is stiff, skip it and pick the next one.
         if target_chain.stiff:
-            print(f'Die Ausgewählte Scheibe mit dem Index:'
-                  f' {target_chain_index} ist starr!')
-            print(' -> Keinen Drehwinkel!')
-            target_chain_index += 1
-            print(f' -> neue Scheibe mit dem Index {target_chain_index}')
-            target_chain = self.chains[target_chain_index]
-            # TODO: Warum wir der Winkel hier auf -1 oder +1 gesetzt?
+            self.logger.warning(
+                "Chosen chain %d is stiff – it cannot receive a rotation",
+                target_idx,
+            )
+            target_idx += 1
+            target_chain = self.chains[target_idx]
+            # Heuristic: use -1 or +1 depending on pole behaviour.
             if not target_chain.absolute_pole.is_infinite:
                 target_angle = -1
             else:
                 target_angle = 1
+            self.logger.debug(
+                "Adjusted target to chain %d with angle %.3f",
+                target_idx, target_angle,
+            )
 
         target_chain.angle = target_angle
+        return target_angle, target_idx
 
-        return target_angle, target_chain_index
+    def _backward_calc(self, target_idx: int,
+                       initial_angle: float) -> None:
+        """
+        Propagate the angle from the target chain backwards to chain 0.
 
-    def _backward_calc(self, target_chain_index: int, initial_angle: float) \
-            -> None:
-        # TODO: das geht nur, wenn die Reihenfolge der Liste mit der der
-        #  Geometrie übereinstimmt ! Das muss vorher sichergestellt sein!
+        Parameters
+        ----------
+        target_idx : int
+            Index of the target chain in ``self.chains``.
+        initial_angle : float
+            Angle that the target chain must achieve.
+        """
         angle = initial_angle
-        for i in range(target_chain_index - 1, -1, -1):
+        for i in range(target_idx - 1, -1, -1):
             next_chain = self.chains[i + 1]
             factor = next_chain.angle_factor
-            print(f'Berechnung für Scheibe {i}: factor = {factor}')
+            self.logger.debug(
+                "Back‑propagation for chain %d – factor %.3f", i, factor
+            )
             if factor == 0:
-                print(f"Winkelberechnung für Kette {i + 1} abgebrochen: "
-                      f"angle_factor = 0")
+                self.logger.error(
+                    "Abort: angle_factor of chain %d is zero", i + 1
+                )
                 break
 
-            current_chain = self.chains[i]
-            if current_chain.angle_factor == 0:
-                print(f"Winkelberechnung für Kette {i} abgebrochen: "
-                      f"angle_factor = 0")
+            cur_chain = self.chains[i]
+            if cur_chain.angle_factor == 0:
+                self.logger.error(
+                    "Abort: angle_factor of chain %d is zero", i
+                )
                 break
 
             angle /= factor
-            current_chain.angle = angle
-            print(f"Berechneter Winkel für Scheibe {i}: {angle}")
+            cur_chain.angle = angle
+            self.logger.info(
+                "Calculated angle for chain %d: %.6f", i, angle
+            )
 
     def _forward_calc(self) -> None:
-        print('(((((((((((((())))))))))))))')
-        print('Berechnung aller Scheibenwinkel')
-
+        """
+        Propagate angles forward through the graph, respecting node
+        connectivity.
+        """
+        self.logger.debug("Forward propagation started")
         previous_chain = None
+
         for node, chains in self.node_to_chains.items():
-            print('=========================')
-            print(f'Knoten: {node.x}, {node.z}')
-            print(f'Überprüfte Scheiben: '
-                  f'{[self.chains.index(c) for c in chains]}')
+            self.logger.info("-" * 25)
+            self.logger.info(
+                "Node (x=%s, z=%s) – processing %d attached chains",
+                node.x, node.z, len(chains)
+            )
+            idx_list = [self.chains.index(c) for c in chains]
+            self.logger.debug("Chain indices at this node: %s", idx_list)
 
             pairs = self._get_chain_pairs(chains, previous_chain)
 
@@ -1237,119 +1295,293 @@ class AngleCalculator(LoggerMixin):
                 self._calc_c2_angle_from_c1(c1, c2)
                 previous_chain = c2
 
-    @staticmethod
-    def _get_chain_pairs(chains: List[Chain], previous_chain: Chain) -> (
-            List)[Tuple[Chain, Chain]]:
-        """Gets pairs of chains for angle calculation."""
-        if previous_chain and previous_chain in chains:
-            return [(previous_chain, c) for c in chains if c != previous_chain]
-        else:
-            return list(combinations(chains, 2))
+        self.logger.debug("Forward propagation finished")
 
-    def _calc_c2_angle_from_c1(self, c1: Chain, c2: Chain) -> bool:
+    @staticmethod
+    def _get_chain_pairs(chains: List[Chain],
+                         previous_chain: Chain) -> List[Tuple[Chain, Chain]]:
+        """
+        Determine which chain pairs should be processed for angle update.
+
+        Parameters
+        ----------
+        chains : List[Chain]
+            Chains attached to the current node.
+        previous_chain : Chain
+            Chain that was processed in the preceding node, if any.
+
+        Returns
+        -------
+        List[Tuple[Chain, Chain]]
+            Ordered list of chain pairs.
+        """
+        if previous_chain and previous_chain in chains:
+            return [
+                (previous_chain, c) for c in chains if c != previous_chain
+            ]
+        return list(combinations(chains, 2))
+
+    def _calc_c2_angle_from_c1(self, c1: Chain,
+                               c2: Chain) -> bool:
+        """
+        Compute ``c2``'s angle using ``c1``'s angle and ``c2``'s factor.
+
+        Returns ``False`` if either chain is stiff (no angle update).
+
+        Parameters
+        ----------
+        c1, c2 : Chain
+            Source and destination chains.
+
+        Returns
+        -------
+        bool
+            ``True`` if the calculation succeeded, ``False`` otherwise.
+        """
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
-        print(f' -> Kombo: {c1_idx} - {c2_idx}')
+        self.logger.debug("Processing pair (%d, %d)", c1_idx, c2_idx)
+
         if c1.stiff or c2.stiff:
-            print('stiff')
+            self.logger.warning(
+                "Skipping pair (%d, %d) – at least one chain is stiff",
+                c1_idx, c2_idx,
+            )
             return False
 
         angle = c1.angle * c2.angle_factor
         c2.angle = angle
-
-        print(f'   -> c{c2_idx}.angle = c{c1_idx}.angle *  '
-              f'c{c2_idx}.angle_factor')
-        print(f'   -> c{c2_idx}.angle = {c1.angle} * {c2.angle_factor}')
-        print(f'   -> c{c2_idx}.angle = {angle}')
+        self.logger.info(
+            "Chain %d angle set to %.6f (%.6f * %.6f)",
+            c2_idx, angle, c1.angle, c2.angle_factor,
+        )
         return True
+
+    def __call__(self, target_chain: Chain, target_angle: float) -> None:
+        """Allow the instance to be called directly."""
+        self.logger.debug(
+            "AngleCalculator invoked via __call__ for chain %d with angle "
+            "%.3f",
+            self.chains.index(target_chain), target_angle,
+        )
+        self.calculate_angles(target_chain, target_angle)
 
 
 @dataclass(eq=False)
 class DisplacementCalculator(LoggerMixin):
+    """
+    Compute bar displacement vectors for a given pole‑plan.
+
+    Parameters
+    ----------
+    chains : List[Chain]
+        List of chains that define the structural configuration.
+    bars : List[Bar]
+        List of all bars belonging to the model.
+    node_to_chains : Dict[Node, List[Chain]]
+        Mapping from each node to the chains that share it.
+    debug : bool, optional
+        Enable additional debug information. Default is ``False``.
+    """
+
     chains: List[Chain]
     bars: List[Bar]
     node_to_chains: Dict[Node, List[Chain]]
-
     debug: bool = False
 
-    def run(self):
-        displacement_bar_list: List[np.ndarray] = \
-            [np.zeros((6, 1)) for _ in self.bars]
-        bar_index_map = {bar: idx for idx, bar in enumerate(self.bars)}
+    def run(self) -> List[np.ndarray]:
+        """
+        Calculate the displacement vector for every bar.
+
+        Returns
+        -------
+        List[np.ndarray]
+            A list containing a 6x1 displacement vector for each bar.
+        """
+        self.logger.info("Displacement calculation started")
+
+        # Initialise an empty displacement vector for each bar.
+        disp_list: List[np.ndarray] = [
+            np.zeros((6, 1)) for _ in self.bars
+        ]
+        bar_index = {bar: i for i, bar in enumerate(self.bars)}
 
         for i, chain in enumerate(self.chains):
             if chain.stiff:
+                self.logger.debug("Skipping stiff chain %d", i)
                 continue
+
             if chain.absolute_pole.is_infinite:
-                displacement = self._calc_displacement_from_translation(chain)
-                for bar in chain.bars:
-                    idx = bar_index_map[bar]
-
-                    displacement_bar = displacement_bar_list[idx]
-                    displacement_bar[0:2, :] = displacement
-                    displacement_bar[3:5, :] = displacement
-
-                    displacement_bar = np.transpose(
-                        bar.transformation_matrix()) @ displacement_bar
-
-                    displacement_bar_list[idx] = displacement_bar
-
+                self._process_translation_chain(chain, disp_list, bar_index)
             else:
-                center = chain.absolute_pole.coords
-                angle = chain.angle
-                for bar in chain.bars:
-                    idx = bar_index_map[bar]
+                self._process_rotation_chain(chain, disp_list, bar_index)
 
-                    node_i = np.array([[bar.node_i.x], [bar.node_i.z]])
-                    node_j = np.array([[bar.node_j.x], [bar.node_j.z]])
+        self.logger.info("Displacement calculation finished")
+        return disp_list
 
-                    displacement_bar = displacement_bar_list[idx]
-                    displacement_bar[0:2, :] = (
-                        self._calc_displacement_from_rotation(
-                            node_i, center, angle))
-                    displacement_bar[3:5, :] = (
-                        self._calc_displacement_from_rotation(
-                            node_j, center, angle))
+    def _process_translation_chain(self, chain: Chain,
+                                   disp_list: List[np.ndarray],
+                                   bar_index: Dict[Bar, int]) -> None:
+        """
+        Handle chains whose absolute pole lies at infinity (pure translation).
 
-                    displacement_bar[2, :] = displacement_bar[5, :] = -angle
+        Parameters
+        ----------
+        chain : Chain
+            The chain to process.
+        disp_list : List[np.ndarray]
+            Global list of displacement vectors (modified in‑place).
+        bar_index : Dict[Bar, int]
+            Mapping from a bar to its index in ``disp_list``.
+        """
+        self.logger.debug(
+            "Processing translation chain %d (infinite pole)",
+            self.chains.index(chain),
+        )
+        displacement = self._calc_displacement_from_translation(chain)
 
-                    displacement_bar = np.transpose(
-                        bar.transformation_matrix()) @ displacement_bar
+        for bar in chain.bars:
+            idx = bar_index[bar]
+            disp = disp_list[idx]
 
-                    displacement_bar_list[idx] = displacement_bar
-        return displacement_bar_list
+            # Apply the same translation to both ends of the bar.
+            disp[0:2, :] = displacement
+            disp[3:5, :] = displacement
 
-    def _calc_displacement_from_translation(self, chain: Chain):
-        # bestimme die Richtung r basierend auf m
+            # Transform from global to local bar coordinates.
+            trans = np.transpose(bar.transformation_matrix()) @ disp
+            disp_list[idx] = trans
+
+            self.logger.debug(
+                "Bar %d displacement (translation) updated", idx
+            )
+
+    def _process_rotation_chain(self, chain: Chain,
+                                disp_list: List[np.ndarray],
+                                bar_index: Dict[Bar, int]) -> None:
+        """
+        Handle chains with a finite absolute pole (rotation about a centre).
+
+        Parameters
+        ----------
+        chain : Chain
+            The chain to process.
+        disp_list : List[np.ndarray]
+            Global list of displacement vectors (modified in‑place).
+        bar_index : Dict[Bar, int]
+            Mapping from a bar to its index in ``disp_list``.
+        """
+        self.logger.debug(
+            "Processing rotation chain %d (finite pole)",
+            self.chains.index(chain),
+        )
+        centre = chain.absolute_pole.coords
+        angle = chain.angle
+
+        for bar in chain.bars:
+            idx = bar_index[bar]
+            disp = disp_list[idx]
+
+            node_i = np.array([[bar.node_i.x], [bar.node_i.z]])
+            node_j = np.array([[bar.node_j.x], [bar.node_j.z]])
+
+            # Displacement of the start node.
+            disp[0:2, :] = self._calc_displacement_from_rotation(
+                node_i, centre, angle
+            )
+            # Displacement of the end node.
+            disp[3:5, :] = self._calc_displacement_from_rotation(
+                node_j, centre, angle
+            )
+            # Rotation component for both nodes.
+            disp[2, :] = disp[5, :] = -angle
+
+            # Transform to the bar's local system.
+            trans = np.transpose(bar.transformation_matrix()) @ disp
+            disp_list[idx] = trans
+
+            self.logger.debug(
+                "Bar %d displacement (rotation) updated", idx
+            )
+
+    def _calc_displacement_from_translation(self, chain: Chain) -> np.ndarray:
+        """
+        Compute the translation vector for a chain with an infinite pole.
+
+        The direction is derived from the pole line; the magnitude is based on
+        neighbouring non‑stiff chains.
+
+        Parameters
+        ----------
+        chain : Chain
+            The chain whose translation is required.
+
+        Returns
+        -------
+        np.ndarray
+            A 2x1 translation vector.
+        """
+        # Determine direction `r` based on the pole line slope `m`.
         m, _ = chain.absolute_pole.line()
         r = np.array([[1], [0]] if m is None else [[-m], [1]])
-        # Normiere den Vektor
+
+        # Normalise the direction vector.
         v_norm = r / np.linalg.norm(r)
-        # Iteriere über die relativen Pole der Scheibe
-        for rPole in chain.relative_pole:
-            # Iteriere über die verbundenen Scheiben
-            for conn_chain in self.node_to_chains[rPole.node]:
-                # Überprüft, ob es sich um eine verbundene Scheibe handelt
-                if (conn_chain != chain and not conn_chain.stiff):
-                    aPole_coords = np.array([
+
+        for r_pole in chain.relative_pole:
+            for conn_chain in self.node_to_chains[r_pole.node]:
+                if conn_chain != chain and not conn_chain.stiff:
+                    a_coords = np.array([
                         [conn_chain.absolute_pole.node.x],
-                        [conn_chain.absolute_pole.node.z]])
-                    rPole_coords = np.array([[rPole.node.x],
-                                             [rPole.node.z]])
-                    delta = aPole_coords - rPole_coords
-                    r = np.hypot(delta[0][0], delta[1][0])
+                        [conn_chain.absolute_pole.node.z],
+                    ])
+                    r_coords = np.array([[r_pole.node.x], [r_pole.node.z]])
+                    delta = a_coords - r_coords
+                    distance = np.hypot(delta[0][0], delta[1][0])
 
-                    if np.sign(chain.angle) == np.sign(conn_chain.angle):
-                        sign = 1
-                    else:
-                        sign = -1
+                    sign = 1 if np.sign(chain.angle) == np.sign(
+                        conn_chain.angle
+                    ) else -1
 
-                    return r * sign * conn_chain.angle * v_norm
+                    result = distance * sign * conn_chain.angle * v_norm
+                    self.logger.debug(
+                        "Translation vector calculated: %s", result.ravel()
+                    )
+                    return result
 
-    def _calc_displacement_from_rotation(self, point, center, angle):
-        delta = point - center
-        r = np.array([[0, -1], [1, 0]])
-        return angle * r @ delta
+        self.logger.warning(
+            "No neighbouring non‑stiff chain found for translation"
+        )
+        return np.zeros((2, 1))
 
-    def __call__(self):
+    @staticmethod
+    def _calc_displacement_from_rotation(point: np.ndarray,
+                                         centre: np.ndarray,
+                                         angle: float) -> np.ndarray:
+        """
+        Compute the displacement of a point caused by a rotation about
+        ``centre``.
+
+        Parameters
+        ----------
+        point : np.ndarray
+            Coordinates of the point (2x1).
+        centre : np.ndarray
+            Rotation centre (2x1).
+        angle : float
+            Rotation angle (radians).
+
+        Returns
+        -------
+        np.ndarray
+            A 2 × 1 displacement vector.
+        """
+        delta = point - centre
+        rot_mat = np.array([[0, -1], [1, 0]])  # 90° rotation matrix
+        result = angle * rot_mat @ delta
+        return result
+
+    def __call__(self) -> List[np.ndarray]:
+        """Allow the instance to be invoked like a function."""
+        self.logger.debug("DisplacementCalculator called via __call__")
         return self.run()
