@@ -828,6 +828,25 @@ class PoleIdentifier(LoggerMixin):
 
 @dataclass(eq=False)
 class Validator(LoggerMixin):
+    """
+    Validate geometric and stiffness relationships between chains.
+
+    Parameters
+    ----------
+    chains : List[Chain]
+        List of all chains in the model.
+    node_to_chains : Dict[Node, List[Chain]]
+        Mapping from each node to the chains that contain it.
+    debug : bool, optional
+        If ``True``, additional debug information is logged. Default is
+        ``False``.
+
+    Attributes
+    ----------
+    _solved : bool
+        Internal flag indicating the result of the last validation run.
+    """
+
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
     debug: bool = False
@@ -835,181 +854,284 @@ class Validator(LoggerMixin):
     _solved: Optional[bool] = field(init=False, default=False)
 
     @property
-    def solved(self):
+    def solved(self) -> bool:
+        """Return the result of the validation."""
         return self._solved
 
-    def run(self):
-        print('Validierung Start...')
+    def run(self) -> bool:
+        """
+        Execute the full validation routine.
+
+        Returns
+        -------
+        bool
+            ``True`` if all chain pairs are consistent, ``False`` otherwise.
+        """
+        self.logger.info("Validation started")
         previous_chain = None
+
         for node, chains in self.node_to_chains.items():
-            print('=========================')
-            print('Knoten: ', node.x, node.z)
-            print(f'Überprüfte Scheiben: '
-                  f'{[self.chains.index(c) for c in chains]}')
+            self.logger.info(
+                "Processing node at (x=%s, z=%s)", node.x, node.z
+            )
+            chain_indices = [self.chains.index(c) for c in chains]
+            self.logger.debug("Chains attached to node: %s", chain_indices)
 
             if previous_chain and previous_chain in chains:
-                pairs = [(previous_chain, c) for c in chains if
-                         c != previous_chain]
+                pairs = [
+                    (previous_chain, c) for c in chains if c != previous_chain
+                ]
+                self.logger.debug(
+                    "Using previous chain %s as first element in pairwise "
+                    "checks",
+                    self.chains.index(previous_chain),
+                )
             else:
-                pairs = combinations(chains, 2)
+                pairs = list(combinations(chains, 2))
+                self.logger.debug(
+                    "Generating %d pairwise combinations", len(pairs)
+                )
 
             for c1, c2 in pairs:
                 if not self._validate_chain_pair(c1, c2, node):
                     self._solved = False
+                    self.logger.error("Validation failed – aborting")
                     return False
-
                 previous_chain = c2
+
         self._solved = True
+        self.logger.info("Validation completed successfully")
         return True
 
-    def _validate_chain_pair(self, c1: Chain, c2: Chain, node: Node):
+    def _validate_chain_pair(self, c1: Chain, c2: Chain, node: Node) -> bool:
+        """
+        Validate a pair of chains that share a common node.
+
+        Parameters
+        ----------
+        c1, c2 : Chain
+            The two to be compared.
+        node : Node
+            The node shared by the two chains.
+
+        Returns
+        -------
+        bool
+            ``True`` if the pair is consistent, ``False`` otherwise.
+        """
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
-        print('°°°°°°°°°°°°°°°°°°°°°°°°°°°')
-        print(f'Kombo: {c1_idx} - {c2_idx}')
+
+        self.logger.debug("Validating chain pair (%d, %d)", c1_idx, c2_idx)
+
+        # Stiff‑chain handling
         if c1.stiff and not c2.stiff:
-            print(f'  -> c{c1_idx} ist eine starre Scheibe')
+            self.logger.info("Chain %d is stiff; adjusting chain %d",
+                             c1_idx, c2_idx)
             if c2.angle_factor == 0:
-                # c2.set_angle_factor(1)
                 c2.angle_factor = 1
-                print(f'  -> c{c2_idx}.set_angle_factor: 1')
+                self.logger.debug("Set angle_factor of chain %d to 1",
+                                  c2_idx)
             return True
 
         if c2.stiff and not c1.stiff:
-            print(f'  -> c{c2_idx} ist eine starre Scheibe')
+            self.logger.info("Chain %d is stiff; adjusting chain %d",
+                             c2_idx, c1_idx)
             if c1.angle_factor == 0:
-                # c1.set_angle_factor(1)
                 c1.angle_factor = 1
-                print(f'  -> c{c1_idx}.set_angle_factor: 1')
+                self.logger.debug("Set angle_factor of chain %d to 1",
+                                  c1_idx)
             return True
 
         if c1.stiff and c2.stiff:
-            print(f'  -> c{c1_idx} & c{c2_idx} sind starre Scheiben')
+            self.logger.info(
+                "Both chains %d and %d are stiff – no conflict",
+                c1_idx, c2_idx
+            )
             return True
 
-        rPole = self._get_rPole_from_chain(node, c1)
-
-        if not self._validation_lines(c1, c2, rPole):
-            print('WIDERSPRUCH!!!')
+        # General geometric validation
+        r_pole = self._get_rPole_from_chain(node, c1)
+        if not self._validation_lines(c1, c2, r_pole):
+            self.logger.warning(
+                "Geometric contradiction detected between chains %d and %d "
+                "at node (x=%s, z=%s)",
+                c1_idx,
+                c2_idx,
+                node.x,
+                node.z,
+            )
             return False
-        print(' -> Kein Konflikt')
-        self._calc_angle_relation(c1, c2, rPole)
+
+        self.logger.info(
+            "No contradiction for chain pair (%d, %d); computing angle "
+            "relation",
+            c1_idx,
+            c2_idx,
+        )
+        self._calc_angle_relation(c1, c2, r_pole)
         return True
 
-    def _validation_lines(self, c1: Chain, c2: Chain, rPole: Pole):
-        print('----------------------------')
-        print('# Pollinien werden überprüft')
+    def _validation_lines(self, c1: Chain, c2: Chain, r_pole: Pole) -> bool:
+        """
+        Compare the absolute‑pole lines of two chains at a given relative pole.
+
+        Parameters
+        ----------
+        c1, c2 : Chain
+            Chains whose lines are compared.
+        r_pole : Pole
+            The relative pole common to both chains.
+
+        Returns
+        -------
+        bool
+            ``True`` if the lines are compatible (identical or parallel),
+            ``False`` if they intersect (indicating a conflict).
+        """
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
 
-        line_1 = c1.apole_lines[rPole.node]
-        line_2 = c2.apole_lines[rPole.node]
+        line_1 = c1.apole_lines[r_pole.node]
+        line_2 = c2.apole_lines[r_pole.node]
 
-        print(f'  -> z{c1_idx} = {line_1[0]} * x + {line_1[1]}')
-        print(f'  -> z{c2_idx} = {line_2[0]} * x + {line_2[1]}')
+        self.logger.debug(
+            "Chain %d line: z = %s * x + %s", c1_idx, line_1[0], line_1[1]
+        )
+        self.logger.debug(
+            "Chain %d line: z = %s * x + %s", c2_idx, line_2[0], line_2[1]
+        )
 
         x, z = get_intersection_point(line_1, line_2)
 
-        if x == float('inf'):
-            print('   -> identisch')
+        if x == float("inf"):
+            self.logger.debug("Lines are identical – no conflict")
             return True
-        elif x is None:
-            print('   -> parallel')
+        if x is None:
+            self.logger.debug("Lines are parallel – no conflict")
             return True
-        else:
-            print('   -> Schnittpunkt')
-            return False
 
-    # Winkelbeziehung zwischen 2 Scheiben bestimmen
-    def _calc_angle_relation(self, c1: Chain, c2: Chain, rPole: Pole):
+        self.logger.debug(
+            "Lines intersect at (x=%s, z=%s) – potential conflict", x, z
+        )
+        return False
+
+    def _calc_angle_relation(self, c1: Chain, c2: Chain, r_pole: Pole) -> None:
+        """
+        Determine and set the angle factor of ``c2`` relative to ``c1``.
+
+        The computation depends on whether any absolute pole lies at infinity
+        and on the displacement vectors of the chains to the relative pole.
+
+        Parameters
+        ----------
+        c1, c2 : Chain
+            Chain ``c1`` is the reference, ``c2`` receives the computed factor.
+        r_pole : Pole
+            The relative pole common to both chains.
+        """
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
-        print('----------------------------')
-        print('# Winkelbeziehung aufstellen')
-        print(f'     -> c{c2_idx}.angle = '
-              f'c{c2_idx}.angle_factor * c{c1_idx}.angle')
-        c1_distance = c1.displacement_to_rpoles
-        c2_distance = c2.displacement_to_rpoles
 
-        if c1_distance is None or c2_distance is None:
-            print('    -> Ein Absolutpol liegt im Unendlichen \n'
-                  '     --> Translation')
-            if c1_distance is None:
-                print(f'    -> aPol : ({c1_idx}) ist im Unendlichen')
-                if c1.angle_factor == 0 or c1.angle_factor == 1:
-                    print(f'    -> c{c1_idx}.angle_factor ist 0')
-                    print(f'     -> c{c1_idx}.angle_factor wird auf 1 gesetzt')
-                    # c1.set_angle_factor(1)
+        self.logger.debug(
+            "Calculating angle relation: c%d = factor * c%d", c2_idx, c1_idx
+        )
+
+        c1_dist = c1.displacement_to_rpoles
+        c2_dist = c2.displacement_to_rpoles
+
+        # Cases where at least one displacement is undefined (infinite pole)
+        if c1_dist is None or c2_dist is None:
+            self.logger.info("At least one chain has an infinite absolute "
+                             "pole")
+            if c1_dist is None:
+                self.logger.debug("Chain %d has infinite absolute pole",
+                                  c1_idx)
+                if c1.angle_factor in (0, 1):
                     c1.angle_factor = 1
-                    # l1 = rPole.coords
-                    a = np.array([[c1.absolute_pole.node.x],
-                                  [c1.absolute_pole.node.z]])
-                    l1 = rPole.coords - a
-
-                    r21 = c2_distance[rPole]
-
-                    # Längenverhältnis bestimmen und Richtung ermitteln
-                    factor = (np.linalg.norm(l1) / np.linalg.norm(
-                        r21)) * np.sign(np.dot(l1.T, r21)).item()
-
-                    # Winkel-Faktor für c2 setzen
-                    # c2.set_angle_factor(factor)
-                    c2.angle_factor = factor
-                    print(f'c{c2_idx}.angle_factor = '
-                          f'l{c1_idx} / r{c2_idx}{c1_idx}')
-                    print(f'c{c2_idx}.angle_factor = '
-                          f'(({c1_idx}) - ({c1_idx}|{c2_idx})) / (({c2_idx})'
-                          f' - ({c1_idx}|{c2_idx}))')
-                    print(f'c{c2_idx}.angle_factor = {factor}')
-                else:
-                    if c2.angle_factor == 0:
-                        print(f'    -> c{c2_idx}.angle_factor ist 0')
-                        print(f'     -> c{c2_idx}.angle_factor wird auf -1 '
-                              f'gesetzt')
-                        # c2.set_angle_factor(1)
-                        c2.angle_factor = 1
-            if c2_distance is None:
-                print(f'    -> aPol : ({c2_idx}) ist im Unendlichen')
+                    self.logger.debug(
+                        "Set angle_factor of chain %d to 1 (fallback)",
+                        c1_idx
+                    )
+                a = np.array([[c1.absolute_pole.node.x],
+                              [c1.absolute_pole.node.z]])
+                l1 = r_pole.coords - a
+                r21 = c2_dist[r_pole]
+                factor = (
+                                 np.linalg.norm(l1) / np.linalg.norm(r21)
+                         ) * np.sign(np.dot(l1.T, r21)).item()
+                c2.angle_factor = factor
+                self.logger.info(
+                    "Set angle_factor of chain %d to %s "
+                    "(derived from geometry)",
+                    c2_idx,
+                    factor,
+                )
+            if c2_dist is None:
+                self.logger.debug("Chain %d has infinite absolute pole",
+                                  c2_idx
+                                  )
                 if c2.angle_factor == 0:
-                    print(f'    -> c{c2_idx}.angle_factor ist 0')
-                    print(f'     -> c{c2_idx}.angle_factor wird auf 1 gesetzt')
-                    # c2.set_angle_factor(1)
                     c2.angle_factor = 1
+                    self.logger.debug(
+                        "Set angle_factor of chain %d to 1 (fallback)",
+                        c2_idx
+                    )
+            return
 
-        elif rPole.is_infinite:
-            # Wenn rPole = Querkraft- oder Normalkraftgelenk
-            print('    -> rPole liegt im Unendlichen \n'
-                  '     --> Translation')
+        # rPole itself is at infinity – treat as translation
+        if r_pole.is_infinite:
+            self.logger.info("Relative pole is infinite – "
+                             "treating as translation")
             if c2.angle_factor == 0:
-                print(f'    -> c{c2_idx}.angle_factor ist 0')
-                print(f'     -> c{c2_idx}.angle_factor wird auf 1 gesetzt')
-                # c2.set_angle_factor(1)
                 c2.angle_factor = 1
-        else:
-            l1 = c1_distance[rPole]
-            r21 = c2_distance[rPole]
+                self.logger.debug(
+                    "Set angle_factor of chain %d to 1 (infinite rPole)",
+                    c2_idx
+                )
+            return
 
-            # Längenverhältnis bestimmen und Richtung ermitteln
-            factor = (np.linalg.norm(l1) / np.linalg.norm(
-                r21)) * np.sign(np.dot(l1.T, r21)).item()
-
-            # Winkel-Faktor für c2 setzen
-            # c2.set_angle_factor(factor)
-            c2.angle_factor = factor
-            print(f'c{c2_idx}.angle_factor = '
-                  f'l{c1_idx} / r{c2_idx}{c1_idx}')
-            print(f'c{c2_idx}.angle_factor = (({c1_idx}) - '
-                  f'({c1_idx}|{c2_idx})) / (({c2_idx}) - ({c1_idx}|{c2_idx}))')
-            print(f'c{c2_idx}.angle_factor = {factor}')
+        # Normal case: both chains have finite displacements
+        l1 = c1_dist[r_pole]
+        r21 = c2_dist[r_pole]
+        factor = (
+                         np.linalg.norm(l1) / np.linalg.norm(r21)
+                 ) * np.sign(np.dot(l1.T, r21)).item()
+        c2.angle_factor = factor
+        self.logger.info(
+            "Computed angle_factor for chain %d: %s "
+            "(ratio of displacement vectors)",
+            c2_idx,
+            factor,
+        )
 
     @staticmethod
-    def _get_rPole_from_chain(node: Node, chain: Chain):
-        for rPole in chain.relative_pole:
-            if rPole.node == node:
-                return rPole
+    def _get_rPole_from_chain(node: Node, chain: Chain) -> Optional[Pole]:
+        """
+        Retrieve the relative pole belonging to ``node`` from ``chain``.
+
+        Parameters
+        ----------
+        node : Node
+            The node for which the relative pole is searched.
+        chain : Chain
+            The chain that should contain the relative pole.
+
+        Returns
+        -------
+        Pole or None
+            The matching relative pole, or ``None`` if not found.
+        """
+        for r_pole in chain.relative_pole:
+            if r_pole.node == node:
+                return r_pole
         return None
 
-    def __call__(self):
+    def __call__(self) -> bool:
+        """
+        Run Validation directly via callable instance syntax.
+        """
+        self.logger.debug("Validator invoked via __call__")
         return self.run()
 
 
