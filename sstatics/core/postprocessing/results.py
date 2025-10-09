@@ -4,6 +4,7 @@ from functools import cached_property
 from typing import Literal
 
 import numpy as np
+import warnings
 
 from sstatics.core.preprocessing.system import System
 from sstatics.core.preprocessing.bar import Bar
@@ -230,20 +231,71 @@ class SystemResult:
 
     @cached_property
     def normal_stress_disc(self):
+        """
+        Combining all normal stress arrays of each bar in a list.
+        For every bar in `self.bars` this property returns the normal stresses
+        from `bar.normal_stress_disc` as a list of 1D numpy arrays.
+
+        Returns
+        -------
+        list of numpy.ndarray
+        List length equals number of bars; each element is a (n) array
+        containing the normal stresses for that bar,
+        where n is n_disc + 1.
+        """
         return [bar.normal_stress_disc for bar in self.bars]
 
     @cached_property
     def shear_stress_disc(self):
+        """
+        Combining all shear stress arrays of each bar in a list.
+        For every bar in `self.bars` this property returns the shear stresses
+        from `bar.shear_stress_disc` and returns them as a list of
+        1D numpy arrays.
+
+        Returns
+        -------
+        list of numpy.ndarray
+        List length equals number of bars; each element is a (n) array
+        containing the shear stresses for that bar,
+        where n is n_disc + 1.
+        """
         return [bar.shear_stress_disc for bar in self.bars]
 
     @cached_property
     def bending_stress_top_disc(self):
+        """
+        Combining all top bending stress arrays of each bar in a list.
+        For every bar in `self.bars` this property extracts the top bending
+        stresses from `bar.bending_stress_disc` (column 0) and returns them as
+        a list of 1D numpy arrays.
+
+        Returns
+        -------
+        list of numpy.ndarray
+        List length equals number of bars; each element is a (n) array
+        containing the top bending stresses for that bar,
+        where n is n_disc + 1.
+        """
         return [bs[:, 0] for bs in
                 (bar.bending_stress_disc for bar in self.bars)
                 ]
 
     @cached_property
     def bending_stress_bottom_disc(self):
+        r"""
+        Combining all bottom bending stress arrays of each bar in a list.
+        For every bar in `self.bars` this property extracts the bottom bending
+        stresses from `bar.bending_stress_disc` (column 1) and returns them as
+        a list of 1D numpy arrays.
+
+        Returns
+        -------
+        list of numpy.ndarray
+        List length equals number of bars; each element is a (n) array
+        containing the bottom bending stresses for that bar,
+        where n is n_disc + 1.
+        """
         return [bs[:, 1] for bs in
                 (bar.bending_stress_disc for bar in self.bars)
                 ]
@@ -628,52 +680,43 @@ class BarResult:
         coef = [self.x_coef[:, 1], self.z_coef[:, 1], self.z_coef[:, 2]]
         return np.vstack([self._eval_poly(c) for c in coef]).T
 
-    ###########################################################################
-    # BACHELORARBEIT Anton - Spannungsberechnung #
-
-    # TODO Kommentar anpassen
     @cached_property
     def normal_stress_disc(self):
         r"""
-        Calculates the normal stress at both ends of the bar element.
-
-        The normal stress is calculated using the formula:
-        σ = N / A,
-        where N is the normal force and A is the cross-sectional area.
+        Compute normal stress at the discretized disc points along the bar
+        using the equation:
+            sigma = N / A
+        where `N` is the normal force at the discretized points and `A` is
+        the cross-sectional area.
 
         Returns
         -------
-        tuple of numpy.ndarray
-            A tuple containing two arrays:
-            - stress_normal_i : ndarray
-                Normal stress at node i (start of the bar).
-            - stress_normal_j : ndarray
-                Normal stress at node j (end of the bar).
-
-        Notes
-        -----
-        The normal forces are extracted from the force vector:
-        - N_i = -forces[:, 0]
-        - N_j =  forces[:, 3]
-
-        The cross-sectional area is accessed via:
-        self.bar.cross_section.area
-
-        Examples
-        --------
-        >>> bar_result = BarResult(bar, deform, forces)
-        >>> sigma_i, sigma_j = bar_result._normal_stress()
-        >>> print(sigma_i)
-        >>> print(sigma_j)
+        numpy.ndarray
+        (n x 1) array containing the normal stress values at each
+        discretized point. Where n is n_disc + 1
         """
         N = self.forces_disc[:, 0]
         A = self.bar.cross_section.area
         return N / A
 
-    # TODO Kommentar anpassen
     @cached_property
     def bending_stress_disc(self):
-        """
+        r"""
+        Compute bending stress at the discretized disc points along the bar
+        using the equation:
+            sigma = M * y / I_y
+        where `M` is the bending moment at the discretized points, `y` is the
+        distance from the neutral axis to the top or bottom, and `I_y` is the
+        second moment of area about the y-axis.
+
+        Returns
+        -------
+        numpy.ndarray
+        (n x 2) array containing bending stress values at each discretized
+        point.
+        Column 0 contains the stress at the top,
+        Column 1 contains the stress at the bottom.
+        n is n_disc + 1
         """
         M = self.forces_disc[:, 2]
         I_y = self.bar.cross_section.mom_of_int
@@ -687,73 +730,74 @@ class BarResult:
         bottom = M / I_y * z_b
         return np.stack((top, bottom), axis=1)
 
-    # TODO Kommentar anpassen
     @cached_property
     def shear_stress_disc(self):
-        """
-        returns max shear stress at the disc points
+        r"""
+        Compute the maximum of the shear stress at the discretized disc points
+        along the bar using the equation:
+            tau = V * S_y / (I_y * w)
+        where `V` is the shear force at the discretized points, `S_y` is the
+        static moment for one half of the rectangle given by:
+            S_y = (w * h**2) / 8
+        ,`I_y` is the second moment of area about the y-axis, `w` is the
+        cross-section width and `h` the cross-section height.
+
+        Returns
+        -------
+        numpy.ndarray
+        (n x 1) array containing shear stress values at each discretized point.
+        Where n is n_disc + 1. For non-rectangular cross-sections a zero array
+        of the same shape is returned and a warning is emitted.
         """
         h = self.bar.cross_section.height
         w = self.bar.cross_section.width
-        V = self.forces_disc[:, 1]
+        V_z = self.forces_disc[:, 1]
         I_y = self.bar.cross_section.mom_of_int
         S_y = (w * h ** 2) / 8  # Static Moment for one half of a rectangle
-        w = self.bar.cross_section.width
-        return (V * S_y) / (I_y * w)
+
+        if self.bar.cross_section.rectangle_check:
+            return (V_z * S_y) / (I_y * w)
+        else:
+            warnings.warn("Shear stress calculation is not implemented for "
+                          "non-rectangular cross-sections")
+            return V_z * 0
 
 # ------------------------------------
-    # TODO Kommentar anpassen
     @property
     def normal_stress_barend(self):
-        # returns the normal stress values at i j and top bottom of cs
+        r"""
+        Compute normal stress at the bar ends (i and j) for top and bottom.
+        Returns the normal stress evaluated at the first and last discretized
+        points along the bar and arranges them into a (2 x 2) array.
+
+        Returns
+        -------
+        numpy.ndarray
+        (2 x 2) array containing normal stress at the bar ends.
+        Row 0 contains the top stresses at i and j,
+        Row 1 contains the bottom stresses at i and j.
+        """
         normal_stress_i = self.normal_stress_disc[0]
         normal_stress_j = self.normal_stress_disc[-1]
 
         return np.array([
-            [np.float64(normal_stress_i), np.float64(normal_stress_i)],
-            [np.float64(normal_stress_j), np.float64(normal_stress_j)]
+            [np.float64(normal_stress_i), np.float64(normal_stress_j)],
+            [np.float64(normal_stress_i), np.float64(normal_stress_j)]
         ])
 
-    # TODO Kommentar anpassen
     @property
     def bending_stress_barend(self):
         r"""
-        Calculates the bending stress at the top and bottom edges of the
-        cross-section at both ends of the bar element.
-
-        The bending stress is computed using the formula:
-        σ = M / I * z,
-        where M is the bending moment, I is the moment of inertia, z is the
-        vertical distance between the center of mass and the point to be
-        calculated.
+        Compute bending stress at the bar ends (i and j) for top and bottom.
+        Returns the bending stress evaluated at the first and last discretized
+        points along the bar and arranges them into a (2 x 2) array.
 
         Returns
         -------
-        tuple of numpy.ndarray
-            A tuple containing four arrays:
-            - stress_bending_i_t : ndarray
-                Bending stress at the top edge at the start of the bar.
-            - stress_bending_i_b : ndarray
-                Bending stress at the bottom edge at the start of the bar.
-            - stress_bending_j_t : ndarray
-                Bending stress at the top edge at the end of the bar.
-            - stress_bending_j_b : ndarray
-                Bending stress at the bottom edge at the end of the bar.
-
-        Notes
-        -----
-        The vertical distances z_t and z_b are calculated from the
-        cross-section geometry:
-        - z_t = height - center_of_mass_z
-        - z_b = center_of_mass_z
-
-        The bending moments are extracted from the force vector:
-        - M_i = -forces[:, 2]
-        - M_j =  forces[:, 5]
-
-        Examples
-        --------
-
+        numpy.ndarray
+        (2 x 2) array containing bending stress at the bar ends.
+        Row 0 contains the top stresses at i and j,
+        Row 1 contains the bottom stresses at i and j.
         """
 
         bending_stress_i_t = self.bending_stress_disc[0, 0]
@@ -766,56 +810,52 @@ class BarResult:
             [bending_stress_i_b, bending_stress_j_b]
         ])
 
-    # TODO Kommentar anpassen
     @property
     def _shear_stress_barend(self):
         r"""
-        Calculates the maximum of the shear stress at both ends of the bar
-        element.
-        Works ONLY for Cross-sections with mechanics_given or cross-sections
-        with geometry_given with a rectangular shape
-
-        The shear stress is calculated using the formula:
-        τ = (V * Sy) / (Iy * b),
-        where V is the shear force,
-        Sy is the first moment of area (static moment) about the y-axis,
-        Iy is the second moment of area (moment of inertia) about the y-Axis,
-        b is the width of the cross section at the point of interest
-
+        Compute maximum of the shear stress at the bar ends (i and j).
+        Returns the max shear stress evaluated at the first and last
+        discretized points along the bar and arranges them into a (1 x 2)
+        array.
 
         Returns
         -------
-        tuple of numpy.ndarray
-            A tuple containing two arrays:
-            - stress_normal_i : ndarray
-                Normal stress at node i (start of the bar).
-            - stress_normal_j : ndarray
-                Normal stress at node j (end of the bar).
-
-        Notes
-        -----
-        The normal forces are extracted from the force vector:
-        - N_i = -forces[:, 0]
-        - N_j =  forces[:, 3]
-
-        The cross-sectional area is accessed via:
-        self.bar.cross_section.area
-
-        Examples
-        --------
-
+        numpy.ndarray
+        (1 x 2) array containing max shear stress at the bar ends.
         """
 
         shear_stress_max_i = self.shear_stress_disc[0]
         shear_stress_max_j = self.shear_stress_disc[-1]
-
         return np.hstack((shear_stress_max_i, shear_stress_max_j))
 
-    # TODO Kommentar anpassen
     def shear_stress_barend_height_disc(self, disc):
-        '''
-        shear stress on discretiziced points on the cross-section
-        '''
+        r"""
+        Compute shear stress distribution along the cross-section height at
+        the bar ends.
+        Using a parabolic distribution scaled by the maximum shear.
+        The height discretization is obtained from
+        `self.bar.cross_section.height_disc(disc=disc)`.
+        For each height coordinate z the shear stress is computed as:
+            tau(z) = - (4 * tau_max) / h**2 * z**2 + (4 * tau_max) / h * z
+        where `tau_max` is the max shear stress at the respective bar end
+        (i or j) and `h` is the cross-section height.
+
+        Parameters
+        ----------
+        disc : float
+            Number of discretization points used by `height_disc`
+            Is defined when the class CrossSectionStressGraphic is called
+
+        Returns
+        -------
+        numpy.ndarray
+        (n x 2) array containing shear stress values at each discretized
+        height.
+        Column 0 contains the shear stress distribution for end i,
+        Column 1 contains the shear stress distribution for end j.
+        Where n is the number of points returned by
+        `self.bar.cross_section.height_disc`.
+        """
         h = self.bar.cross_section.height
         cs_height_disc = self.bar.cross_section.height_disc(disc=disc)
         i_max = self._shear_stress_barend[0]

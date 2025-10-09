@@ -46,15 +46,21 @@ class CrossSectionStressGraphic(SingleGraphicObject):
         if side not in ['left', 'right']:
             raise ValueError('side must be "left" or "right"')
 
+        if not (0.0 <= position <= 1.0):
+            raise ValueError('position must be between 0.0 and 1.0')
+        self.position = position
+
         self.system = system_result.system
         mesh_segments = self.system.mesh_segments_of(bar)
 
         # calculates point of interest
         point = (
-            round((bar.node_j.x - bar.node_i.x) * position + bar.node_i.x, 12),
-            round((bar.node_j.z - bar.node_i.z) * position + bar.node_i.z, 12)
+            round((bar.node_j.x - bar.node_i.x) * self.position +
+                  bar.node_i.x, 12),
+            round((bar.node_j.z - bar.node_i.z) * self.position +
+                  bar.node_i.z, 12)
         )
-        print('Gewünschter Point: ', point)
+        print('Point of interest: ', point)
 
         self.bar_of_interest = None
         self.barend_of_interest = None
@@ -63,15 +69,15 @@ class CrossSectionStressGraphic(SingleGraphicObject):
         # distincts if the bar is defined from left to right or right to left
         if bar.node_i.x < bar.node_j.x:
             # bar is defined from left to right
-            for i, seg in enumerate(mesh_segments):
+            for i, seg in enumerate(mesh_segments, start=1):
                 if side == 'left':
                     # check bar only at node j
                     if (
                         round(seg.node_j.x, 12),
                         round(seg.node_j.z, 12)
                     ) == point:
-                        print('Endpunkt (j) von Teilstab ', i,
-                              ' entspricht gesuchtem Punkt')
+                        print('The end point (j) of bar ', i,
+                              ' equals the point of interest.')
                         self.bar_of_interest = seg
                         self.barend_of_interest = 'j'
                         break
@@ -81,22 +87,22 @@ class CrossSectionStressGraphic(SingleGraphicObject):
                         round(seg.node_i.x, 12),
                         round(seg.node_i.z, 12)
                     ) == point:
-                        print('Anfangspunkt (i) von Teilstab ', i,
-                              ' entspricht gesuchtem Punkt')
+                        print('The beginning point (i) of bar ', i,
+                              ' equals the point of interest.')
                         self.bar_of_interest = seg
                         self.barend_of_interest = 'i'
                         break
         else:
             # bar is defined from right to left
-            for i, seg in enumerate(mesh_segments):
+            for i, seg in enumerate(mesh_segments, start=1):
                 if side == 'left':
                     # check bar only at node i
                     if (
                         round(seg.node_i.x, 12),
                         round(seg.node_i.z, 12)
                     ) == point:
-                        print('Anfangspunkt (i) von Teilstab ', i,
-                              ' entspricht gesuchtem Punkt')
+                        print('The beginning point (i) of bar ', i,
+                              ' equals the point of interest.')
                         self.bar_of_interest = seg
                         self.barend_of_interest = 'i'
                         break
@@ -106,8 +112,8 @@ class CrossSectionStressGraphic(SingleGraphicObject):
                         round(seg.node_j.x, 12),
                         round(seg.node_j.z, 12)
                     ) == point:
-                        print('Endpunkt (j) von Teilstab ', i,
-                              ' entspricht gesuchtem Punkt')
+                        print('The end point (j) of bar ', i,
+                              ' equals the point of interest.')
                         self.bar_of_interest = seg
                         self.barend_of_interest = 'j'
                         break
@@ -115,16 +121,15 @@ class CrossSectionStressGraphic(SingleGraphicObject):
         if self.bar_of_interest is None:
             # checks if the break was part of one of the segments
             raise ValueError(
-                'An der gewünschten Position liegen keine Ergebnisse vor. '
-                'Gib eine andere Position an, oder generiere ein passendes '
-                'mesh.')
+                'No results found at the requested location for the given bar.'
+                ' Enter a different location or generate a suitable mesh.'
+            )
 
         # cross-section at the point of interest
         self.cross_section = self.bar_of_interest.cross_section
 
         # index of the bar of interest
         index = self.system.mesh.index(self.bar_of_interest)
-        print(index)
 
         # system_results at the point of interest
         bar_result = system_result.bars[index]
@@ -344,15 +349,35 @@ class StressGraphic(SingleGraphicObject):
             )
         else:
             # 'shear'
-            return (
-                (y[0], z[0], self._annotation_text[0]),
-                (y[1], z[1], self._annotation_text[1]),
-                (y[2], z[2], self._annotation_text[2]),
-                (y[3], z[3], self._annotation_text[3]),
-            )
+            if self.cross_section.rectangle_check:
+                return (
+                    (y[0], z[0], self._annotation_text[0]),
+                    (y[1], z[1], self._annotation_text[1]),
+                    (y[2], z[2], self._annotation_text[2]),
+                    (y[3], z[3], self._annotation_text[3]),
+                )
+            else:
+                return (
+                    (y[0], z[0], self._annotation_text[0]),
+                    (y[1], z[1], ''),
+                    (y[2], z[2], ''),
+                    (y[3], z[3], ''),
+                )
 
     @property
     def create_points(self):
+        r"""
+        Create points of the stress distribution for plotting.
+        Includes the 'base_scale' to scale the distribution.
+
+        Returns
+        -------
+        list of tuple
+        List of (z, y) points describing the stress distribution.
+        For linear distributions the list has 5 points.
+        For shear the list length is the number of height discretization points
+        plus one.
+        """
         # Return the points to create the stress distribution
         # Includes 'base_scale' to scale the distribution to the size of the cs
         if self.kind in ('normal', 'bending'):

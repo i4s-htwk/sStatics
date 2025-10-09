@@ -434,15 +434,7 @@ class CrossSection:
     def y_min(self):
         r"""
         Calculates the smallest y-value of the cross-section.
-
-        Returns
-        -------
-
-        Notes
-        -----
-
         """
-
         if self.geometry_given:
             y_coords = []
             for shape in self.geometry:
@@ -450,11 +442,96 @@ class CrossSection:
                     shape = shape.convert_to_polygon()
                 y_coords.extend(shape.y)
             return min(y_coords)
-
         else:
             return (0)
 
     def height_disc(self, disc):
+        r"""
+        Discetize the height of the cross-section.
+        Creates evenly spaced height coordinates across the cross-section
+        height.
+
+        Parameters
+        ----------
+        disc : int
+            Number of subdivisions along the cross-section height.
+
+        Returns
+        -------
+        numpy.ndarray
+        ( n ) array with linearly spaced heights from 0 to the cross-section
+        height `self.height`, inclusive.
+        Where n is n_disc + 1.
+        """
         n_disc = disc
         h = self.height
         return np.linspace(0, h, n_disc + 1)
+
+    @property
+    def rectangle_check(self):
+        '''
+        Checks if the given cross-section is rectangular with edges parallel
+        to the coordinate axes.
+
+        Returns True if:
+            - the cross-section is defined by mechanical properties (always
+            rectangular),
+        or if:
+            - it consists of exactly one Polygon,
+            - the Polygon has exactly 4 distinct corner points (excluding the
+            closing point),
+            - the corner points form a rectangle in correct edge order
+            (condition A or B).
+        Returns False otherwise.
+        '''
+
+        if self.geometry_given:
+            if len(self.geometry) != 1:
+                # a rectangle should be given as 1 geometry
+                return False
+
+            geom = self.geometry[0]
+
+            if not isinstance(geom, Polygon):
+                # a rectangle cannot contain a circular sector
+                return False
+
+            pts = list(geom.points)
+
+            corner_pts = pts[:-1]   # deletes the last entry of the pts-list
+            # which is the same as the first one
+
+            if len(corner_pts) != 4:
+                # corner_pts-list must be exactly 4 points long
+                return False
+
+            if len(set(corner_pts)) != 4:
+                # checks, if no points appear twice by converting into a
+                # set and checking if it is still 4 points long
+                return False
+
+            z = [p[0] for p in corner_pts]
+            y = [p[1] for p in corner_pts]
+
+            condition_a = (
+                    (z[0] == z[1]) and
+                    (z[2] == z[3]) and
+                    (y[0] == y[3]) and
+                    (y[1] == y[2])
+            )
+
+            condition_b = (
+                    (z[0] == z[3]) and
+                    (z[1] == z[2]) and
+                    (y[0] == y[1]) and
+                    (y[2] == y[3])
+            )
+
+            if not (condition_a or condition_b):
+                return False
+
+            return True
+
+        else:
+            # self.mechanics_given
+            return True
