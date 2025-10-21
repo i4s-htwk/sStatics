@@ -114,6 +114,14 @@ class System:
         return max(x_coords) - min(x_coords), max(z_coords) - min(z_coords)
 
     @property
+    def boundary(self):
+        nodes = self.nodes(mesh_type='bars')
+        x_coords = [node.x for node in nodes]
+        z_coords = [node.z for node in nodes]
+        return (min(x_coords), max(x_coords),
+                min(z_coords), max(z_coords))
+
+    @property
     def mesh(self):
         return self._mesh.mesh
 

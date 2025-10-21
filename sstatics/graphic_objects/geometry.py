@@ -56,6 +56,24 @@ class LineGraphic(MultiGraphicObject):
         x, z = points[0]
         return cls(x, z, points, **kwargs)
 
+    @classmethod
+    def from_slope_intercept(cls, m, n, boundary=(-5, 5, -5, 5), **kwargs):
+        # TODO: hier über boundary nachdenken
+        x0, x1, z0, z1 = boundary
+        if m is None:
+            # vertical Line x = n
+            p0 = (n, z0)
+            p1 = (n, z1)
+        elif m == 0:
+            # horizontal Line y = n
+            p0 = (x0, n)
+            p1 = (x1, n)
+        else:
+            # y = m * x + n
+            p0 = (x0, m * x0 + n)
+            p1 = (x1, m * x1 + n)
+        return cls.from_points([p0, p1], **kwargs)
+
     @property
     def traces(self):
         x, z = np.array(list(zip(*self.points)))
@@ -229,11 +247,6 @@ class EllipseGraphic(SingleGraphicObject):
                     'Both angles in "angle_range" have to be in the interval '
                     '[0, 2 * pi].'
                 )
-        if angle_range[0] >= angle_range[1]:
-            raise ValueError(
-                'The lower bound of "angle_range" has to be less than the '
-                'upper bound.'
-            )
         super().__init__(x, z, **kwargs)
         self.a = a
         self.b = b

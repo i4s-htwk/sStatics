@@ -13,10 +13,11 @@ from sstatics.core.preprocessing.loads import (
 )
 from sstatics.core.preprocessing.temperature import BarTemp
 from sstatics.core.utils import transformation_matrix
+from sstatics.core.logger_mixin import LoggerMixin
 
 
 @dataclass(eq=False)
-class Bar:
+class Bar(LoggerMixin):
     """Create a bar for a statical system.
 
      Parameters
@@ -86,6 +87,7 @@ class Bar:
     point_loads: (
         tuple[BarPointLoad, ...] | list[BarPointLoad] | BarPointLoad
     ) = ()
+    debug: bool = False
 
     # TODO: other validations? validate hinges
     def __post_init__(self):

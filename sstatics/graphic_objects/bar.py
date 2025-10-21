@@ -3,6 +3,7 @@ import numpy as np
 from functools import cached_property
 
 from sstatics.core.preprocessing.bar import Bar
+from sstatics.graphic_objects.loads import PointLoadGraphic
 from sstatics.graphic_objects.utils import MultiGraphicObject, transform
 from sstatics.graphic_objects.geometry import LineGraphic, EllipseGraphic
 from sstatics.graphic_objects.hinges import (
@@ -39,6 +40,7 @@ class BarGraphic(MultiGraphicObject):
 
     def __init__(
             self, bar: Bar, bar_number=None, base_scale=None, max_dim=None,
+            show_annotations: bool = True,
             **kwargs
     ):
         if not isinstance(bar, Bar):
@@ -55,6 +57,14 @@ class BarGraphic(MultiGraphicObject):
         self.number = bar_number
         self.base_scale = base_scale
         self.max_dim = max_dim
+        self.show_annotations = show_annotations
+        self._point_load_graphic = [
+            PointLoadGraphic(
+                *self._point_load_pos(pl.position), pl,
+                rotate_moment=(np.pi if pl.position > 0.5 else 0),
+                scale=self._base_scale / 2
+            ) for pl in self.bar.point_loads
+        ]
 
     @cached_property
     def _annotation_pos(self):
@@ -73,6 +83,12 @@ class BarGraphic(MultiGraphicObject):
     def _max_dim(self):
         return self.max_dim if self.max_dim \
             else max(abs(self.x_i - self.x_j), abs(self.z_i - self.z_j))
+
+    def _point_load_pos(self, pos):
+        return (
+            self.x_i + (self.x_j - self.x_i) * pos,
+            self.z_i + (self.z_j - self.z_i) * pos,
+        )
 
     @cached_property
     def _base_scale(self):
@@ -156,14 +172,16 @@ class BarGraphic(MultiGraphicObject):
 
     @property
     def _annotations(self):
-        x, z = transform(
-            self.x_i, self.z_i, *self._annotation_pos, self.rotation,
-            self.scale
-        )
-        return (
-            () if self.number is None
-            else ((x, z, self.number),)
-        )
+        annotations = []
+        for lg in self._point_load_graphic:
+            annotations.extend(lg._annotations)
+        if self.show_annotations or self.number is not None:
+            x, z = transform(
+                self.x_i, self.z_i, *self._annotation_pos, self.rotation,
+                self.scale
+            )
+            annotations.append((x, z, self.number))
+        return tuple(annotations)
 
     @property
     def traces(self):
@@ -192,11 +210,13 @@ class BarGraphic(MultiGraphicObject):
             )
         )
         # TODO: create separate class for bar number
-        traces.extend(
-            EllipseGraphic(
-                *self._annotation_pos, 0.25 * self._base_scale
-            ).transform_traces(self.x_i, self.z_i, self.rotation, self.scale)
-        )
+        if self.show_annotations:
+            traces.extend(
+                EllipseGraphic(
+                    *self._annotation_pos, 0.25 * self._base_scale
+                ).transform_traces(self.x_i, self.z_i, self.rotation,
+                                   self.scale)
+            )
 
         # traces.extend(
         #     BarLine.from_two_points(
@@ -232,5 +252,9 @@ class BarGraphic(MultiGraphicObject):
         # TODO: temp
 
         # TODO: point_load
+        for plg in self._point_load_graphic:
+            traces.extend(plg.transform_traces(
+                self.x_i, self.z_i, self.rotation, self.scale
+            ))
 
         return traces
