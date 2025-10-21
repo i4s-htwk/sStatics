@@ -9,7 +9,7 @@ from sstatics.core.preprocessing.modifier import SystemModifier
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.poleplan.operation import get_angle
 from sstatics.core.preprocessing.system import System
-from sstatics.core.solution.first_order import FirstOrder
+from sstatics.core.solution.solver import Solver
 
 
 @dataclass(eq=False)
@@ -39,11 +39,12 @@ class InfluenceLine:
         else:
             raise ValueError("obj must be an instance of Bar or Node")
 
-        calc_system = FirstOrder(self.modified_system)
+        calc_system = Solver(self.modified_system)
 
         if calc_system.solvable:
             norm_force = self.calc_norm_force(force, obj)
-            deform_1, force_1 = calc_system.calc
+            deform_1 = calc_system.bar_deform_list
+            force_1 = calc_system.internal_forces
 
             deform_2 = [vec * norm_force for vec in deform_1]
             force_2 = [vec * norm_force for vec in force_1]
@@ -153,7 +154,7 @@ class InfluenceLine:
         This method calculates a virtual force to balance the deformation
         difference between two connected bars, based on their deformation.
         """
-        calc_system = FirstOrder(self.modified_system)
+        calc_system = Solver(self.modified_system)
         if isinstance(obj, Bar):
             # calc bar deformations
             deform = calc_system.bar_deform_list
@@ -210,6 +211,6 @@ class InfluenceLine:
         else:
             raise ValueError("obj must be an instance of Bar or Node")
 
-        calc_system = FirstOrder(self.modified_system)
+        calc_system = Solver(self.modified_system)
 
-        return calc_system.calc
+        return [calc_system.bar_deform_list, calc_system.internal_forces]

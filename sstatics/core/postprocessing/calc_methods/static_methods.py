@@ -10,7 +10,7 @@ from sstatics.core.preprocessing.bar import Bar
 from sstatics.core.preprocessing.modifier import SystemModifier
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.system import System
-from sstatics.core.solution.first_order import FirstOrder
+from sstatics.core.solution import Solver
 
 
 @dataclass(eq=False)
@@ -92,7 +92,7 @@ class PVK:
         :any:`SystemResult`
             Result object containing internal forces and displacements.
         """
-        solve = FirstOrder(system)
+        solve = Solver(system)
         return SystemResult(system=system,
                             bar_deform_list=solve.bar_deform_list,
                             bar_internal_forces=solve.internal_forces,

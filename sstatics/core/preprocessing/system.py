@@ -5,7 +5,7 @@ from typing import Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
-from sstatics.core.preprocessing.bar import Bar
+from sstatics.core.preprocessing.bar import Bar, BarSecond
 from sstatics.core.preprocessing.loads import NodePointLoad
 from sstatics.core.preprocessing.node import Node
 
@@ -19,7 +19,8 @@ class System:
 
     Parameters
     ----------
-    bars : tuple[Bar, ...] | list[Bar]
+    bars : tuple[Bar, ...] | list[Bar] | tuple[BarSecond, ...] \
+            | list[BarSecond]
         A list or tuple of bars that define the structure of the statical
         system. The bars must be provided in a consecutive order, as they
         represent a connected structure.
@@ -40,8 +41,9 @@ class System:
         The bars of the system after segmentation.
     """
 
-    bars: tuple[Bar, ...] | list[Bar]
-    user_divisions: Optional[Dict[Bar, List[float]]] = None
+    bars: tuple[Bar, ...] | list[Bar] | tuple[BarSecond, ...] | list[BarSecond]
+    user_divisions: (Optional[Dict[Bar, List[float]]]
+                     | Optional[Dict[BarSecond, List[float]]]) = None
 
     # weitere Validierungen? sich schneidende Stäbe?
     def __post_init__(self):

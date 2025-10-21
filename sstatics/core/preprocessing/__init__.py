@@ -1,6 +1,6 @@
 
 from sstatics.core.preprocessing import geometry
-from sstatics.core.preprocessing.bar import Bar
+from sstatics.core.preprocessing.bar import Bar, BarSecond
 from sstatics.core.preprocessing.cross_section import CrossSection
 from sstatics.core.preprocessing.dof import DegreesOfFreedom, NodeDisplacement
 from sstatics.core.preprocessing.geometry import *  # noqa: F401, F403
@@ -23,6 +23,7 @@ __all__ = [
     'BarLineLoad',
     'BarPointLoad',
     'BarTemp',
+    'BarSecond',
     'CrossSection',
     'DegreesOfFreedom',
     'geometry',
