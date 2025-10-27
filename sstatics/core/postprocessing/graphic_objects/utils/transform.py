@@ -19,7 +19,7 @@ class Transform:
         The pivot point for rotation and scaling.
     rotation : float, default=0.0
         The rotation angle in radians, counterclockwise.
-    scale : float, default=1.0
+    scaling : float, default=1.0
         Uniform scaling factor, must be greater than zero.
     translation : tuple[float, float], default=(0.0, 0.0)
         Translation vector applied after rotation and scaling.
@@ -29,7 +29,7 @@ class Transform:
     TypeError
         If the types of the parameters are invalid.
     ValueError
-        If `scale` is less than or equal to zero.
+        If `scaling` is less than or equal to zero.
     """
     def __init__(
             self,
@@ -78,7 +78,7 @@ class Transform:
         Example
         -------
         >>> t = Transform(
-        >>>     origin=(1, 1), rotation=np.pi/2, scale=2, translation=(3, 0)
+        >>>     origin=(1, 1), rotation=np.pi/2, scaling=2, translation=(3, 0)
         >>> )
         >>> x, z = t.apply([0, 1], [0, 1])  # x = [2. 4.], z = [3. 1.]
         """
@@ -175,7 +175,7 @@ class Transform:
         TypeError
             If the types of the parameters are incorrect.
         ValueError
-            If `scale` <= 0.
+            If `scaling` <= 0.
         """
         if not isinstance(origin, tuple) or len(origin) != 2:
             raise TypeError(
@@ -220,3 +220,41 @@ class Transform:
     @property
     def translation(self):
         return self._translation
+
+    def __call__(self, x, z):
+        """Apply the transformation by calling the instance directly.
+
+        This is a shorthand for :meth:`apply`, enabling syntax like:
+        >>> transform = Transform(rotation=np.pi / 2)
+        >>> x_new, z_new = transform(x, z)
+
+        Parameters
+        ----------
+        x : float | Sequence[float]
+            The x-coordinates to transform.
+        z : float | Sequence[float]
+            The z-coordinates to transform.
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            The transformed coordinates.
+        """
+        return self.apply(x, z)
+
+    def __repr__(self):
+        """Return a concise string representation for debugging.
+
+        Returns
+        -------
+        str
+            A developer-friendly string showing key transformation parameters,
+            e.g.:
+            ``Transform(
+            origin=(0, 0), rotation=1.571, scaling=1.0, translation=(0, 0)
+            )``.
+        """
+        return (
+            f'Transform(origin={self._origin}, rotation={self._rotation:.3f}, '
+            f'scaling={self._scaling}, translation={tuple(self._translation)})'
+        )

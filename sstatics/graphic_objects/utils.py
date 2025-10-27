@@ -120,7 +120,7 @@ class MultiGraphicObject(abc.ABC):
         fig = Figure(data=self.traces, show_grid=show_grid)
         for annotation in self.annotations:
             fig.add_annotation(annotation)
-        fig.show(*args, **kwargs)
+        fig.show(renderer='browser', *args, **kwargs)
 
 
 class SingleGraphicObject(MultiGraphicObject):
