@@ -1,5 +1,6 @@
 
 import abc
+from typing import Type
 
 import numpy as np
 from sympy.core.cache import cached_property
@@ -162,3 +163,74 @@ class MomentHingeGeo(HingeGeo):
             self._origin, self._width, self._height,
             show_outline=False, line_style=DEFAULT_FILL_WHITE
         )
+
+
+class CombiHingeGeo(ObjectGeo):
+
+    def __init__(
+            self,
+            origin: tuple[float, float],
+            *hinges: tuple[HingeGeo | Type[HingeGeo], ...],
+            **kwargs
+    ):
+        self._validate_init(hinges)
+        super().__init__(origin=origin, **kwargs)
+        self._hinges = [
+            h((0, 0)) if isinstance(h, type) else h for h in hinges
+        ]
+
+    @cached_property
+    def graphic_elements(self):
+        elements = []
+        x, z = self._origin
+        for i, hinge in enumerate(self._hinges):
+            x += self._x_off(i)
+            hinge_cls = type(hinge)
+            elements.append(hinge_cls(
+                (x, z), hinge.width, hinge.height,
+                line_style=hinge.line_style
+            ))
+        return elements
+
+    @cached_property
+    def text_elements(self):
+        x0, z0 = self._origin
+        return [(x0, z0, self._text, self._text_style)]
+
+    def _x_off(self, i):
+        if i == 0:
+            return 0.0
+        prev, curr = self._hinges[i - 1], self._hinges[i]
+        return (
+            self._width_factor(prev, is_prev=True) +
+            self._width_factor(curr, is_prev=False)
+        )
+
+    @staticmethod
+    def _width_factor(hinge, is_prev: bool):
+        factor = (3 / 4 if is_prev else 1 / 4) \
+            if isinstance(hinge, NormalHingeGeo) else 1 / 2
+        return factor * hinge.width
+
+    @staticmethod
+    def _validate_init(hinges):
+        if not all(
+            (isinstance(h, type) and issubclass(h, HingeGeo))
+            or issubclass(type(h), HingeGeo)
+            for h in hinges
+        ):
+            raise ValueError(
+                'each hinge must be an instance or a subclass of Hinge'
+            )
+
+    @property
+    def hinges(self):
+        return self._hinges
+
+    @property
+    def last_hinge(self):
+        return self._hinges[-1]
+
+    @property
+    def total_width(self):
+        return sum(h.width for h in self._hinges)
