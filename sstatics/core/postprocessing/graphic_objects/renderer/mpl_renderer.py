@@ -19,6 +19,7 @@ class MplRenderer(AbstractRenderer):
         self._show_axis = show_axis
         self._show_grid = show_grid
         self._fig, self._ax = plt.subplots(**kwargs)
+        self._z_order = 0
         self._layout()
 
     @cache
@@ -36,24 +37,33 @@ class MplRenderer(AbstractRenderer):
 
     def add_objects(self, *obj):
         for o in obj:
-            for x, z, style in o.graphic_elements:
+            for x, z, style in self._iter_graphic_elements(o):
                 x, z = o.transform(x, z)
                 style = convert_style(style, MPL)
                 self.add_graphic(x, z, **style)
 
-            for x, z, text, style in o.text_elements:
+            for x, z, text, style in self._iter_text_elements(o):
                 x, z = o.transform(x, z)
                 style = convert_style(style, MPL)
                 self.add_text(x, z, text, **style, ha='center')
 
     def add_graphic(self, x, y, **style):
+        style = self._fix_z_order(style)
         if style.pop('fill', False):
             self._ax.fill(x, y, **style)
         else:
             self._ax.plot(x, y, **style)
 
     def add_text(self, x, y, text, **style):
+        style = self._fix_z_order(style)
         self._ax.text(x, y, text, **style)
 
     def show(self, *args, **kwargs):
         plt.show(*args, **kwargs)
+
+    def _fix_z_order(self, style):
+        style = style.copy()
+        z = getattr(self, "_z_order", 0)
+        self._z_order = z + 1
+        style.setdefault("zorder", z)
+        return style

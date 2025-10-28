@@ -17,28 +17,28 @@ class ControllerGraphic:
                     f'mode in objects must be PLOTLY or MPL, got {obj!r}'
                 )
         self._objects = list(objects)
-        self._extra_models = []
+        self._extra_geos = []
 
     def show(self, show_axis=True, show_grid=False):
-        renderer = ObjectRenderer(self.models)
+        renderer = ObjectRenderer(self.geos)
         renderer.show(show_axis, show_grid)
 
-    def add_models(self, *models):
-        self._extra_models.append(*models)
+    def add_geos(self, *geos):
+        self._extra_geos.append(*geos)
 
-    def _build_models(self):
-        models = []
+    @property
+    def _build_geos(self):
+        geos = []
         for obj in self._objects:
             if isinstance(obj, (list, tuple)):
                 for o in obj:
-                    models.append(self._core_to_model(o))
+                    geos.append(self._core_to_geo(o))
             else:
-                models.append(self._core_to_model(obj))
-
-        return models
+                geos.append(self._core_to_geo(obj))
+        return geos
 
     @staticmethod
-    def _core_to_model(o):
+    def _core_to_geo(o):
         if isinstance(o, Polygon):
             return PolygonGeo(o)
 
@@ -49,5 +49,5 @@ class ControllerGraphic:
             )
 
     @property
-    def models(self):
-        return self._build_models() + self._extra_models
+    def geos(self):
+        return self._build_geos + self._extra_geos

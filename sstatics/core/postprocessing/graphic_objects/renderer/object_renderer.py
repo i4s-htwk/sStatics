@@ -1,3 +1,4 @@
+from functools import cache
 
 from ..geo.object_geo import ObjectGeo
 from .plotly_renderer import PlotlyRenderer
@@ -50,14 +51,19 @@ class ObjectRenderer:
                 DEFAULT_MODE
             ))
 
+    @cache
     def show(self, show_axis=True, show_grid=False):
         for renderer in self._render(show_axis, show_grid):
             renderer.show()
 
-    def figure(self):
-        for renderer in self._render():
-            return renderer.figure
+    @cache
+    def figure(self, **kwargs):
+        figs = []
+        for renderer in self._render(**kwargs):
+            figs.append(renderer.figure)
+        return figs
 
+    @cache
     def _render(self, show_axis=True, show_grid=False):
         figures = []
         for objs, mode in self._groups:
