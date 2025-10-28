@@ -1,3 +1,4 @@
+
 from functools import cache
 
 from ..geo.object_geo import ObjectGeo
@@ -18,6 +19,7 @@ class ObjectRenderer:
     ):
         self._groups = []
         self._parse_objects(objects)
+        self._patch_mpl_figure_repr()
 
     def _parse_objects(self, objects):
         pending_objects = []
@@ -57,9 +59,9 @@ class ObjectRenderer:
             renderer.show()
 
     @cache
-    def figure(self, **kwargs):
+    def figure(self, show_axis=True, show_grid=False):
         figs = []
-        for renderer in self._render(**kwargs):
+        for renderer in self._render(show_axis, show_grid):
             figs.append(renderer.figure)
         return figs
 
@@ -84,3 +86,58 @@ class ObjectRenderer:
     @property
     def groups(self):
         return self._groups
+
+    @staticmethod
+    def _describe_mpl_figure(fig):
+        info = {"axes": []}
+        for ax in fig.axes:
+            ax_info = {
+                "title": ax.get_title(),
+                "xlim": ax.get_xlim(),
+                "ylim": ax.get_ylim(),
+                "lines": [],
+                "patches": [],
+                "texts": []
+            }
+
+            for line in ax.lines:
+                ax_info["lines"].append({
+                    "xdata": line.get_xdata().tolist(),
+                    "ydata": line.get_ydata().tolist(),
+                    "style": {
+                        "color": line.get_color(),
+                        "linewidth": line.get_linewidth(),
+                        "linestyle": line.get_linestyle()
+                    }
+                })
+
+            for patch in ax.patches:
+                ax_info["patches"].append({
+                    "type": type(patch).__name__,
+                    "facecolor": patch.get_facecolor(),
+                    "edgecolor": patch.get_edgecolor(),
+                    "alpha": patch.get_alpha(),
+                })
+
+            for text in ax.texts:
+                ax_info["texts"].append({
+                    "text": text.get_text(),
+                    "position": text.get_position(),
+                    "color": text.get_color(),
+                    "fontsize": text.get_fontsize()
+                })
+
+            info["axes"].append(ax_info)
+        return info
+
+    @staticmethod
+    def _patch_mpl_figure_repr():
+        import matplotlib.figure
+
+        if not hasattr(matplotlib.figure.Figure, "_patched_repr"):
+            def _custom_fig_repr(self):
+                from pprint import pformat
+                return pformat(ObjectRenderer._describe_mpl_figure(self))
+
+            matplotlib.figure.Figure.__repr__ = _custom_fig_repr
+            matplotlib.figure.Figure._patched_repr = True
