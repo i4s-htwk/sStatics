@@ -9,6 +9,6 @@ Contents
 .. toctree::
     :maxdepth: 2
 
-    preprocessing_methods
-    solution
-    postprocessing_methods
+    api/preprocessing_methods
+    api/solution
+    api/postprocessing_methods

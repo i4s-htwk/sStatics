@@ -6,7 +6,10 @@ from sstatics.graphic_objects.geometry import (
     PointGraphic, LineGraphic, RectangleGraphic, IsoscelesTriangleGraphic,
     PolygonGraphic, EllipseGraphic, CircularSectorGraphic
 )
-from sstatics.graphic_objects.diagram import Arrow, CoordinateSystem, Hatching
+from sstatics.graphic_objects.diagram import (
+    CurvedArrow, CoordinateSystem, Hatching, StraightArrow
+)
+from sstatics.graphic_objects.loads import PointLoadGraphic
 from sstatics.graphic_objects.supports import (
     FreeNode, RollerSupport, PinnedSupport, FixedSupportUW, FixedSupportUPhi,
     FixedSupportWPhi, ChampedSupport
@@ -24,7 +27,6 @@ from sstatics.graphic_objects.results import (
 
 
 __all__ = [
-    'Arrow',
     'BarGraphic',
     'BarResultGraphic',
     'ChampedSupport',
@@ -32,6 +34,7 @@ __all__ = [
     'CombiHinge',
     'CoordinateSystem',
     'CrossSectionGraphic',
+    'CurvedArrow',
     'EllipseGraphic',
     'FixedSupportUPhi',
     'FixedSupportUW',
@@ -47,6 +50,7 @@ __all__ = [
     'NormalForceHinge',
     'PointGraphic',
     'PinnedSupport',
+    'PointLoadGraphic',
     'PolygonGraphic',
     'RectangleGraphic',
     'ResultGraphic',
@@ -54,6 +58,7 @@ __all__ = [
     'rotate',
     'ShearForceHinge',
     'SingleGraphicObject',
+    'StraightArrow',
     'SystemGraphic',
     'SystemResultGraphic',
     'transform'

@@ -1,4 +1,6 @@
 
+from itertools import combinations
+
 from typing import List, Tuple
 
 from shapely.geometry import MultiPolygon, Polygon as ShapelyPolygon
@@ -57,8 +59,8 @@ class PolygonMerge:
         self.positive = positive or []
         self.negative = negative or []
 
-        if not self.positive:
-            raise ValueError("At least one positive polygon is required.")
+        # if not self.positive:
+        #     raise ValueError("At least one positive polygon is required.")
 
         if not all(isinstance(p, Polygon) for p in self.positive):
             raise TypeError(
@@ -69,7 +71,8 @@ class PolygonMerge:
                 "All elements in 'negative' must be Polygon instances."
             )
 
-        self.unary_pos = unary_union([p.polygon for p in self.positive])
+        self.unary_pos = unary_union([p.polygon for p in self.positive]) \
+            if self.positive else None
         self.unary_neg = unary_union([p.polygon for p in self.negative]) \
             if self.negative else None
 
@@ -90,9 +93,16 @@ class PolygonMerge:
             If the resulting geometry is a `MultiPolygon`, which is
             currently not supported.
         """
-        result = self.unary_pos
-        if self.unary_neg:
-            result = difference(result, self.unary_neg)
+        positive_flag = True
+        if self.unary_pos:
+            result = self.unary_pos
+            positive_flag = True
+            if self.unary_neg:
+                result = difference(result, self.unary_neg)
+
+        elif self.unary_neg:
+            result = self.unary_neg
+            positive_flag = False
 
         if isinstance(result, MultiPolygon):
             # TODO: handle multipolygons explicitly if needed
@@ -102,7 +112,8 @@ class PolygonMerge:
 
         return Polygon(
             points=list(result.exterior.coords),
-            holes=[list(interior.coords) for interior in result.interiors]
+            holes=[list(interior.coords) for interior in result.interiors],
+            positive=positive_flag
         )
 
     def __call__(self) -> Polygon:
@@ -194,6 +205,30 @@ class SectorToPolygonHandler:
             a_maxy >= b_miny
         )
 
+    @staticmethod
+    def bounding_boxes_overlap_circ(a: CircularSector, b: CircularSector) \
+            -> bool:
+        [a_miny, a_maxy], [a_minz, a_maxz] = a.boundary()
+        [b_miny, b_maxy], [b_minz, b_maxz] = b.boundary()
+        return (
+                a_miny <= b_maxy and
+                a_maxy >= b_miny and
+                a_minz <= b_maxz and
+                a_maxz >= b_minz
+        )
+
+    @staticmethod
+    def identical(a: CircularSector, b: CircularSector) -> bool:
+        [a_miny, a_maxy], [a_minz, a_maxz] = a.boundary()
+        [b_miny, b_maxy], [b_minz, b_maxz] = b.boundary()
+        return (
+                a_miny == b_miny and
+                a_maxy == b_maxy and
+                a_minz == b_minz and
+                a_maxz == b_maxz and
+                a.center == b.center
+        )
+
     def execute(self) -> Tuple[List[Polygon], List[CircularSector]]:
         r"""
         Converts intersecting circular sectors to polygons and separates
@@ -211,18 +246,41 @@ class SectorToPolygonHandler:
               converted from intersecting sectors.
             - A list of circular sectors that did not intersect any polygon.
         """
+        if len(self.polygons) == 0 and len(self.circular_sector) == 1:
+            return self.polygons, self.circular_sector
         polygons_extended = self.polygons.copy()
         circular_sector_remaining = []
+
+        if len(self.circular_sector) > 1:
+            circ_to_poly = [
+                i.convert_to_polygon() for i in self.circular_sector
+            ]
+            circ_to_poly_shapely = [i.polygon for i in circ_to_poly]
+
+            combined, contained = (
+                self.find_duplicates_overlaps_contained(circ_to_poly_shapely)
+            )
+
+            for i in combined:
+                print(
+                    f"Note: A circular sector {i} intersects a polygon. "
+                    "It is discrete into 100 points and "
+                    "treated as a polygon."
+                )
+                polygons_extended.append(circ_to_poly[i])
+
+            self.circular_sector = [elem for i, elem in enumerate(
+                self.circular_sector) if i not in combined]
 
         for i in self.circular_sector:
             sec_as_polygon = i.convert_to_polygon(num_points=100)
 
             if any(
-                self.bounding_boxes_overlap(sec_as_polygon.polygon,
-                                            sp.polygon) and
-                sec_as_polygon.polygon.intersection(
-                    sp.polygon).area > 1e-10
-                for sp in polygons_extended
+                    self.bounding_boxes_overlap(sec_as_polygon.polygon,
+                                                sp.polygon) and
+                    sec_as_polygon.polygon.overlaps(
+                        sp.polygon)
+                    for sp in polygons_extended
             ):
                 print(
                     f"Note: A circular sector {i} intersects a polygon. "
@@ -232,7 +290,6 @@ class SectorToPolygonHandler:
                 polygons_extended.append(sec_as_polygon)
             else:
                 circular_sector_remaining.append(i)
-
         return polygons_extended, circular_sector_remaining
 
     def __call__(self) -> Tuple[List[Polygon], List[CircularSector]]:
@@ -246,3 +303,53 @@ class SectorToPolygonHandler:
             See `execute` method for details.
         """
         return self.execute()
+
+    @staticmethod
+    def find_duplicates_overlaps_contained(geometries):
+        if len(geometries) == 1:
+            return [], [0]
+
+        duplicates = set()
+        overlaps = set()
+        contained = set()
+
+        for i, j in combinations(range(len(geometries)), 2):
+            g1, g2 = geometries[i], geometries[j]
+            print('i:', i, 'j:', j)
+
+            # 1. Exact same geometries
+            if g1.equals(g2):
+                duplicates.add(i)
+                duplicates.add(j)
+                print('equal')
+
+            # 2. Fully contained
+            elif g1.contains(g2):
+                contained.add(j)
+                print(f'Geometry {j} is fully contained in geometry {i}')
+            elif g2.contains(g1):
+                contained.add(i)
+                print(f'Geometry {i} is fully contained in geometry {j}')
+
+            # 3. Partial overlaps (intersection > 0, not full containment)
+            elif g1.intersects(g2):
+                intersection = g1.intersection(g2)
+                if intersection.area > 0:
+                    overlaps.add(i)
+                    overlaps.add(j)
+                    print(f'Geometries {i} and {j} partially overlap')
+
+        # Optional: Do not count duplicates or contained geometries as overlaps
+        overlaps -= duplicates
+        overlaps -= contained
+
+        # todo: merge overlaps and duplicates into one list
+
+        print("Duplicate geometries:", duplicates)
+        print("Partial overlaps:", overlaps)
+        print("Contained geometries:", contained)
+
+        combined = list(duplicates | overlaps)
+        print('Geometries treated as polygons with indices:', combined)
+
+        return combined, contained

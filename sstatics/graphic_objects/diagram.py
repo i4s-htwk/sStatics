@@ -6,11 +6,97 @@ from sstatics.graphic_objects import (
     rotate, transform, SingleGraphicObject, LineGraphic,
     IsoscelesTriangleGraphic, RectangleGraphic
 )
+from sstatics.graphic_objects.geometry import EllipseGraphic
 
 
 class Arrow(SingleGraphicObject):
-    # TODO: change intern scaling for arrow
-    # TODO: better rotation
+
+    def __init__(self, x, z, width, **kwargs):
+        if width <= 0:
+            raise ValueError('"width" has to be greater than zero.')
+        super().__init__(x, z, **kwargs)
+        self.width = width
+
+
+class StraightArrow(Arrow):
+
+    def __init__(
+            self, x, z, length: float = 3, head_width: float = 0.4,
+            offset: float = 0, **kwargs
+    ):
+        if length <= 0:
+            raise ValueError('"length" has to be greater than zero.')
+        super().__init__(x, z, head_width, **kwargs)
+        self.length = length
+        self.offset = offset
+
+    @property
+    def traces(self):
+        head = IsoscelesTriangleGraphic.from_width(
+            self.x, self.z - self.offset, self.width,
+            scatter_options=SingleGraphicObject.scatter_options | {
+                'fill': 'toself', 'fillcolor': 'black'
+            },
+            rotation=np.pi
+        )
+        head_traces = head.transform_traces(
+            self.x, self.z, self.rotation, self.scale
+        )
+        tail = LineGraphic.from_points(
+            [(self.x, self.z - self.offset),
+             (self.x, self.z - self.length - self.offset)],
+            scatter_options=self.scatter_kwargs
+        )
+        tail_traces = tail.transform_traces(self.x, self.z, self.rotation)
+        return *head_traces, *tail_traces
+
+
+class CurvedArrow(Arrow):
+
+    def __init__(
+            self, x, z, radius: float = 1,
+            angle_span: tuple[float, float] = (0, np.pi / 2),
+            head_width: float = 0.4, **kwargs
+    ):
+        super().__init__(x, z, head_width, **kwargs)
+        self.radius = radius
+        self.angle_span = angle_span
+
+    @property
+    def head_position(self):
+        end_angle = self.angle_span[1]
+        x = self.x + self.radius * 2 * np.cos(end_angle)
+        z = self.z + self.radius * 2 * np.sin(end_angle)
+        return x, z
+
+    @property
+    def traces(self):
+        head_angle_offset = (
+            np.pi + np.pi / 12 if self.angle_span[0] < self.angle_span[1]
+            else - np.pi / 12
+        )
+        head = IsoscelesTriangleGraphic.from_width(
+            *self.head_position, self.width,
+            scatter_options=SingleGraphicObject.scatter_options | {
+                'fill': 'toself', 'fillcolor': 'black'
+            },
+            rotation=-self.angle_span[1] + head_angle_offset
+        )
+        head_traces = head.transform_traces(
+            self.x, self.z, self.rotation, self.scale
+        )
+
+        tail = EllipseGraphic(
+            self.x, self.z, self.radius * 2, angle_range=self.angle_span,
+            scatter_options=self.scatter_kwargs
+        )
+        tail_traces = tail.transform_traces(
+            self.x, self.z, self.rotation, self.scale
+        )
+        return *head_traces, *tail_traces
+
+
+class ScaledArrow(SingleGraphicObject):
 
     scatter_options = SingleGraphicObject.scatter_options | {
         'fill': 'toself',
@@ -73,11 +159,11 @@ class CoordinateSystem(SingleGraphicObject):
 
     @property
     def traces(self):
-        x_axis = Arrow(
+        x_axis = ScaledArrow(
             self.x + self.scale, self.z, tail_length=6, rotation=np.pi / 2,
             scale=self.scale, scatter_options=self.scatter_kwargs
         )
-        z_axis = Arrow(
+        z_axis = ScaledArrow(
             self.x, self.z + self.scale, tail_length=6, scale=self.scale,
             scatter_options=self.scatter_kwargs
         )

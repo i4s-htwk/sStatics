@@ -97,7 +97,10 @@ class MultiGraphicObject(abc.ABC):
     @property
     def annotations(self):
         return tuple(
-            go.layout.Annotation(x=x, y=y, text=text, **self.annotation_kwargs)
+            go.layout.Annotation(
+                x=x, y=y, text=text if text != 0 else '',
+                **self.annotation_kwargs
+            )
             for x, y, text in self._annotations
         )
 

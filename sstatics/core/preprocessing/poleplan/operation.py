@@ -92,9 +92,8 @@ def validate_point_on_line(line, point, debug=False, epsilon=1e-9):
     Args:
         line (tuple): (slope, intercept) of the line.
         point (tuple): (x, z) coordinates of the point.
-        debug (bool, optional): print debug information. Defaults to
-            False.
-        epsilon (float, optional): tolerance for floating-point
+        debug (bool, optional): print debug information. Defaults to False.
+        epsilon (float, optional): tolerance for floating-point \
             comparison. Defaults to 1e-9.
 
     Returns:
