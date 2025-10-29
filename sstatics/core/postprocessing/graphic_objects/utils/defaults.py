@@ -104,22 +104,65 @@ DEFAULT_HINGE = dict(
 )
 
 DEFAULT_NORMAL_HINGE = dict(
-    width=11 / 20,
-    height=11 / 30
+    width=1.0,
+    height=0.6
 )
 
 DEFAULT_SHEAR_HINGE = dict(
-    width=11 / 80,
-    height=11 / 20
+    width=0.25,
+    height=1.0
 )
 
 DEFAULT_MOMENT_HINGE = dict(
-    width=11 / 40,
-    height=11 / 40
+    width=0.5,
+    height=0.5
 )
 
 DEFAULT_FILL_WHITE = dict(
-    fillcolor='rgba(255, 255, 255, 1)'
+    fillcolor='white'
+)
+
+DEFAULT_SUPPORT = dict(
+    line=dict(width=2),
+)
+
+DEFAULT_SUPPORT_HATCH = dict(
+    spacing=0.36,
+)
+
+DEFAULT_CHAMPED_SUPPORT_HATCH = dict(
+    spacing=0.36,
+    angle=np.pi / 4
+)
+
+DEFAULT_ROLLER_SUPPORT = dict(
+    width=2.0,
+    height=2.0
+)
+
+DEFAULT_PINNED_SUPPORT = dict(
+    width=3.5,
+    height=2.0
+)
+
+DEFAULT_FIXED_SUPPORT_UW = dict(
+    width=2.0,
+    height=2.0
+)
+
+DEFAULT_FIXED_SUPPORT_UPHI = dict(
+    width=1.0,
+    height=2.0
+)
+
+DEFAULT_FIXED_SUPPORT_WPHI = dict(
+    width=3.0,
+    height=2.0
+)
+
+DEFAULT_CHAMPED_SUPPORT = dict(
+    width=0.5,
+    height=2.0
 )
 
 PLOTLY = 'plotly'

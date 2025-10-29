@@ -45,6 +45,7 @@ class HingeGeo(ObjectGeo, abc.ABC):
         super().__init__(origin=origin, **kwargs)
         self._width = width
         self._height = height
+        self._x0, self._z0 = self._origin
 
     @cached_property
     def graphic_elements(self):
@@ -106,22 +107,20 @@ class NormalHingeGeo(HingeGeo):
 
     @cached_property
     def _curve(self):
-        x0, z0 = self._origin
         x = [
-            x0 + 3 / 4 * self._width, x0 - 1 / 4 * self._width,
-            x0 - 1 / 4 * self._width, x0 + 3 / 4 * self._width
+            self._x0 + 3 / 4 * self._width, self._x0 - 1 / 4 * self._width,
+            self._x0 - 1 / 4 * self._width, self._x0 + 3 / 4 * self._width
         ]
         z = [
-            z0 - 1 / 2 * self._height, z0 - 1 / 2 * self._height,
-            z0 + 1 / 2 * self._height, z0 + 1 / 2 * self._height
+            self._z0 - 1 / 2 * self._height, self._z0 - 1 / 2 * self._height,
+            self._z0 + 1 / 2 * self._height, self._z0 + 1 / 2 * self._height
         ]
         return [OpenCurveGeo(x, z, line_style=self._line_style)]
 
     @cached_property
     def _background(self):
-        x0, z0 = self._origin
         return RectangleGeo(
-            (x0 - 1 / 8 * self._width, z0), self._width / 4,
+            (self._x0 - 1 / 8 * self._width, self._z0), self._width / 4,
             self._height, show_outline=False, line_style=DEFAULT_FILL_WHITE
         )
 
@@ -131,12 +130,11 @@ class ShearHingeGeo(HingeGeo):
 
     @cached_property
     def _curve(self):
-        x0, z0 = self._origin
         offsets = (-1 / 2 * self._width, 1 / 2 * self._width)
         return [
             OpenCurveGeo.from_center(
-                (x0 + dx, z0), self._height, rotation=np.pi / 2,
-                line_style=self._line_style
+                (self._x0 + dx, self._z0), self._height,
+                rotation=np.pi / 2, line_style=self._line_style
             ) for dx in offsets
         ]
 
