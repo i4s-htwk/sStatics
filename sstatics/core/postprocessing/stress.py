@@ -219,11 +219,12 @@ class CrossSectionStress:
         """
         # Get cross-section boundaries
         _, zb = self.cross_section.boundary()
-        if zb[0] <= z <= zb[1]:
-            raise ValueError(
-                f'z must be in the range of the cross-section '
-                f'z_min = {zb[0]} and z_max = {zb[1]}. Given z = {z}'
-            )
+        if z is not None:
+            if zb[0] <= z <= zb[1]:
+                raise ValueError(
+                    f'z must be in the range of the cross-section '
+                    f'z_min = {zb[0]} and z_max = {zb[1]}. Given z = {z}'
+                )
         n_stress = n / self.cross_section.area
         self._normal_stress = n_stress  # Cache the result
         return n_stress
