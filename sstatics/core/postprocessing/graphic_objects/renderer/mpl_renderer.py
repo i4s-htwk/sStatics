@@ -4,7 +4,6 @@ from functools import cache, cached_property
 import matplotlib.pyplot as plt
 
 from .base_renderer import AbstractRenderer
-from .convert import convert_style
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import MPL
 
 
@@ -16,6 +15,7 @@ class MplRenderer(AbstractRenderer):
             show_grid: bool = False,
             **kwargs
     ):
+        super().__init__(mode=MPL)
         self._show_axis = show_axis
         self._show_grid = show_grid
         self._fig, self._ax = plt.subplots(**kwargs)
@@ -34,18 +34,6 @@ class MplRenderer(AbstractRenderer):
     @cached_property
     def figure(self):
         return self._fig
-
-    def add_objects(self, *obj):
-        for o in obj:
-            for x, z, style in self._iter_graphic_elements(o):
-                x, z = o.transform(x, z)
-                style = convert_style(style, MPL)
-                self.add_graphic(x, z, **style)
-
-            for x, z, text, style in self._iter_text_elements(o):
-                x, z = o.transform(x, z)
-                style = convert_style(style, MPL)
-                self.add_text(x, z, text, **style, ha='center')
 
     def add_graphic(self, x, y, **style):
         style = self._fix_z_order(style)

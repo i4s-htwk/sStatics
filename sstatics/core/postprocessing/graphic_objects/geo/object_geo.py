@@ -1,12 +1,11 @@
 
+from __future__ import annotations
 import abc
 from functools import cached_property
 from typing import Any
 
-import numpy as np
-
 from ..utils.defaults import (
-    DEFAULT_LINE, DEFAULT_TEXT, DEFAULT_TEXT_OFFSET, DEFAULT_POINT
+    DEFAULT_LINE, DEFAULT_TEXT, DEFAULT_POINT
 )
 from ..utils.transform import Transform
 
@@ -95,7 +94,9 @@ class ObjectGeo(abc.ABC):
 
     @cached_property
     @abc.abstractmethod
-    def graphic_elements(self) -> list[tuple[list[float], list[float], dict]]:
+    def graphic_elements(self) -> list[
+        ObjectGeo | tuple[list[float], list[float], dict]
+    ]:
         """
         Return a list of polylines representing the object.
 
@@ -151,14 +152,39 @@ class ObjectGeo(abc.ABC):
         -----
         If the object has no polylines, all values are returned as ``0.0``.
         """
-        lines = self.graphic_elements
-        if not lines:
-            return 0.0, 0.0, 0.0, 0.0
         x_coords, z_coords = [], []
-        for x_list, z_list, _ in lines:
+
+        # Rekursive Iteration über alle Grafik-Elemente
+        for x_list, z_list, _ in self._iter_graphic_elements(self):
             x_coords.extend(x for x in x_list if x is not None)
             z_coords.extend(z for z in z_list if z is not None)
+
+        if not x_coords or not z_coords:
+            return 0.0, 0.0, 0.0, 0.0
+
         return min(x_coords), max(x_coords), min(z_coords), max(z_coords)
+
+    def _iter_graphic_elements(self, obj=None, transform_fn=None):
+        if obj is None:
+            obj = self
+
+        if transform_fn is None:
+            def transform_fn(x, z):
+                return obj.transform(x, z)
+        else:
+            def transform_fn(x, z, prev=transform_fn, current=obj.transform):
+                x, z = prev(x, z)
+                return current(x, z)
+
+        for element in obj.graphic_elements:
+            if isinstance(element, ObjectGeo):
+                # Rekursion nur für Unterobjekte vom Typ ObjectGeo
+                yield from self._iter_graphic_elements(element, transform_fn)
+            else:
+                # normales grafisches Element (x_list, z_list, style)
+                x, z, style = element
+                x, z = transform_fn(x, z)
+                yield x, z, style
 
     @cached_property
     def _max_dimensions(self) -> tuple[float, float]:
@@ -204,57 +230,6 @@ class ObjectGeo(abc.ABC):
         """
         dx, dz = self._max_dimensions
         return 0.08 * max(dx, dz) + 0.02
-
-    def find_text_position(self, x: float, z: float):
-        offset = DEFAULT_TEXT_OFFSET * self._base_scale
-        positions = [
-            (x, z + offset),
-            (x - offset, z),
-            (x, z - offset),
-            (x + offset, z)
-        ]
-
-        for x_try, z_try in positions:
-            if not self._text_collision(x_try, z_try):
-                return x_try, z_try
-
-        x_try, z_try = positions[0]
-        return x_try, z_try
-
-    def _text_collision(self, x: float, z: float,
-                        margin: float = 0.01) -> bool:
-        for px_list, pz_list, _ in self.graphic_elements:
-            # Filter None-Werte
-            coords = [(xi, zi) for xi, zi in zip(px_list, pz_list) if
-                      xi is not None and zi is not None]
-            if len(coords) < 2:
-                continue  # keine Segmente vorhanden
-            for (x0, z0), (x1, z1) in zip(coords[:-1], coords[1:]):
-                dist = self._point_to_segment_distance(x, z, x0, z0, x1, z1)
-                if dist < margin:
-                    return True
-            # Optional: prüfe Endpunkte
-            if any(np.hypot(x - xi, z - zi) < margin for xi, zi in coords):
-                return True
-        return False
-
-    @staticmethod
-    def _point_to_segment_distance(px, pz, x0, z0, x1, z1):
-        """
-        Returns the shortest distance from point (px, pz) to the line segment
-        between (x0, z0) and (x1, z1).
-        """
-        # Vektor vom Segmentanfang zum Punkt
-        dx, dz = px - x0, pz - z0
-        # Segmentvektor
-        sx, sz = x1 - x0, z1 - z0
-        seg_len_sq = sx ** 2 + sz ** 2
-        if seg_len_sq == 0:  # Segment ist nur ein Punkt
-            return np.hypot(dx, dz)
-        t = max(0, min(1, (dx * sx + dz * sz) / seg_len_sq))
-        closest_x = x0 + t * sx
-        closest_z = z0 + t * sz
-        return np.hypot(px - closest_x, pz - closest_z)
 
     @staticmethod
     def _merge_style(

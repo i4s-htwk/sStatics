@@ -31,8 +31,7 @@ class PointGeo(ObjectGeo):
 
     @cached_property
     def text_elements(self):
-        x, z = self.find_text_position(*self._origin)
-        return [(x, z, self._text, self._text_style)]
+        return [(*self._origin, self._text, self._text_style)]
 
     def __repr__(self):
         return (
@@ -67,8 +66,7 @@ class OpenCurveGeo(ObjectGeo):
 
     @cached_property
     def text_elements(self):
-        x, z = self.find_text_position(*self._origin)
-        return [(x, z, self._text, self._text_style)]
+        return [(*self._origin, self._text, self._text_style)]
 
     @classmethod
     def from_center(cls, origin: tuple[float, float], length: float, **kwargs):
@@ -213,15 +211,17 @@ class ClosedCurveGeo(ObjectGeo, abc.ABC):
             self,
             origin: tuple[float, float],
             show_center: bool = False,
-            hatch: bool | None = None,
+            show_hatch: bool | None = None,
             hatch_style: dict[str, Any] | None = None,
             show_outline: bool = True,
             **kwargs
     ):
-        self._validate_curve(show_center, hatch, hatch_style, show_outline)
+        self._validate_curve(
+            show_center, show_hatch, hatch_style, show_outline
+        )
         super().__init__(origin=origin, **kwargs)
         self._show_center = show_center
-        self._hatch_style = self._set_hatch_style(hatch, hatch_style)
+        self._hatch_style = self._set_hatch_style(show_hatch, hatch_style)
         self._show_outline = show_outline
 
         if not self._show_outline:
@@ -258,16 +258,17 @@ class ClosedCurveGeo(ObjectGeo, abc.ABC):
         return HatchGeo(self, **self._hatch_style)
 
     @staticmethod
-    def _validate_curve(show_center, hatch, hatch_style, show_outline):
+    def _validate_curve(show_center, show_hatch, hatch_style, show_outline):
         if not isinstance(show_center, bool):
             raise TypeError(
                 f'"show_center" must be a boolean, got '
                 f'{type(show_center).__name__}.'
             )
 
-        if not isinstance(hatch, (bool, NoneType)):
+        if not isinstance(show_hatch, (bool, NoneType)):
             raise TypeError(
-                f'"hatch" must be a boolean, got {type(hatch).__name__}.'
+                f'"show_hatch" must be a boolean, got '
+                f'{type(show_hatch).__name__}.'
             )
 
         if not isinstance(hatch_style, (dict, NoneType)):
@@ -282,11 +283,11 @@ class ClosedCurveGeo(ObjectGeo, abc.ABC):
                 f'{type(show_outline).__name__}.'
             )
 
-    def _set_hatch_style(self, hatch, user_hatch):
-        if hatch is False:
+    def _set_hatch_style(self, show_hatch, user_hatch):
+        if show_hatch is False:
             return None
         class_hatch = getattr(self, 'CLASS_HATCH_STYLE', {})
-        hatch = hatch or user_hatch or class_hatch
+        hatch = show_hatch or user_hatch or class_hatch
         if hatch:
             return self._merge_style(
                 self.DEFAULT_HATCH_STYLE,

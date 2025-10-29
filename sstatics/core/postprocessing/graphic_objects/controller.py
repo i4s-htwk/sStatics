@@ -61,7 +61,8 @@ class ControllerGraphic:
         for obj in objects:
             if isinstance(obj, str) and obj not in (PLOTLY, MPL):
                 raise ValueError(
-                    f'mode in objects must be PLOTLY or MPL, got {obj!r}'
+                    f"Invalid mode {obj!r}. Expected one of: {PLOTLY!r}, "
+                    f"{MPL!r}."
                 )
 
             if isinstance(obj, (list, tuple)):

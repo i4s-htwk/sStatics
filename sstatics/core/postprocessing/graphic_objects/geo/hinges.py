@@ -8,7 +8,8 @@ from sympy.core.cache import cached_property
 from sstatics.core.postprocessing.graphic_objects.geo.geometry import (
     OpenCurveGeo, EllipseGeo, RectangleGeo
 )
-from ..geo.object_geo import ObjectGeo
+from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
+    ObjectGeo
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_HINGE, DEFAULT_NORMAL_HINGE, DEFAULT_SHEAR_HINGE,
     DEFAULT_MOMENT_HINGE, DEFAULT_FILL_WHITE
