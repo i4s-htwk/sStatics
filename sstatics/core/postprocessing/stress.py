@@ -668,7 +668,7 @@ class BarStressDistribution:
     --------
     >>> from sstatics.core.preprocessing import (Bar, System, Material, Node,
     ... CrossSection, BarLineLoad)
-    >>> from sstatics.core import FirstOrder
+    >>> from sstatics.core.solution import FirstOrder
     >>> from sstatics.core.postprocessing import BarStressDistribution
     >>> # First, set up and solve the structural system
     >>> n1 = Node(0, 0, u='fixed', w='fixed')
