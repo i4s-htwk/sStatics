@@ -7,7 +7,6 @@ from typing import Literal
 
 from sstatics.core.preprocessing import Bar, BarSecond, System, SystemModifier
 from sstatics.core.solution.solver import Solver
-from sstatics.core.utils import transformation_matrix
 
 
 @dataclass
@@ -90,31 +89,32 @@ class SecondOrder:
         ]
 
     def _transform_internal_forces(self, solver):
-        """Transform local bar forces back into global internal forces.
+        """Rotates end forces using current bar-end rotations (phi_i, phi_j).
 
-        The function maps the element-level internal forces computed by the
-        solver to global coordinate systems using the element transformation
-        matrices.
-
-        Parameters
-        ----------
-        solver : :class:`Solver`
-            Solver instance containing bar deformations and internal forces.
+        The local force components are mapped with the instantaneous bar-end
+        rotations to ensure second-order consistent reporting.
 
         Returns
         -------
-        list of np.ndarray
-            List of transformed internal force vectors for each bar.
+        list[np.ndarray]
+            List of (6×1) force vectors per bar in local bar coordinates.
         """
         forces_list = []
-        for deform, force in zip(solver.bar_deform_list,
-                                 solver.internal_forces):
+        for deform, force in zip(
+                solver.bar_deform_list,
+                solver.internal_forces):
             phi_i, phi_j = deform[2, 0], deform[5, 0]
-            f_i = np.array([[-force[0, 0]], [-force[1, 0]], [force[2, 0]]])
-            f_j = np.array([[force[3, 0]], [force[4, 0]], [force[5, 0]]])
-            Ti = transformation_matrix(phi_i)
-            Tj = transformation_matrix(phi_j)
-            forces_list.append(np.vstack((-Ti @ f_i, Tj @ f_j)))
+            l_i, l_j = -force[0, 0], force[3, 0]
+            t_i, t_j = -force[1, 0], force[4, 0]
+            force_sec = np.array([
+                [-(l_i * np.cos(phi_i) - t_i * np.sin(phi_i))],
+                [-(t_i * np.cos(phi_i) + l_i * np.sin(phi_i))],
+                [force[2, 0]],
+                [l_j * np.cos(phi_j) - t_j * np.sin(phi_j)],
+                [t_j * np.cos(phi_j) + l_j * np.sin(phi_j)],
+                [force[5, 0]]
+            ])
+            forces_list.append(force_sec)
         return forces_list
 
     def _update_geometry(self, system, node_deform_curr, node_deform_prev):
@@ -410,7 +410,7 @@ class SecondOrder:
                            self._transform_internal_forces(solver))
         return solver
 
-    def solver_iteration(self, iteration: int = -1):
+    def solver_iteration_cumulativ(self, iteration: int = -1):
         """Return a solver instance for a specific iteration step.
 
         By default, the last iteration solver is returned.
@@ -539,7 +539,7 @@ class SecondOrder:
             )
         return len(self.get_iteration_results())
 
-    def get_incremental_solver(self, iteration_index: int = -1):
+    def solver_iteration_incremental(self, iteration_index: int = -1):
         """Return the incremental solver between two successive iterations.
 
         The resulting solver represents the difference between iteration
@@ -651,9 +651,9 @@ class SecondOrder:
 
         for i, r in enumerate(results):
             solver = (
-                self.solver_iteration(i)
+                self.solver_iteration_cumulativ(i)
                 if mode == "cumulative"
-                else self.get_incremental_solver(i)
+                else self.solver_iteration_incremental(i)
             )
             if solver is None:
                 continue
