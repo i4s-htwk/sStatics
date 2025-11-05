@@ -485,7 +485,7 @@ class KGV(RED):
 
         Returns
         -------
-        :any:`np.ndarray`
+        :any:`numpy.array`
             One-dimensional array of preliminary coefficients, with one
             entry per redundant.
         """
@@ -503,7 +503,7 @@ class KGV(RED):
 
         Returns
         -------
-        :any:`np.ndarray`
+        :any:`numpy.array`
             Two-dimensional square matrix of influence numbers, with one
             row and one column for each redundant.
         """
@@ -522,7 +522,7 @@ class KGV(RED):
 
         Returns
         -------
-        :any:`np.ndarray`
+        :any:`numpy.array`
             One-dimensional array containing the solved redundant forces.
         """
         return np.linalg.solve(self.influence_coef(), -self.load_coef())
