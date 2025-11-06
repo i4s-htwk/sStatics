@@ -1,3 +1,4 @@
+
 from collections import defaultdict
 
 import numpy as np
@@ -5,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Set, Optional, Tuple
 from itertools import combinations
 
+from sstatics.core.logger_mixin import LoggerMixin
 from sstatics.core.preprocessing.bar import Bar
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.system import System
@@ -30,11 +32,9 @@ def get_intersection_point(line1, line2):
     is_identical, is_parallel = _check_lines(m1, n1, m2, n2)
 
     if is_identical:
-        print(u' -> z0 = z1 identische Geraden!')
         return float('inf'), float('inf')
 
     elif is_parallel:
-        print(u' -> z0 und z1 sind parallele Geraden')
         return None, None
 
     # Handle vertical lines
@@ -145,54 +145,36 @@ def get_angle(point, center, displacement: float = 1):
         return displacement / length
 
 
-def print_chains(chains, bars):
-    for chain in chains:
-        i = chains.index(chain)
-        index = []
-        conn = []
-        for bar in chain.bars:
-            index.append(bars.index(bar))
-        for n in chain.connection_nodes:
-            conn.append((n.x, n.z))
-
-        print(f'Chain: {i}, bars: {index}, \n -> conn_nodes: {conn}, '
-              f'\n -> rPol: {chain.relative_pole}, '
-              f'\n -> mPol: {chain.absolute_pole}'
-              f'\n -> starr: {chain.stiff}')
-
-
-def print_dict_key_value(dictionary, bars, all_chains):
-    # Only for Debugging
-    print('# # # # # # # # # # # # # # # # # # # # # ')
+# help functions for logger messages
+def dict_key_value_to_string(dictionary, all_chains) -> str:
+    lines = []
     for node, chains in dictionary.items():
-        print(f"Node: ({node.x}, {node.z})")
-        print('---------------------------')
+        lines.append(f"\nNode ({node.x}|{node.z})")
+        lines.append("-" * 60)
         for chain in chains:
             i = all_chains.index(chain)
-            index = []
-            conn = []
-            for bar in chain.bars:
-                index.append(bars.index(bar))
-            for n in chain.connection_nodes:
-                conn.append((n.x, n.z))
+            lines.append(f"  Chain {i}:\n{chain}")
+    return "\n".join(lines)
 
-            print(f'  Chain: {i}, bars: {index}, \n   -> conn_nodes: {conn}, '
-                  f'\n   -> rPol: {chain.relative_pole}, '
-                  f'\n   -> mPol: {chain.absolute_pole}'
-                  f'\n   -> starr: {chain.stiff}')
-        print()
-        print('---------------------------')
+
+def chains_to_str(chains):
+    lines = ["Identify chains:"]
+    for i, chain in enumerate(chains):
+        lines.append(f"Chain {i}:\n{chain}")
+    return "\n".join(lines)
 
 
 @dataclass(eq=False)
-class ChainIdentifier:
+class ChainIdentifier(LoggerMixin):
     system: System
+    debug: bool = False
 
     _node_to_chains: Optional[dict] = field(init=False, default=defaultdict)
     _chains: list[Chain] = field(init=False, default_factory=list)
 
     def __post_init__(self):
         self.bars = self.system.bars
+        self.logger.debug("ChainIdentifier post‑init completed")
 
     @property
     def node_to_chains(self):
@@ -203,30 +185,75 @@ class ChainIdentifier:
         return self._chains
 
     def run(self):
+        """Main entry point – graph traversal and chain identification."""
         nodes = self.system.nodes(mesh_type='bars')
         to_visit, visited = [nodes[0]], []
+
+        self.logger.info(
+            f"Starting graph traversal with {len(nodes)} nodes.")
+        self.logger.debug(
+            f"Initial node to visit: ({nodes[0].x}, {nodes[0].z})")
+
         while to_visit:
             current_node = to_visit.pop(0)
+
             if current_node not in visited:
+                self.logger.debug(
+                    f"Visiting node ({current_node.x}, {current_node.z})"
+                )
                 visited.append(current_node)
-                to_visit += (
+
+                connected = (
                     self.system.connected_nodes(mesh_type='bars')
                 )[current_node]
+                self.logger.debug(
+                    f"Connected nodes found: "
+                    f"{[f'({n.x}, {n.z})' for n in connected]}"
+                )
+
+                # Add connected nodes to visit list
+                to_visit += connected
+                self.logger.debug(
+                    f"Nodes to visit updated. Remaining: {len(to_visit)}"
+                )
+
+                # Identify new chains from the current node
+                self.logger.info(
+                    f"Identifying chains starting from node "
+                    f"({current_node.x}, {current_node.z})"
+                )
                 self._identify_chains_from_node(current_node)
+                self.logger.info(chains_to_str(self._chains))
 
-                print_chains(self._chains, self.bars)
-
+                # Check for shared chains and merge if necessary
                 if shared_chains := self._find_shared_chains():
+                    self.logger.info(
+                        f"Found {len(shared_chains)} shared chains — "
+                        f"merging..."
+                    )
                     self._merge_chains(shared_chains)
+                    self.logger.debug("Shared chains merged successfully.")
+
+                # Try identifying triangular connections
+                self.logger.debug("Attempting to identify triangles.")
                 self._identify_triangle()
 
+        self.logger.info(
+            f"Graph traversal completed. Visited {len(visited)} "
+            f"nodes in total."
+        )
+
+        # Re‑run triangle detection until no further triangles are found.
         while self._identify_triangle():
+            self.logger.debug("Another triangle was merged – re‑checking")
             continue
 
-    def _identify_triangle(self):
-        print('Dreieckssuche')
+        self.logger.info("Chain identification finished")
+
+    def _identify_triangle(self) -> bool:
+        """Detect a closed triangle of three chains and merge them."""
+        self.logger.info('Starting Identify Triangle.')
         self.find_all_conn()
-        print_chains(self._chains, self.bars)
         chains = [chain for chain in self._chains if
                   len(chain.connection_nodes) >= 2]
         if len(chains) >= 3:
@@ -242,35 +269,19 @@ class ChainIdentifier:
                 valid_triangle_nodes = [node for node, count in
                                         node_counts.items() if count == 2]
                 if len(valid_triangle_nodes) == 3:
-                    print('--> gefunden!')
+                    self.logger.debug(
+                        "Valid triangle found between chains:\n"
+                        + chains_to_str([c1, c2, c3])
+                    )
                     self._merge_chains([c1, c2, c3])
-                    print_chains(self._chains, self.bars)
+                    self.logger.info("Triangle merged into a new chain")
                     return True
+        self.logger.debug("No triangle found in this iteration")
         return False
 
     def find_all_conn(self):
-        # conn = {}
-        # for chain in self._chains:
-        #     # node - chain zuweisung
-        #     for n in chain.connection_nodes:
-        #         if n not in conn:
-        #             conn[n] = []
-        #         conn[n].append(chain)
-        #     # jeder Stab hat 2 Knoten, es kann aber sein, dass nur der
-        #     # Anfangs oder Endknoten des Stabes bereits als
-        #     # Verbindungsknoten in der Scheibe hinterlegt ist, der jeweils
-        #     # andere kann aber ggf. ebenfalls ein Verbindungsknoten zu einer
-        #     # Anderen Scheibe haben (das wird dann ersichtlich, wenn dieser
-        #     # im dict 'conn' enthalten ist.
-        #     # -> diese Knoten sollen müssen gefunden werden!
-        #     for bar in chain.bars:
-        #         for node in (bar.node_i, bar.node_j):
-        #             if node not in chain.connection_nodes and node in conn:
-        #                 # der Knoten muss nun der Scheibe hinzugefügt werden
-        #                 self._add_node_to_chain(chain, node)
-        # print_dict_key_value(conn, self.bars)
-        # # return conn
-        node_to_chains = {}
+        """Populate the node‑to‑chains dictionary for the current chain set."""
+        node_to_chains: dict[Node, List[Chain]] = {}
         for chain in self._chains:
             for node in chain.connection_nodes:
                 node_to_chains.setdefault(node, []).append(chain)
@@ -280,729 +291,1003 @@ class ChainIdentifier:
                             node in node_to_chains):
                         self._add_node_to_chain(chain, node)
         self._node_to_chains = node_to_chains
-        print_dict_key_value(node_to_chains, self.bars, self._chains)
+        self.logger.debug(
+            "Node‑to‑chains mapping created:\n"
+            + dict_key_value_to_string(node_to_chains, self._chains)
+        )
 
     def _identify_chains_from_node(self, current_node: Node):
-        print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')
-        print(f'({current_node.x},{current_node.z})')
+        """Create new chains starting at the supplied node."""
         unassigned_bars = []
         connected_bars = (
             self.system.node_to_bar_map(segmented=False))[current_node]
-
+        self.logger.debug(
+            "Processing %d bars connected to node (%s, %s)",
+            len(connected_bars), current_node.x, current_node.z,
+        )
+        self.logger.debug('Iteration over all bars that are connected with '
+                          'this node')
         for bar in connected_bars:
-            print('---------------------------------------------')
-            print(f'Stabnr: {self.bars.index(bar)}')
+            bar_idx = self.bars.index(bar)
+            self.logger.debug(f"Connected Bar: {bar_idx}")
+
             if self._has_hinge(bar, current_node):
-                print(' -> Gelenk')
-                print('   -> hier beginnt eine neue Scheibe')
+                self.logger.debug("Hinge detected – starting a new chain")
                 self._new_chain({bar}, current_node)
             else:
-                print(' -> kein Gelenk')
+                self.logger.debug("No hinge – bar will be stored for later")
                 unassigned_bars.append(bar)
 
-        print('Gibt es noch unverarbeitete angrenzende Stäbe?')
+        self.logger.debug("Checking for unprocessed adjacent bars")
         if unassigned_bars:
-            print(f' -> Ja, folgende Stäbe sind noch nicht zugewiesen: '
-                  f'{[self.bars.index(b) for b in unassigned_bars]}')
+            indices = [self.bars.index(b) for b in unassigned_bars]
+            self.logger.debug(
+                "Unassigned bars remain: %s", ", ".join(map(str, indices))
+            )
             self._new_chain(set(unassigned_bars), current_node)
+        else:
+            self.logger.debug("All connected bars have been assigned")
 
     def _new_chain(self, bars: Set[Bar], current_node: Node):
-        existing_chain = self._get_chain(bars)
-        if existing_chain:
-            existing_chain.add_bars(bars)
-            self._add_node_to_chain(existing_chain, current_node)
+        """Create a new chain or extend an existing one."""
+        existing = self._get_chain(bars)
+        if existing:
+            self.logger.debug(
+                "Extending existing chain (now %d bars)", len(existing.bars)
+            )
+            existing.add_bars(bars)
+            self._add_node_to_chain(existing, current_node)
         else:
+            self.logger.info(
+                "Creating new chain with %d bars at node (%s, %s)",
+                len(bars), current_node.x, current_node.z,
+            )
             new_chain = Chain(bars)
             self._add_node_to_chain(new_chain, current_node)
             self._chains.append(new_chain)
 
     @staticmethod
     def _has_hinge(bar: Bar, node: Node):
+        """Return True if the bar has a hinge at the given node."""
         if bar.node_i == node:
             return any(bar.hinge[0:3])
         else:
             return any(bar.hinge[4:6])
 
     def _get_chain(self, bars: Set[Bar]):
+        """Find a chain that already contains any of the supplied bars."""
         for chain in self._chains:
             if bars & chain.bars:
                 return chain
         return None
 
     def _add_node_to_chain(self, chain: Chain, node: Node):
-        # TODO: das muss vereinfacht werden!
-        print('...')
-        print(f'Aktueller Knoten ({node.x},{node.z}) '
-              f'wird zur Scheibe hinzugefügt')
-        # potenzieller Verbindungspunkte zwischen weiteren Scheiben
+        # TODO: simplify
+        """Add a node (and possibly poles) to a chain."""
+        self.logger.debug(
+            "Adding node (%s, %s) to chain (currently %d nodes)",
+            node.x, node.z, len(chain.connection_nodes),
+        )
+
         connected_bars = self.system.node_to_bar_map(segmented=False)[node]
         chain.add_connection_node(node)
 
-        # Absolutpol oder Linie des Absolutpols
-        if node.u == 'fixed' and node.w == 'fixed' and node.phi == 'free':
-            print(' -> zweiwertiges Auflager')
+        # Determine pole type based on support conditions
+        if node.u == "fixed" and node.w == "fixed" and node.phi == "free":
+            self.logger.info(
+                "Node is a two‑degree‑of‑freedom support – absolute pole added"
+            )
             chain.set_absolute_pole(Pole(node, same_location=True))
-        elif (node.u == 'fixed' or node.w == 'fixed') and node.phi == 'free':
-            print(' -> einwertiges Auflager')
-            print('  -> haben angrenzende Stäbe Gelenke')
-            for bar in connected_bars:
-                # das geht auch nicht? WARUM?
 
-                for end, hinge_phi, hinge_w, hinge_u in [
-                    (bar.node_i,
-                     bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i),
-                    (bar.node_j,
-                     bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j),
-                ]:
-                    if node == end:
-                        if bar not in chain.bars:
-                            if hinge_w:
-                                chain.set_absolute_pole(
-                                    Pole(node, same_location=True))
-                            continue
-                        # if hinge_w or hinge_u and hinge_phi:
-                        #     print(f'   -> am Knoten ({node.x}, {node.z}) '
-                        #           f'hat Stab {self.bars.index(bar)} '
-                        #           f'ein Normal-oder Querkraftgelenk')
-                        #     print('     -> wird Relativpol')
-                        #     direction = np.pi - bar.inclination if hinge_w \
-                        #         else np.pi / 2 - bar.inclination
-                        #     chain.add_relative_pole(
-                        #         Pole(node,is_infinite=True,
-                        #              direction=direction))
-                        if hinge_phi:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)} '
-                                  f'ein Momentengelenk')
-                            print('     -> wird Relativpol')
-                            chain.add_relative_pole(
-                                Pole(node, same_location=True))
-                        if hinge_w or hinge_u:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)} '
-                                  f'ein Normal-oder Querkraftgelenk')
-                            print('     -> wird Relativpol')
-                            direction = np.pi - bar.inclination if hinge_w \
-                                else np.pi / 2 - bar.inclination
-                            chain.add_relative_pole(
-                                Pole(node, is_infinite=True,
-                                     direction=direction))
-                        else:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)} '
-                                  f'kein Gelenk')
-                            print('     -> wird Absolutpol')
-                            direction = np.pi / 2 - node.rotation \
-                                if node.w == 'fixed' else np.pi - node.rotation
-                            # bei overwrite = True gehts nicht! WARUM?!?!?
-                            chain.set_absolute_pole(
-                                Pole(node, direction=direction))
-        # Starre Scheibe mit Gelenkprüfung
-        #  -> kann durch Gelenke zum Absolutpol werden!
-        elif node.u == 'fixed' and node.w == 'fixed' and node.phi == 'fixed':
+        elif (node.u == "fixed" or node.w == "fixed") and node.phi == "free":
+            self.logger.info(
+                "Node is a one‑degree‑of‑freedom support – checking attached"
+                "bars"
+            )
             for bar in connected_bars:
-                for end, hinge_phi, hinge_w, hinge_u in [
-                    (bar.node_i,
-                     bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i),
-                    (bar.node_j,
-                     bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j),
-                ]:
-                    if node == end:
-                        if hinge_phi:
-                            chain.set_absolute_pole(
-                                Pole(node, same_location=True))
-                        elif hinge_w or hinge_u:
-                            direction = np.pi - bar.inclination if hinge_w \
-                                else np.pi / 2 - bar.inclination
-                            chain.set_absolute_pole(
-                                Pole(node, is_infinite=True,
-                                     direction=direction))
-                        else:
-                            chain.stiff = True
-                            chain.set_absolute_pole(
-                                Pole(node, same_location=True))
+                for end, hinge_phi, hinge_w, hinge_u in \
+                        [
+                            (bar.node_i,
+                             bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i
+                             ),
+                            (bar.node_j,
+                             bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j
+                             )
+                        ]:
+                    if node != end:
+                        continue
 
-        # Wenn mindestens 2 Stäbe an den Knoten Anschließen
-        # könnte es ein Verbindungsknoten sein:
+                    if hinge_phi:
+                        self.logger.debug(
+                            "Moment hinge found on bar %d – adding relative "
+                            "pole",
+                            self.bars.index(bar),
+                        )
+                        chain.add_relative_pole(Pole(node, same_location=True))
+
+                    if hinge_w or hinge_u:
+                        direction = (
+                            np.pi - bar.inclination
+                            if hinge_w
+                            else np.pi / 2 - bar.inclination
+                        )
+                        self.logger.debug(
+                            "Normal/shear hinge on bar %d – adding infinite "
+                            "relative pole",
+                            self.bars.index(bar),
+                        )
+                        chain.add_relative_pole(
+                            Pole(node, is_infinite=True, direction=direction)
+                        )
+                    else:
+                        direction = (
+                            np.pi / 2 - node.rotation
+                            if node.w == "fixed"
+                            else np.pi - node.rotation
+                        )
+                        self.logger.debug(
+                            "No hinge – setting absolute pole with "
+                            "direction %.3f",
+                            direction,
+                        )
+                        chain.set_absolute_pole(
+                            Pole(node, direction=direction))
+
+        elif node.u == "fixed" and node.w == "fixed" and node.phi == "fixed":
+            self.logger.info(
+                "Fully fixed node – checking for stiff or pole conditions")
+            for bar in connected_bars:
+                for end, hinge_phi, hinge_w, hinge_u in \
+                        [
+                            (bar.node_i,
+                             bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i
+                             ),
+                            (bar.node_j,
+                             bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j
+                             )
+                        ]:
+                    if node != end:
+                        continue
+
+                    if hinge_phi:
+                        chain.set_absolute_pole(Pole(node, same_location=True))
+                    elif hinge_w or hinge_u:
+                        direction = (
+                            np.pi - bar.inclination
+                            if hinge_w
+                            else np.pi / 2 - bar.inclination
+                        )
+                        chain.set_absolute_pole(
+                            Pole(node, is_infinite=True, direction=direction)
+                        )
+                    else:
+                        chain.stiff = True
+                        chain.set_absolute_pole(Pole(node, same_location=True))
+
+        # If more than one bar meets at the node, it may become a connection
+        # node
         if len(connected_bars) > 1:
-            # notwendig für zum finden eines Dreiecks
-            # chain.add_connection_node(node)
             for bar in connected_bars:
-                # if bar not in chain.bars:
-                #     continue
-                for end, hinge_phi, hinge_w, hinge_u in [
-                    (bar.node_i,
-                     bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i),
-                    (bar.node_j,
-                     bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j),
-                ]:
-                    if node == end:
-                        # if hinge_w or hinge_u and hinge_phi:
-                        #     print(f'   -> am Knoten ({node.x}, {node.z}) '
-                        #           f'hat Stab {self.bars.index(bar)} '
-                        #           f'ein Normal-oder Querkraftgelenk')
-                        #     print('     -> wird Relativpol')
-                        #     direction = np.pi - bar.inclination if hinge_w \
-                        #         else np.pi / 2 - bar.inclination
-                        #     chain.add_relative_pole(
-                        #         Pole(node,is_infinite=True,
-                        #              direction=direction))
-                        if hinge_phi:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)}'
-                                  f' ein Momentengelenk')
-                            print('     -> wird Relativpol')
-                            chain.add_relative_pole(
-                                Pole(node, same_location=True))
-                        elif hinge_w or hinge_u:
-                            print(f'   -> am Knoten ({node.x}, {node.z}) '
-                                  f'hat Stab {self.bars.index(bar)} '
-                                  f'ein Normal-oder Querkraftgelenk')
-                            print('     -> wird Relativpol')
-                            direction = np.pi - bar.inclination if hinge_w \
-                                else np.pi / 2 - bar.inclination
-                            chain.add_relative_pole(
-                                Pole(node, is_infinite=True,
-                                     direction=direction))
+                for end, hinge_phi, hinge_w, hinge_u in \
+                        [
+                            (bar.node_i,
+                             bar.hinge_phi_i, bar.hinge_w_i, bar.hinge_u_i
+                             ),
+                            (bar.node_j,
+                             bar.hinge_phi_j, bar.hinge_w_j, bar.hinge_u_j
+                             )
+                        ]:
+                    if node != end:
+                        continue
+
+                    if hinge_phi:
+                        self.logger.debug(
+                            "Moment hinge on bar %d at connection node – "
+                            "relative pole",
+                            self.bars.index(bar),
+                        )
+                        chain.add_relative_pole(Pole(node, same_location=True))
+                    elif hinge_w or hinge_u:
+                        direction = (
+                            np.pi - bar.inclination
+                            if hinge_w
+                            else np.pi / 2 - bar.inclination
+                        )
+                        self.logger.debug(
+                            "Normal/shear hinge on bar %d at connection node "
+                            "– infinite relative pole",
+                            self.bars.index(bar),
+                        )
+                        chain.add_relative_pole(
+                            Pole(node, is_infinite=True, direction=direction)
+                        )
 
     def _find_shared_chains(self):
+        """Return a flat list of chains that share at least one bar."""
         bar_to_chains = {}
         for chain in self._chains:
             for bar in chain.bars:
                 bar_to_chains.setdefault(bar, []).append(chain)
-        return [
-            chain for chains in bar_to_chains.values() if len(chains) > 1 for
-            chain in chains
+
+        shared = [
+            chain
+            for chains in bar_to_chains.values()
+            if len(chains) > 1
+            for chain in chains
         ]
+        self.logger.debug(
+            "Shared chains detection yielded %d entries", len(shared)
+        )
+        return shared
 
-    def _merge_chains(self, chains: list[Chain]):
-        # Prüfe, ob alle zu mergen-Ketten in self._chains vorhanden sind
-        missing_chains = [chain for chain in chains if
-                          chain not in self._chains]
-        if missing_chains:
-            raise ValueError(
-                f"Chain: {missing_chains} is not in self._chains.")
+    def _merge_chains(self, chains: List[Chain]):
+        """Merge the supplied chains into a single new chain."""
+        missing = [c for c in chains if c not in self._chains]
+        if missing:
+            msg = f"Chain(s) {missing} not present in self._chains"
+            self.logger.error(msg)
+            raise ValueError(msg)
 
-        # Finde den kleinsten Index der vorkommenden Chains
-        insertion_index = min(self._chains.index(chain) for chain in chains)
+        insertion_index = min(self._chains.index(c) for c in chains)
+        self.logger.debug(
+            "Merging %d chains at insertion index %d", len(chains),
+            insertion_index
+        )
 
-        # Sammle alle Bars aus den zu mergen-Ketten
-        bars = set(bar for chain in chains for bar in chain.bars)
+        combined_bars = {bar for chain in chains for bar in chain.bars}
+        self.logger.debug("Combined bar count: %d", len(combined_bars))
 
-        # Entferne die Ketten direkt aus self._chains
+        # Remove the old chains
         for chain in chains:
-            print('Index: ')
-            print(self._chains.index(chain))
-        for chain in chains:
+            self.logger.debug("Removing chain with %d bars", len(chain.bars))
             self._chains.remove(chain)
 
-        remaining_connection_nodes = set()
-        for chain in chains:
-            for node in chain.connection_nodes:
-                remaining_connection_nodes.add(node)
+        # Gather all distinct connection nodes
+        remaining_nodes = {node for chain in chains for node in
+                           chain.connection_nodes}
+        self.logger.debug("Remaining connection nodes count: %d",
+                          len(remaining_nodes))
 
-        # Neue Dreiecksscheibe erstellen
-        new_triangle_chain = Chain(bars)
-        new_triangle_chain.add_connection_node(remaining_connection_nodes)
+        # Build the new chain
+        new_chain = Chain(combined_bars)
+        new_chain.add_connection_node(remaining_nodes)
+        self.logger.info(
+            "Creating new chain with %d bars",
+            len(combined_bars)
+        )
 
         for chain in chains:
             if chain.absolute_pole:
-                new_triangle_chain.set_absolute_pole(chain.absolute_pole)
+                new_chain.set_absolute_pole(chain.absolute_pole)
 
-        for n in remaining_connection_nodes:
-            self._add_node_to_chain(new_triangle_chain, n)
+        for node in remaining_nodes:
+            self._add_node_to_chain(new_chain, node)
 
-        # Neue Chain an ursprünglicher Stelle einfügen
-        self._chains.insert(insertion_index, new_triangle_chain)
-
-        print_chains(self._chains, self.bars)
+        self._chains.insert(insertion_index, new_chain)
+        self.logger.info(
+            "Merged %d chains into a new chain (now %d total chains) \n"
+            "new chain:\n%s",
+            len(chains), len(self._chains), new_chain
+        )
 
     def __call__(self):
+        """Convenient entry point so the class can be called like a
+        function."""
+        self.logger.debug("ChainIdentifier invoked via __call__")
         return self.run()
 
 
 @dataclass(eq=False)
-class PoleIdentifier:
+class PoleIdentifier(LoggerMixin):
+    """
+    Analyze kinematic chains and determine missing absolute poles.
+
+    Traverses all chains, identifies missing absolute poles, and infers
+    their positions from geometric or kinematic relationships between
+    adjacent chains.
+
+    Attributes
+    ----------
+    chains : List[Chain]
+        List of chain objects to be analyzed.
+    node_to_chains : Dict[Node, List[Chain]]
+        Mapping from each node to the chains connected to it.
+    debug : bool, optional
+        Enables verbose debugging if True (default: False).
+    """
+
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
+    debug: bool = False
 
     def run(self):
+        """
+        Iterate over all chains and resolve absolute poles.
+
+        Checks each chain for missing absolute pole information and infers
+        absolute poles by analyzing relationships between adjacent chains.
+        """
+        self.logger.info(
+            "Pole identification started – %d chains to process",
+            len(self.chains)
+        )
+
         for i, chain in enumerate(self.chains):
-            print('------------------------------')
-            print(f'///////// Scheibe {i} \\\\\\\\\\\\\\\\\\\\')
-            print('Ist Scheibe vollständig?')
+            self.logger.info("Processing chain %d", i)
+
             if chain.solved:
-                print(f'-> Scheibe {i} ist vollständig!')
-                print(' -> sind angrenzende Scheiben unverschieblich?')
-                break_outer_loop = False
-                for rPole in list(chain.relative_pole):
-                    if break_outer_loop:
-                        break
-                    connected_chain = (
-                        self.node_to_chains.get(rPole.node, []))
-                    if (len(connected_chain) > 1 and
-                            any(c.stiff for c in connected_chain
-                                if c != chain)):
-                        print(' -> Ja, es gibt Starre Scheiben')
-                        for conn_chain in connected_chain:
-                            if conn_chain != chain and conn_chain.stiff:
-                                self._set_aPole_connected_chain_is_stiff(
-                                    chain, conn_chain, rPole)
-                                break_outer_loop = True
-                                break
-                    else:
-                        print(' -> Nein, es gibt keine Starren Scheiben')
-                print('...Prüfung abgeschlossen!')
+                self.logger.info("Chain %d is already solved", i)
+                self._check_adjacent_stiff_chains(i, chain)
+                self.logger.debug("Verification for chain %d completed", i)
                 continue
 
-            print(f'-> Scheibe {i} ist unvollständig!')
+            self.logger.debug("Chain %d is incomplete", i)
+
             if not chain.solved_absolute_pole:
-                print('  -> Absolutpolangaben sind nicht vollständig.')
+                self.logger.debug(
+                    "Absolute pole data missing for chain %d", i
+                )
+
                 if chain.absolute_pole is None:
-                    print('   -> Lage des Absolutpol unbekannt')
-                    # Bildung von Absolut-Pollinien zweier angrenzenden
-                    #  Scheiben (a) & (b)
-                    # Im Schnittpunkt dieser Absolut-Pollinien liegt
-                    #  der Absolutpol (i)
-                    #   (a) - (a|i) -> (i)
-                    #   (b) - (i|b) -> (i)
+                    self.logger.info(
+                        "Absolute pole unknown – attempting inference from "
+                        "connected chains"
+                    )
                     self._find_absolute_pole(chain)
                 else:
-                    print('   -> Koordinaten des Absolutpol unbekannt.')
-                    print('    -> Absolutpol befindet sich auf bekannter '
-                          'Pollinie')
-                    # Scheibe wird durch ein bewegliches Lager gestützt:
-                    #   -> der Absolutpol liegt auf einer Geraden senkrecht zur
-                    #      möglichen Bewegungsrichtung des Lagers
-                    absolute_pole_line = chain.absolute_pole.line()
+                    self.logger.info(
+                        "Absolute pole exists but coordinates unknown"
+                    )
+                    abs_line = chain.absolute_pole.line()
+                    self._find_absolute_pole(chain, [abs_line])
 
-                    # Bildung von Absolut-Pollinien einer angrenzenden Scheibe
-                    # Im Schnittpunkt der beiden Geraden liegt der Absolutpol
-                    self._find_absolute_pole(chain,
-                                             [absolute_pole_line])
+    def _check_adjacent_stiff_chains(self, i: int, chain: Chain):
+        """
+        Check whether any adjacent chain connected to the given chain is stiff.
+        """
+        self.logger.debug("Checking adjacent stiff chains for chain %s", i)
+
+        for r_pole in list(chain.relative_pole):
+            connected = self.node_to_chains.get(r_pole.node, [])
+            if (len(connected) > 1 and
+                    any(c.stiff for c in connected if c != chain)):
+                self.logger.info(
+                    "Stiff adjacent chain detected for chain %s "
+                    "via node(%s, %s)",
+                    i, r_pole.node.x, r_pole.node.z
+                )
+                for adj in connected:
+                    if adj != chain and adj.stiff:
+                        self._set_aPole_connected_chain_is_stiff(
+                            chain, adj, r_pole)
+                        return
+            else:
+                self.logger.debug(
+                    "No stiff adjacent chains found at node (%s, %s)",
+                    r_pole.node.x, r_pole.node.z
+                )
 
     def _find_absolute_pole(self, chain: Chain, lines: list = None):
+        """
+        Infer the absolute pole of a chain by analyzing intersections of
+        absolute pole lines.
+        """
         i = self.chains.index(chain)
         if lines is None:
             lines = []
         else:
-            print(f'     -> g({i}): z(x) = {lines[0][0]} * x + {lines[0][1]}')
-        # Finden der angrenzenden Scheiben und deren Pol-Linien
-        print('Finden der angrenzenden Scheiben...')
+            self.logger.debug(
+                "Chain %s: Using existing line equation z(x) = %s * x + %s",
+                i, lines[0][0], lines[0][1]
+            )
+
+        self.logger.debug("Searching for adjacent chains for chain %s", i)
+
+        intersection = set()
         for rPole in chain.relative_pole:
             connected_chain = self.node_to_chains[rPole.node]
-            intersection = set()
-            print(f'Scheiben mit dem gleichen Verbindungsknoten '
-                  f'({rPole.node.x} | {rPole.node.z}):')
+            self.logger.debug(
+                "Node (%s | %s) connects %s chains",
+                rPole.node.x, rPole.node.z, len(connected_chain)
+            )
+
             for conn_chain in connected_chain:
-                if conn_chain != chain:
-                    j = self.chains.index(conn_chain)
-                    print('==================================================')
-                    print(f' -> angrenzende Scheibe: {j}')
-                    print(f'Ist Scheibe {j} eine starre Scheibe?')
-                    if conn_chain.stiff:
-                        self._set_aPole_connected_chain_is_stiff(
-                            chain, conn_chain, rPole)
-                        return True
-                    print(f' -> Scheibe {j} ist keine starre Scheibe.')
-                    print(f'Hat Scheibe {j} eine Absolutpollinie?')
-                    if conn_chain.solved_absolute_pole:
-                        line_dict = conn_chain.apole_lines
-                        if line_dict:
-                            print(f' -> Absolutpollinie: ({j}) - ({i}|{j}):'
-                                  f' z(x) = {line_dict[rPole.node][0]} * x '
-                                  f'+ {line_dict[rPole.node][1]}')
-                            lines.append(line_dict[rPole.node])
-                else:
+                if conn_chain == chain:
                     continue
 
-                print('gespeicherte Geraden:')
-                for nr, line in enumerate(lines):
-                    print(f'  z{nr}(x) = {line[0]} * x + {line[1]}')
+                j = self.chains.index(conn_chain)
+                self.logger.debug(
+                    "Evaluating adjacent chain %s for chain %s", j, i
+                )
+
+                if conn_chain.stiff:
+                    self.logger.info(
+                        "Adjacent chain %s is stiff – using for absolute pole "
+                        "identification", j
+                    )
+                    self._set_aPole_connected_chain_is_stiff(
+                        chain, conn_chain, rPole
+                    )
+                    return True
+
+                if conn_chain.solved_absolute_pole:
+                    line_dict = conn_chain.apole_lines
+                    if line_dict:
+                        line = line_dict[rPole.node]
+                        self.logger.debug(
+                            "Adding absolute pole line from chain %s: "
+                            "z(x) = %s * x + %s",
+                            j, line[0], line[1]
+                        )
+                        lines.append(line)
 
                 if len(lines) == 2:
-                    print('Haben die beiden Geraden eine Schnittpunkt?')
                     x, z = get_intersection_point(lines[0], lines[1])
-                    print(f' -> Schnittpunkt: ({x},{z})')
                     intersection.add((x, z))
-                    print(f'  -> Hinzufügen des Schnittpunktes zur '
-                          f'Schnittpunktsliste: {intersection}')
+                    self.logger.debug("Intersection found: (%s, %s)", x, z)
                     lines.pop()
-                    print('  -> letzte Gerade aus Geradenliste entfernen')
                 else:
-                    print(' -> aus einer Gerade kann kein Schnittpunkt '
-                          'gebildet werden!')
-            print('Wieviele Schnittpunkte liegen in der Schnittpunktliste?')
-            if len(intersection) == 1:
-                print(' -> ein schnittpunkt gefunden')
-                x, z = intersection.pop()
-                print(f'  -> Schnittpunkt ({x},{z}) als Absolutpol der Scheibe'
-                      f' {i} hinzufügen.')
-                if x is not None:
-                    print('   -> Koordinaten des Absolutpols sind bekannt.')
-                    if x == float('inf'):
-                        aPole = chain.absolute_pole
-                        x = aPole.node.x
-                        z = aPole.node.z
-                    chain.set_absolute_pole(
-                        Pole(Node(x=x, z=z), same_location=True),
-                        overwrite=True)
-                elif x is None:
-                    print('   -> Koordinaten des Absolutpols sind unbekannt.')
-                    direction = lines[0][0]
-                    if direction is None:
-                        # für vertikale Linien muss None in 90°
-                        #  umgewandelt werden!
-                        direction = np.pi / 2
-                    if chain.absolute_pole is None:
-                        # Wenn für den Absolutpol noch keine Informationen
-                        #  abgespeichert sind
-                        p = next(iter(chain.relative_pole))
-                        node = p.node
-                    else:
-                        # Wenn für den Absolutpol schon ein Knoten gespeichert
-                        #  wurde
-                        node = chain.absolute_pole.node
-                    chain.set_absolute_pole(
-                        Pole(node, is_infinite=True, direction=direction),
-                        overwrite=True)
-            elif len(intersection) > 1:
-                print(' -> mehrere Schnittpunkte gefunden!!! \n'
-                      '    -> Ein Absolutpol kann nur einen Koordinatenpunkt '
-                      'haben \n'
-                      '       -> Widerspruch im Polplan!')
-            elif len(intersection) == 0:
-                print(' -> keinen Schnittpunkt gefunden!')
+                    self.logger.debug(
+                        "Not enough lines to form an intersection "
+                        "(need 2, have %s)",
+                        len(lines)
+                    )
+
+        if len(intersection) == 1:
+            x, z = intersection.pop()
+            self.logger.info(
+                "Single intersection found for chain %s at (%s, %s)", i, x, z
+            )
+            if x is not None:
+                if x == float('inf'):
+                    aPole = chain.absolute_pole
+                    x, z = aPole.node.x, aPole.node.z
+                chain.set_absolute_pole(
+                    Pole(Node(x=x, z=z), same_location=True), overwrite=True
+                )
+            else:
+                direction = lines[0][0] or np.pi / 2
+                node = chain.absolute_pole.node if chain.absolute_pole \
+                    else next(iter(chain.relative_pole)).node
+                chain.set_absolute_pole(
+                    Pole(node, is_infinite=True, direction=direction),
+                    overwrite=True
+                )
+        elif len(intersection) > 1:
+            self.logger.warning(
+                "Multiple intersection points found for chain %s – "
+                "inconsistent pole geometry",
+                i
+            )
+        else:
+            self.logger.debug("No intersection found for chain %s", i)
 
     def _set_aPole_connected_chain_is_stiff(
-            self, chain: Chain, conn_chain: Chain, rPole: Pole):
+            self, chain: Chain, conn_chain: Chain, rPole: Pole
+    ):
+        """
+        Assign the absolute pole of a chain if a connected chain is stiff.
+        """
         j = self.chains.index(conn_chain)
         i = self.chains.index(chain)
         pole = None
-        print(f' -> Scheibe {j} ist eine starre Scheibe!')
-        aPole = chain.absolute_pole
-        print(f' -> Hat Scheibe {i} einen Absolutpol?')
-        print(f'    -> aPole: {aPole}')
+
+        self.logger.info(
+            "Connected chain %s is stiff – setting absolute pole for chain %s",
+            j, i
+        )
 
         for rPole_conn_chain in conn_chain.relative_pole:
-            print(f'  -> Ist der rPole ({i}|{j}) der Scheibe ({i}) '
-                  f'gleich der Scheibe ({j})?')
             if rPole_conn_chain.node == rPole.node:
-                if (not rPole_conn_chain.same_location
-                        and rPole.same_location):
-                    print(f'   -> Nein, rPole der Scheibe ({j}) '
-                          f'liegt im Unendlichen')
+                if not rPole_conn_chain.same_location and rPole.same_location:
+                    self.logger.debug(
+                        "Relative pole (%s|%s) of connected chain lies at "
+                        "infinity", i, j
+                    )
                     pole = rPole_conn_chain
                     break
-                elif (rPole_conn_chain.same_location
-                      and not rPole.same_location):
-                    print(f'   -> Nein, rPole der Scheibe ({i}) '
-                          'liegt im Unendlichen')
+                elif (rPole_conn_chain.same_location and
+                      not rPole.same_location):
+                    self.logger.debug(
+                        "Relative pole (%s|%s) of current chain lies at "
+                        "infinity", i, j
+                    )
                     pole = rPole
                     break
                 else:
-                    print('   -> Ja, sind identisch')
                     pole = rPole
 
         if pole.is_infinite:
             chain.set_absolute_pole(
                 Pole(pole.node, direction=pole.direction, is_infinite=True),
-                overwrite=False)
+                overwrite=False
+            )
         else:
-            print(f'  -> rPole ({i}|{j}) wird aPole ({i}) der Scheibe {i}')
             chain.set_absolute_pole(
-                Pole(pole.node, same_location=True),
-                overwrite=False)
-        print(f'   -> rPole ({i}|{j}) wird aus Scheibe ({i}) entfernt')
+                Pole(pole.node, same_location=True), overwrite=False
+            )
 
         chain.relative_pole.remove(rPole)
 
         if len(chain.relative_pole) == 0:
             chain.add_relative_pole(Pole(pole.node, same_location=True))
 
+        self.logger.debug(
+            "Relative pole (%s|%s) removed and absolute pole assigned for "
+            "chain %s",
+            i, j, i
+        )
+
     def __call__(self):
+        """
+        Run pole identification directly via callable instance syntax.
+        """
+        self.logger.debug("PoleIdentifier invoked via __call__()")
         return self.run()
 
 
 @dataclass(eq=False)
-class Validator:
+class Validator(LoggerMixin):
+    """
+    Validate geometric and stiffness relationships between chains.
+
+    Parameters
+    ----------
+    chains : List[Chain]
+        List of all chains in the model.
+    node_to_chains : Dict[Node, List[Chain]]
+        Mapping from each node to the chains that contain it.
+    debug : bool, optional
+        If ``True``, additional debug information is logged. Default is
+        ``False``.
+
+    Attributes
+    ----------
+    _solved : bool
+        Internal flag indicating the result of the last validation run.
+    """
+
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
+    debug: bool = False
 
     _solved: Optional[bool] = field(init=False, default=False)
 
     @property
-    def solved(self):
+    def solved(self) -> bool:
+        """Return the result of the validation."""
         return self._solved
 
-    def run(self):
-        print('Validierung Start...')
+    def run(self) -> bool:
+        """
+        Execute the full validation routine.
+
+        Returns
+        -------
+        bool
+            ``True`` if all chain pairs are consistent, ``False`` otherwise.
+        """
+        self.logger.info("Validation started")
         previous_chain = None
+
         for node, chains in self.node_to_chains.items():
-            print('=========================')
-            print('Knoten: ', node.x, node.z)
-            print(f'Überprüfte Scheiben: '
-                  f'{[self.chains.index(c) for c in chains]}')
+            self.logger.info(
+                "Processing node at (x=%s, z=%s)", node.x, node.z
+            )
+            chain_indices = [self.chains.index(c) for c in chains]
+            self.logger.debug("Chains attached to node: %s", chain_indices)
 
             if previous_chain and previous_chain in chains:
-                pairs = [(previous_chain, c) for c in chains if
-                         c != previous_chain]
+                pairs = [
+                    (previous_chain, c) for c in chains if c != previous_chain
+                ]
+                self.logger.debug(
+                    "Using previous chain %s as first element in pairwise "
+                    "checks",
+                    self.chains.index(previous_chain),
+                )
             else:
-                pairs = combinations(chains, 2)
+                pairs = list(combinations(chains, 2))
+                self.logger.debug(
+                    "Generating %d pairwise combinations", len(pairs)
+                )
 
             for c1, c2 in pairs:
                 if not self._validate_chain_pair(c1, c2, node):
                     self._solved = False
+                    self.logger.error("Validation failed – aborting")
                     return False
-
                 previous_chain = c2
+
         self._solved = True
+        self.logger.info("Validation completed successfully")
         return True
 
-    def _validate_chain_pair(self, c1: Chain, c2: Chain, node: Node):
+    def _validate_chain_pair(self, c1: Chain, c2: Chain, node: Node) -> bool:
+        """
+        Validate a pair of chains that share a common node.
+
+        Parameters
+        ----------
+        c1, c2 : Chain
+            The two to be compared.
+        node : Node
+            The node shared by the two chains.
+
+        Returns
+        -------
+        bool
+            ``True`` if the pair is consistent, ``False`` otherwise.
+        """
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
-        print('°°°°°°°°°°°°°°°°°°°°°°°°°°°')
-        print(f'Kombo: {c1_idx} - {c2_idx}')
+
+        self.logger.debug("Validating chain pair (%d, %d)", c1_idx, c2_idx)
+
+        # Stiff‑chain handling
         if c1.stiff and not c2.stiff:
-            print(f'  -> c{c1_idx} ist eine starre Scheibe')
+            self.logger.info("Chain %d is stiff; adjusting chain %d",
+                             c1_idx, c2_idx)
             if c2.angle_factor == 0:
-                # c2.set_angle_factor(1)
                 c2.angle_factor = 1
-                print(f'  -> c{c2_idx}.set_angle_factor: 1')
+                self.logger.debug("Set angle_factor of chain %d to 1",
+                                  c2_idx)
             return True
 
         if c2.stiff and not c1.stiff:
-            print(f'  -> c{c2_idx} ist eine starre Scheibe')
+            self.logger.info("Chain %d is stiff; adjusting chain %d",
+                             c2_idx, c1_idx)
             if c1.angle_factor == 0:
-                # c1.set_angle_factor(1)
                 c1.angle_factor = 1
-                print(f'  -> c{c1_idx}.set_angle_factor: 1')
+                self.logger.debug("Set angle_factor of chain %d to 1",
+                                  c1_idx)
             return True
 
         if c1.stiff and c2.stiff:
-            print(f'  -> c{c1_idx} & c{c2_idx} sind starre Scheiben')
+            self.logger.info(
+                "Both chains %d and %d are stiff – no conflict",
+                c1_idx, c2_idx
+            )
             return True
 
-        rPole = self._get_rPole_from_chain(node, c1)
-
-        if not self._validation_lines(c1, c2, rPole):
-            print('WIDERSPRUCH!!!')
+        # General geometric validation
+        r_pole = self._get_rPole_from_chain(node, c1)
+        if not self._validation_lines(c1, c2, r_pole):
+            self.logger.warning(
+                "Geometric contradiction detected between chains %d and %d "
+                "at node (x=%s, z=%s)",
+                c1_idx,
+                c2_idx,
+                node.x,
+                node.z,
+            )
             return False
-        print(' -> Kein Konflikt')
-        self._calc_angle_relation(c1, c2, rPole)
+
+        self.logger.info(
+            "No contradiction for chain pair (%d, %d); computing angle "
+            "relation",
+            c1_idx,
+            c2_idx,
+        )
+        self._calc_angle_relation(c1, c2, r_pole)
         return True
 
-    def _validation_lines(self, c1: Chain, c2: Chain, rPole: Pole):
-        print('----------------------------')
-        print('# Pollinien werden überprüft')
+    def _validation_lines(self, c1: Chain, c2: Chain, r_pole: Pole) -> bool:
+        """
+        Compare the absolute‑pole lines of two chains at a given relative pole.
+
+        Parameters
+        ----------
+        c1, c2 : Chain
+            Chains whose lines are compared.
+        r_pole : Pole
+            The relative pole common to both chains.
+
+        Returns
+        -------
+        bool
+            ``True`` if the lines are compatible (identical or parallel),
+            ``False`` if they intersect (indicating a conflict).
+        """
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
 
-        line_1 = c1.apole_lines[rPole.node]
-        line_2 = c2.apole_lines[rPole.node]
+        line_1 = c1.apole_lines[r_pole.node]
+        line_2 = c2.apole_lines[r_pole.node]
 
-        print(f'  -> z{c1_idx} = {line_1[0]} * x + {line_1[1]}')
-        print(f'  -> z{c2_idx} = {line_2[0]} * x + {line_2[1]}')
+        self.logger.debug(
+            "Chain %d line: z = %s * x + %s", c1_idx, line_1[0], line_1[1]
+        )
+        self.logger.debug(
+            "Chain %d line: z = %s * x + %s", c2_idx, line_2[0], line_2[1]
+        )
 
         x, z = get_intersection_point(line_1, line_2)
 
-        if x == float('inf'):
-            print('   -> identisch')
+        if x == float("inf"):
+            self.logger.debug("Lines are identical – no conflict")
             return True
-        elif x is None:
-            print('   -> parallel')
+        if x is None:
+            self.logger.debug("Lines are parallel – no conflict")
             return True
-        else:
-            print('   -> Schnittpunkt')
-            return False
 
-    # Winkelbeziehung zwischen 2 Scheiben bestimmen
-    def _calc_angle_relation(self, c1: Chain, c2: Chain, rPole: Pole):
+        self.logger.debug(
+            "Lines intersect at (x=%s, z=%s) – potential conflict", x, z
+        )
+        return False
+
+    def _calc_angle_relation(self, c1: Chain, c2: Chain, r_pole: Pole) -> None:
+        """
+        Determine and set the angle factor of ``c2`` relative to ``c1``.
+
+        The computation depends on whether any absolute pole lies at infinity
+        and on the displacement vectors of the chains to the relative pole.
+
+        Parameters
+        ----------
+        c1, c2 : Chain
+            Chain ``c1`` is the reference, ``c2`` receives the computed factor.
+        r_pole : Pole
+            The relative pole common to both chains.
+        """
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
-        print('----------------------------')
-        print('# Winkelbeziehung aufstellen')
-        print(f'     -> c{c2_idx}.angle = '
-              f'c{c2_idx}.angle_factor * c{c1_idx}.angle')
-        c1_distance = c1.displacement_to_rpoles
-        c2_distance = c2.displacement_to_rpoles
 
-        if c1_distance is None or c2_distance is None:
-            print('    -> Ein Absolutpol liegt im Unendlichen \n'
-                  '     --> Translation')
-            if c1_distance is None:
-                print(f'    -> aPol : ({c1_idx}) ist im Unendlichen')
-                if c1.angle_factor == 0 or c1.angle_factor == 1:
-                    print(f'    -> c{c1_idx}.angle_factor ist 0')
-                    print(f'     -> c{c1_idx}.angle_factor wird auf 1 gesetzt')
-                    # c1.set_angle_factor(1)
+        self.logger.debug(
+            "Calculating angle relation: c%d = factor * c%d", c2_idx, c1_idx
+        )
+
+        c1_dist = c1.displacement_to_rpoles
+        c2_dist = c2.displacement_to_rpoles
+
+        # Cases where at least one displacement is undefined (infinite pole)
+        if c1_dist is None or c2_dist is None:
+            self.logger.info("At least one chain has an infinite absolute "
+                             "pole")
+            if c1_dist is None:
+                self.logger.debug("Chain %d has infinite absolute pole",
+                                  c1_idx)
+                if c1.angle_factor in (0, 1):
                     c1.angle_factor = 1
-                    # l1 = rPole.coords
-                    a = np.array([[c1.absolute_pole.node.x],
-                                  [c1.absolute_pole.node.z]])
-                    l1 = rPole.coords - a
-
-                    r21 = c2_distance[rPole]
-
-                    # Längenverhältnis bestimmen und Richtung ermitteln
-                    factor = (np.linalg.norm(l1) / np.linalg.norm(
-                        r21)) * np.sign(np.dot(l1.T, r21)).item()
-
-                    # Winkel-Faktor für c2 setzen
-                    # c2.set_angle_factor(factor)
-                    c2.angle_factor = factor
-                    print(f'c{c2_idx}.angle_factor = '
-                          f'l{c1_idx} / r{c2_idx}{c1_idx}')
-                    print(f'c{c2_idx}.angle_factor = '
-                          f'(({c1_idx}) - ({c1_idx}|{c2_idx})) / (({c2_idx})'
-                          f' - ({c1_idx}|{c2_idx}))')
-                    print(f'c{c2_idx}.angle_factor = {factor}')
-                else:
-                    if c2.angle_factor == 0:
-                        print(f'    -> c{c2_idx}.angle_factor ist 0')
-                        print(f'     -> c{c2_idx}.angle_factor wird auf -1 '
-                              f'gesetzt')
-                        # c2.set_angle_factor(1)
-                        c2.angle_factor = 1
-            if c2_distance is None:
-                print(f'    -> aPol : ({c2_idx}) ist im Unendlichen')
+                    self.logger.debug(
+                        "Set angle_factor of chain %d to 1 (fallback)",
+                        c1_idx
+                    )
+                a = np.array([[c1.absolute_pole.node.x],
+                              [c1.absolute_pole.node.z]])
+                l1 = r_pole.coords - a
+                r21 = c2_dist[r_pole]
+                factor = (
+                                 np.linalg.norm(l1) / np.linalg.norm(r21)
+                         ) * np.sign(np.dot(l1.T, r21)).item()
+                c2.angle_factor = factor
+                self.logger.info(
+                    "Set angle_factor of chain %d to %s "
+                    "(derived from geometry)",
+                    c2_idx,
+                    factor,
+                )
+            if c2_dist is None:
+                self.logger.debug("Chain %d has infinite absolute pole",
+                                  c2_idx
+                                  )
                 if c2.angle_factor == 0:
-                    print(f'    -> c{c2_idx}.angle_factor ist 0')
-                    print(f'     -> c{c2_idx}.angle_factor wird auf 1 gesetzt')
-                    # c2.set_angle_factor(1)
                     c2.angle_factor = 1
+                    self.logger.debug(
+                        "Set angle_factor of chain %d to 1 (fallback)",
+                        c2_idx
+                    )
+            return
 
-        elif rPole.is_infinite:
-            # Wenn rPole = Querkraft- oder Normalkraftgelenk
-            print('    -> rPole liegt im Unendlichen \n'
-                  '     --> Translation')
+        # rPole itself is at infinity – treat as translation
+        if r_pole.is_infinite:
+            self.logger.info("Relative pole is infinite – "
+                             "treating as translation")
             if c2.angle_factor == 0:
-                print(f'    -> c{c2_idx}.angle_factor ist 0')
-                print(f'     -> c{c2_idx}.angle_factor wird auf 1 gesetzt')
-                # c2.set_angle_factor(1)
                 c2.angle_factor = 1
-        else:
-            l1 = c1_distance[rPole]
-            r21 = c2_distance[rPole]
+                self.logger.debug(
+                    "Set angle_factor of chain %d to 1 (infinite rPole)",
+                    c2_idx
+                )
+            return
 
-            # Längenverhältnis bestimmen und Richtung ermitteln
-            factor = (np.linalg.norm(l1) / np.linalg.norm(
-                r21)) * np.sign(np.dot(l1.T, r21)).item()
-
-            # Winkel-Faktor für c2 setzen
-            # c2.set_angle_factor(factor)
-            c2.angle_factor = factor
-            print(f'c{c2_idx}.angle_factor = '
-                  f'l{c1_idx} / r{c2_idx}{c1_idx}')
-            print(f'c{c2_idx}.angle_factor = (({c1_idx}) - '
-                  f'({c1_idx}|{c2_idx})) / (({c2_idx}) - ({c1_idx}|{c2_idx}))')
-            print(f'c{c2_idx}.angle_factor = {factor}')
+        # Normal case: both chains have finite displacements
+        l1 = c1_dist[r_pole]
+        r21 = c2_dist[r_pole]
+        factor = (
+                         np.linalg.norm(l1) / np.linalg.norm(r21)
+                 ) * np.sign(np.dot(l1.T, r21)).item()
+        c2.angle_factor = factor
+        self.logger.info(
+            "Computed angle_factor for chain %d: %s "
+            "(ratio of displacement vectors)",
+            c2_idx,
+            factor,
+        )
 
     @staticmethod
-    def _get_rPole_from_chain(node: Node, chain: Chain):
-        for rPole in chain.relative_pole:
-            if rPole.node == node:
-                return rPole
+    def _get_rPole_from_chain(node: Node, chain: Chain) -> Optional[Pole]:
+        """
+        Retrieve the relative pole belonging to ``node`` from ``chain``.
+
+        Parameters
+        ----------
+        node : Node
+            The node for which the relative pole is searched.
+        chain : Chain
+            The chain that should contain the relative pole.
+
+        Returns
+        -------
+        Pole or None
+            The matching relative pole, or ``None`` if not found.
+        """
+        for r_pole in chain.relative_pole:
+            if r_pole.node == node:
+                return r_pole
         return None
 
-    def __call__(self):
+    def __call__(self) -> bool:
+        """
+        Run Validation directly via callable instance syntax.
+        """
+        self.logger.debug("Validator invoked via __call__")
         return self.run()
 
 
 @dataclass(eq=False)
-class AngleCalculator:
+class AngleCalculator(LoggerMixin):
+    """
+    Compute rotation angles for all chains such that a target chain attains a
+    prescribed angle.
+
+    Parameters
+    ----------
+    chains : List[Chain]
+        Ordered list of chain objects.
+    node_to_chains : Dict[Node, List[Chain]]
+        Mapping from each node to the chains that contain it.
+    debug : bool, optional
+        Enable verbose debugging output. Default is ``False``.
+    """
+
     chains: List[Chain]
     node_to_chains: Dict[Node, List[Chain]]
+    debug: bool = False
 
-    def calculate_angles(self, target_chain: Chain, target_angle: float) -> \
-            None:
-        print('---------------------------')
-        print('Schritt 4: Winkelberechnung')
-        print('---------------------------')
-        print(f'Die Drehwinkel aller Scheiben sollen so bestimmt werden, '
-              f'dass die Scheibe {self.chains.index(target_chain)} den '
-              f'Winkel von {target_angle} hat.')
+    def calculate_angles(self, target_chain: Chain,
+                         target_angle: float) -> None:
+        """
+        Public entry point – orchestrates backward and forward angle
+        propagation.
 
-        angle, target_chain_index = (self._init_target_chain(
-            target_chain, target_angle
-        ))
+        Parameters
+        ----------
+        target_chain : Chain
+            Chain whose angle must become ``target_angle``.
+        target_angle : float
+            Desired angle for ``target_chain`` (in the same unit as the model).
+        """
+        self.logger.info("Angle calculation starts")
 
-        print('Berechnung des Winkels von Scheibe 0, so dass,')
-        print(f'Scheibe {target_chain_index} den Winkel {angle} hat.')
+        idx = self.chains.index(target_chain)
+        self.logger.info(
+            "Target chain %d should receive angle %.3f",
+            idx, target_angle,
+        )
 
-        if target_chain_index != 0:
-            self._backward_calc(target_chain_index, angle)
+        angle, target_idx = self._init_target_chain(target_chain,
+                                                    target_angle)
+
+        self.logger.info(
+            "Calculating angle for chain 0 so that chain %d obtains %.3f",
+            target_idx, angle,
+        )
+
+        if target_idx != 0:
+            self._backward_calc(target_idx, angle)
         else:
-            print(' -> Keine Rückwärtsberechnung nötig, da die ausgewählte '
-                  'Scheibe Scheibe 0 ist!')
+            self.logger.info(
+                "No backward propagation needed – target is chain 0"
+            )
+
         self._forward_calc()
+        self.logger.info("Angle calculation completed")
 
-        print('-----------------------')
-        print('Schritt 4 abgeschlossen')
-        print('-----------------------')
+    def _init_target_chain(self, target_chain: Chain,
+                           target_angle: float) -> Tuple[float, int]:
+        """
+        Prepare the target chain and sanity‑check chain ``0``.
 
-    def _init_target_chain(self, target_chain: Chain, target_angle: float):
-        # Behandlung der ersten Scheibe, falls sie nicht Ziel ist und nicht
-        # starr
-        target_chain_index = self.chains.index(target_chain)
+        Returns
+        -------
+        Tuple[float, int]
+            The (possibly modified) target angle and the index of the target
+            chain after any adjustments.
+        """
+        target_idx = self.chains.index(target_chain)
         chain_0 = self.chains[0]
+
+        # Ensure chain 0 has a valid factor if it is not the target.
         if chain_0 != target_chain and not chain_0.stiff:
             chain_0.angle_factor = 1
-            print('Set angle_factor=1 for chain 0')
+            self.logger.debug("Set angle_factor=1 for chain 0")
 
-        # Behandlung, falls target_chain starr ist
+        # If the requested chain is stiff, skip it and pick the next one.
         if target_chain.stiff:
-            print(f'Die Ausgewählte Scheibe mit dem Index:'
-                  f' {target_chain_index} ist starr!')
-            print(' -> Keinen Drehwinkel!')
-            target_chain_index += 1
-            print(f' -> neue Scheibe mit dem Index {target_chain_index}')
-            target_chain = self.chains[target_chain_index]
-            # TODO: Warum wir der Winkel hier auf -1 oder +1 gesetzt?
+            self.logger.warning(
+                "Chosen chain %d is stiff – it cannot receive a rotation",
+                target_idx,
+            )
+            target_idx += 1
+            target_chain = self.chains[target_idx]
+            # Heuristic: use -1 or +1 depending on pole behaviour.
             if not target_chain.absolute_pole.is_infinite:
                 target_angle = -1
             else:
                 target_angle = 1
+            self.logger.debug(
+                "Adjusted target to chain %d with angle %.3f",
+                target_idx, target_angle,
+            )
 
         target_chain.angle = target_angle
+        return target_angle, target_idx
 
-        return target_angle, target_chain_index
+    def _backward_calc(self, target_idx: int,
+                       initial_angle: float) -> None:
+        """
+        Propagate the angle from the target chain backwards to chain 0.
 
-    def _backward_calc(self, target_chain_index: int, initial_angle: float) \
-            -> None:
-        # TODO: das geht nur, wenn die Reihenfolge der Liste mit der der
-        #  Geometrie übereinstimmt ! Das muss vorher sichergestellt sein!
+        Parameters
+        ----------
+        target_idx : int
+            Index of the target chain in ``self.chains``.
+        initial_angle : float
+            Angle that the target chain must achieve.
+        """
         angle = initial_angle
-        for i in range(target_chain_index - 1, -1, -1):
+        for i in range(target_idx - 1, -1, -1):
             next_chain = self.chains[i + 1]
             factor = next_chain.angle_factor
-            print(f'Berechnung für Scheibe {i}: factor = {factor}')
+            self.logger.debug(
+                "Back‑propagation for chain %d – factor %.3f", i, factor
+            )
             if factor == 0:
-                print(f"Winkelberechnung für Kette {i + 1} abgebrochen: "
-                      f"angle_factor = 0")
+                self.logger.error(
+                    "Abort: angle_factor of chain %d is zero", i + 1
+                )
                 break
 
-            current_chain = self.chains[i]
-            if current_chain.angle_factor == 0:
-                print(f"Winkelberechnung für Kette {i} abgebrochen: "
-                      f"angle_factor = 0")
+            cur_chain = self.chains[i]
+            if cur_chain.angle_factor == 0:
+                self.logger.error(
+                    "Abort: angle_factor of chain %d is zero", i
+                )
                 break
 
             angle /= factor
-            current_chain.angle = angle
-            print(f"Berechneter Winkel für Scheibe {i}: {angle}")
+            cur_chain.angle = angle
+            self.logger.info(
+                "Calculated angle for chain %d: %.6f", i, angle
+            )
 
     def _forward_calc(self) -> None:
-        print('(((((((((((((())))))))))))))')
-        print('Berechnung aller Scheibenwinkel')
-
+        """
+        Propagate angles forward through the graph, respecting node
+        connectivity.
+        """
+        self.logger.debug("Forward propagation started")
         previous_chain = None
+
         for node, chains in self.node_to_chains.items():
-            print('=========================')
-            print(f'Knoten: {node.x}, {node.z}')
-            print(f'Überprüfte Scheiben: '
-                  f'{[self.chains.index(c) for c in chains]}')
+            self.logger.info("-" * 25)
+            self.logger.info(
+                "Node (x=%s, z=%s) – processing %d attached chains",
+                node.x, node.z, len(chains)
+            )
+            idx_list = [self.chains.index(c) for c in chains]
+            self.logger.debug("Chain indices at this node: %s", idx_list)
 
             pairs = self._get_chain_pairs(chains, previous_chain)
 
@@ -1010,117 +1295,293 @@ class AngleCalculator:
                 self._calc_c2_angle_from_c1(c1, c2)
                 previous_chain = c2
 
-    @staticmethod
-    def _get_chain_pairs(chains: List[Chain], previous_chain: Chain) -> (
-            List)[Tuple[Chain, Chain]]:
-        """Gets pairs of chains for angle calculation."""
-        if previous_chain and previous_chain in chains:
-            return [(previous_chain, c) for c in chains if c != previous_chain]
-        else:
-            return list(combinations(chains, 2))
+        self.logger.debug("Forward propagation finished")
 
-    def _calc_c2_angle_from_c1(self, c1: Chain, c2: Chain) -> bool:
+    @staticmethod
+    def _get_chain_pairs(chains: List[Chain],
+                         previous_chain: Chain) -> List[Tuple[Chain, Chain]]:
+        """
+        Determine which chain pairs should be processed for angle update.
+
+        Parameters
+        ----------
+        chains : List[Chain]
+            Chains attached to the current node.
+        previous_chain : Chain
+            Chain that was processed in the preceding node, if any.
+
+        Returns
+        -------
+        List[Tuple[Chain, Chain]]
+            Ordered list of chain pairs.
+        """
+        if previous_chain and previous_chain in chains:
+            return [
+                (previous_chain, c) for c in chains if c != previous_chain
+            ]
+        return list(combinations(chains, 2))
+
+    def _calc_c2_angle_from_c1(self, c1: Chain,
+                               c2: Chain) -> bool:
+        """
+        Compute ``c2``'s angle using ``c1``'s angle and ``c2``'s factor.
+
+        Returns ``False`` if either chain is stiff (no angle update).
+
+        Parameters
+        ----------
+        c1, c2 : Chain
+            Source and destination chains.
+
+        Returns
+        -------
+        bool
+            ``True`` if the calculation succeeded, ``False`` otherwise.
+        """
         c1_idx = self.chains.index(c1)
         c2_idx = self.chains.index(c2)
-        print(f' -> Kombo: {c1_idx} - {c2_idx}')
+        self.logger.debug("Processing pair (%d, %d)", c1_idx, c2_idx)
+
         if c1.stiff or c2.stiff:
-            print('stiff')
+            self.logger.warning(
+                "Skipping pair (%d, %d) – at least one chain is stiff",
+                c1_idx, c2_idx,
+            )
             return False
 
         angle = c1.angle * c2.angle_factor
         c2.angle = angle
-
-        print(f'   -> c{c2_idx}.angle = c{c1_idx}.angle *  '
-              f'c{c2_idx}.angle_factor')
-        print(f'   -> c{c2_idx}.angle = {c1.angle} * {c2.angle_factor}')
-        print(f'   -> c{c2_idx}.angle = {angle}')
+        self.logger.info(
+            "Chain %d angle set to %.6f (%.6f * %.6f)",
+            c2_idx, angle, c1.angle, c2.angle_factor,
+        )
         return True
+
+    def __call__(self, target_chain: Chain, target_angle: float) -> None:
+        """Allow the instance to be called directly."""
+        self.logger.debug(
+            "AngleCalculator invoked via __call__ for chain %d with angle "
+            "%.3f",
+            self.chains.index(target_chain), target_angle,
+        )
+        self.calculate_angles(target_chain, target_angle)
 
 
 @dataclass(eq=False)
-class DisplacementCalculator:
+class DisplacementCalculator(LoggerMixin):
+    """
+    Compute bar displacement vectors for a given pole‑plan.
+
+    Parameters
+    ----------
+    chains : List[Chain]
+        List of chains that define the structural configuration.
+    bars : List[Bar]
+        List of all bars belonging to the model.
+    node_to_chains : Dict[Node, List[Chain]]
+        Mapping from each node to the chains that share it.
+    debug : bool, optional
+        Enable additional debug information. Default is ``False``.
+    """
+
     chains: List[Chain]
     bars: List[Bar]
     node_to_chains: Dict[Node, List[Chain]]
+    debug: bool = False
 
-    def run(self):
-        displacement_bar_list: List[np.ndarray] = \
-            [np.zeros((6, 1)) for _ in self.bars]
-        bar_index_map = {bar: idx for idx, bar in enumerate(self.bars)}
+    def run(self) -> List[np.ndarray]:
+        """
+        Calculate the displacement vector for every bar.
+
+        Returns
+        -------
+        List[np.ndarray]
+            A list containing a 6x1 displacement vector for each bar.
+        """
+        self.logger.info("Displacement calculation started")
+
+        # Initialise an empty displacement vector for each bar.
+        disp_list: List[np.ndarray] = [
+            np.zeros((6, 1)) for _ in self.bars
+        ]
+        bar_index = {bar: i for i, bar in enumerate(self.bars)}
 
         for i, chain in enumerate(self.chains):
             if chain.stiff:
+                self.logger.debug("Skipping stiff chain %d", i)
                 continue
+
             if chain.absolute_pole.is_infinite:
-                displacement = self._calc_displacement_from_translation(chain)
-                for bar in chain.bars:
-                    idx = bar_index_map[bar]
-
-                    displacement_bar = displacement_bar_list[idx]
-                    displacement_bar[0:2, :] = displacement
-                    displacement_bar[3:5, :] = displacement
-
-                    displacement_bar = np.transpose(
-                        bar.transformation_matrix()) @ displacement_bar
-
-                    displacement_bar_list[idx] = displacement_bar
-
+                self._process_translation_chain(chain, disp_list, bar_index)
             else:
-                center = chain.absolute_pole.coords
-                angle = chain.angle
-                for bar in chain.bars:
-                    idx = bar_index_map[bar]
+                self._process_rotation_chain(chain, disp_list, bar_index)
 
-                    node_i = np.array([[bar.node_i.x], [bar.node_i.z]])
-                    node_j = np.array([[bar.node_j.x], [bar.node_j.z]])
+        self.logger.info("Displacement calculation finished")
+        return disp_list
 
-                    displacement_bar = displacement_bar_list[idx]
-                    displacement_bar[0:2, :] = (
-                        self._calc_displacement_from_rotation(
-                            node_i, center, angle))
-                    displacement_bar[3:5, :] = (
-                        self._calc_displacement_from_rotation(
-                            node_j, center, angle))
+    def _process_translation_chain(self, chain: Chain,
+                                   disp_list: List[np.ndarray],
+                                   bar_index: Dict[Bar, int]) -> None:
+        """
+        Handle chains whose absolute pole lies at infinity (pure translation).
 
-                    displacement_bar[2, :] = displacement_bar[5, :] = -angle
+        Parameters
+        ----------
+        chain : Chain
+            The chain to process.
+        disp_list : List[np.ndarray]
+            Global list of displacement vectors (modified in‑place).
+        bar_index : Dict[Bar, int]
+            Mapping from a bar to its index in ``disp_list``.
+        """
+        self.logger.debug(
+            "Processing translation chain %d (infinite pole)",
+            self.chains.index(chain),
+        )
+        displacement = self._calc_displacement_from_translation(chain)
 
-                    displacement_bar = np.transpose(
-                        bar.transformation_matrix()) @ displacement_bar
+        for bar in chain.bars:
+            idx = bar_index[bar]
+            disp = disp_list[idx]
 
-                    displacement_bar_list[idx] = displacement_bar
-        return displacement_bar_list
+            # Apply the same translation to both ends of the bar.
+            disp[0:2, :] = displacement
+            disp[3:5, :] = displacement
 
-    def _calc_displacement_from_translation(self, chain: Chain):
-        # bestimme die Richtung r basierend auf m
+            # Transform from global to local bar coordinates.
+            trans = np.transpose(bar.transformation_matrix()) @ disp
+            disp_list[idx] = trans
+
+            self.logger.debug(
+                "Bar %d displacement (translation) updated", idx
+            )
+
+    def _process_rotation_chain(self, chain: Chain,
+                                disp_list: List[np.ndarray],
+                                bar_index: Dict[Bar, int]) -> None:
+        """
+        Handle chains with a finite absolute pole (rotation about a centre).
+
+        Parameters
+        ----------
+        chain : Chain
+            The chain to process.
+        disp_list : List[np.ndarray]
+            Global list of displacement vectors (modified in‑place).
+        bar_index : Dict[Bar, int]
+            Mapping from a bar to its index in ``disp_list``.
+        """
+        self.logger.debug(
+            "Processing rotation chain %d (finite pole)",
+            self.chains.index(chain),
+        )
+        centre = chain.absolute_pole.coords
+        angle = chain.angle
+
+        for bar in chain.bars:
+            idx = bar_index[bar]
+            disp = disp_list[idx]
+
+            node_i = np.array([[bar.node_i.x], [bar.node_i.z]])
+            node_j = np.array([[bar.node_j.x], [bar.node_j.z]])
+
+            # Displacement of the start node.
+            disp[0:2, :] = self._calc_displacement_from_rotation(
+                node_i, centre, angle
+            )
+            # Displacement of the end node.
+            disp[3:5, :] = self._calc_displacement_from_rotation(
+                node_j, centre, angle
+            )
+            # Rotation component for both nodes.
+            disp[2, :] = disp[5, :] = -angle
+
+            # Transform to the bar's local system.
+            trans = np.transpose(bar.transformation_matrix()) @ disp
+            disp_list[idx] = trans
+
+            self.logger.debug(
+                "Bar %d displacement (rotation) updated", idx
+            )
+
+    def _calc_displacement_from_translation(self, chain: Chain) -> np.ndarray:
+        """
+        Compute the translation vector for a chain with an infinite pole.
+
+        The direction is derived from the pole line; the magnitude is based on
+        neighbouring non‑stiff chains.
+
+        Parameters
+        ----------
+        chain : Chain
+            The chain whose translation is required.
+
+        Returns
+        -------
+        np.ndarray
+            A 2x1 translation vector.
+        """
+        # Determine direction `r` based on the pole line slope `m`.
         m, _ = chain.absolute_pole.line()
         r = np.array([[1], [0]] if m is None else [[-m], [1]])
-        # Normiere den Vektor
+
+        # Normalise the direction vector.
         v_norm = r / np.linalg.norm(r)
-        # Iteriere über die relativen Pole der Scheibe
-        for rPole in chain.relative_pole:
-            # Iteriere über die verbundenen Scheiben
-            for conn_chain in self.node_to_chains[rPole.node]:
-                # Überprüft, ob es sich um eine verbundene Scheibe handelt
-                if (conn_chain != chain and not conn_chain.stiff):
-                    aPole_coords = np.array([
+
+        for r_pole in chain.relative_pole:
+            for conn_chain in self.node_to_chains[r_pole.node]:
+                if conn_chain != chain and not conn_chain.stiff:
+                    a_coords = np.array([
                         [conn_chain.absolute_pole.node.x],
-                        [conn_chain.absolute_pole.node.z]])
-                    rPole_coords = np.array([[rPole.node.x],
-                                             [rPole.node.z]])
-                    delta = aPole_coords - rPole_coords
-                    r = np.hypot(delta[0][0], delta[1][0])
+                        [conn_chain.absolute_pole.node.z],
+                    ])
+                    r_coords = np.array([[r_pole.node.x], [r_pole.node.z]])
+                    delta = a_coords - r_coords
+                    distance = np.hypot(delta[0][0], delta[1][0])
 
-                    if np.sign(chain.angle) == np.sign(conn_chain.angle):
-                        sign = 1
-                    else:
-                        sign = -1
+                    sign = 1 if np.sign(chain.angle) == np.sign(
+                        conn_chain.angle
+                    ) else -1
 
-                    return r * sign * conn_chain.angle * v_norm
+                    result = distance * sign * conn_chain.angle * v_norm
+                    self.logger.debug(
+                        "Translation vector calculated: %s", result.ravel()
+                    )
+                    return result
 
-    def _calc_displacement_from_rotation(self, point, center, angle):
-        delta = point - center
-        r = np.array([[0, -1], [1, 0]])
-        return angle * r @ delta
+        self.logger.warning(
+            "No neighbouring non‑stiff chain found for translation"
+        )
+        return np.zeros((2, 1))
 
-    def __call__(self):
+    @staticmethod
+    def _calc_displacement_from_rotation(point: np.ndarray,
+                                         centre: np.ndarray,
+                                         angle: float) -> np.ndarray:
+        """
+        Compute the displacement of a point caused by a rotation about
+        ``centre``.
+
+        Parameters
+        ----------
+        point : np.ndarray
+            Coordinates of the point (2x1).
+        centre : np.ndarray
+            Rotation centre (2x1).
+        angle : float
+            Rotation angle (radians).
+
+        Returns
+        -------
+        np.ndarray
+            A 2 × 1 displacement vector.
+        """
+        delta = point - centre
+        rot_mat = np.array([[0, -1], [1, 0]])  # 90° rotation matrix
+        result = angle * rot_mat @ delta
+        return result
+
+    def __call__(self) -> List[np.ndarray]:
+        """Allow the instance to be invoked like a function."""
+        self.logger.debug("DisplacementCalculator called via __call__")
         return self.run()

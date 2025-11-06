@@ -4,8 +4,8 @@ from sstatics.core.preprocessing.poleplan.objects import (
 )
 from sstatics.core.preprocessing.poleplan.operation import (
     get_intersection_point, _check_lines, validate_point_on_line, get_angle,
-    print_chains, print_dict_key_value, ChainIdentifier, PoleIdentifier,
-    Validator, AngleCalculator, DisplacementCalculator
+    ChainIdentifier, PoleIdentifier, Validator, AngleCalculator,
+    DisplacementCalculator
 )
 
 
@@ -19,8 +19,6 @@ __all__ = [
     'Pole',
     'PoleIdentifier',
     'Poleplan',
-    'print_chains',
-    'print_dict_key_value',
     'Validator',
     'validate_point_on_line',
     '_check_lines',

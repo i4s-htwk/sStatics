@@ -7,10 +7,11 @@ import numpy as np
 
 from sstatics.core.preprocessing.dof import NodeDisplacement
 from sstatics.core.preprocessing.loads import NodePointLoad
+from sstatics.core.logger_mixin import LoggerMixin
 
 
 @dataclass(eq=False)
-class Node:
+class Node(LoggerMixin):
     """Create a node for a statical system.
 
     Parameters
@@ -56,8 +57,10 @@ class Node:
     loads: (
         tuple[NodePointLoad, ...] | list[NodePointLoad] | NodePointLoad
     ) = ()
+    debug: bool = False
 
     def __post_init__(self):
+        self.logger.info(f"Node created at ({self.x}, {self.z})")
         for param in (self.u, self.w, self.phi):
             if isinstance(param, str) and param not in ('fixed', 'free'):
                 raise ValueError(
@@ -220,3 +223,11 @@ class Node:
         False
         """
         return self.x == other.x and self.z == other.z
+
+    def __str__(self):
+        """Return a concise string representation of the node."""
+        bc = f"u={self.u}, w={self.w}, φ={self.phi}"
+        disp = f"{len(self.displacements)} disp" if self.displacements else "—"
+        loads = f"{len(self.loads)} load" if self.loads else "—"
+        return (f"Node({self.x}|{self.z}, rot={self.rotation:.3f}, "
+                f"{bc}, disp={disp}, loads={loads})")

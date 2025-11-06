@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Type
 import numpy as np
 
+from sstatics.core.logger_mixin import LoggerMixin
 from sstatics.core.preprocessing.bar import Bar
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.system import System
@@ -70,6 +71,15 @@ class Pole:
         n = z - m * x
         return [m, n]
 
+    def __str__(self):
+        if self.is_infinite:
+            return f"Pole(∞, dir={np.degrees(self.direction):.1f}°)"
+        elif self.same_location:
+            return f"Pole({self.node.x}|{self.node.z})"
+        else:
+            return (f"Pole(({self.node.x}|{self.node.z}), dir"
+                    f"={np.degrees(self.direction):.1f}°)")
+
 
 @dataclass(eq=False)
 class Chain:
@@ -117,18 +127,6 @@ class Chain:
     def solved_relative_pole(self) -> bool:
         return all(pole.same_location or pole.is_infinite
                    for pole in self.relative_pole)
-
-    # @property
-    # def solved_relation_aPole_rPole(self):
-    #     if self.absolute_pole.is_infinite:
-    #         for rPole in self.relative_pole:
-    #             print(rPole)
-    #             if rPole.same_location:
-    #                 if not validate_point_on_line(
-    #                         self.absolute_pole.line(), (rPole.x, rPole.z)):
-    #                     self.stiff = True
-    #                     return False
-    #     return True
 
     # Other properties
     @property
@@ -321,84 +319,217 @@ class Chain:
                     vec_dict[rPole] = (rPole.coords - aPole_coords)
             return vec_dict
 
+    def __str__(self):
+        bar_str = ", ".join(
+            f"({b.node_i.x}|{b.node_i.z}) — ({b.node_j.x}|{b.node_j.z})"
+            for b in self.bars
+        )
+
+        conn_str = ", ".join(f"({n.x}|{n.z})" for n in self.connection_nodes)
+
+        # Relative Pole
+        if self.relative_pole:
+            rPol_str = ", ".join(str(p) for p in self.relative_pole)
+        else:
+            rPol_str = "None"
+
+        # Absoluter Pol
+        aPol_str = str(self.absolute_pole) if self.absolute_pole else "None"
+
+        return (
+            f"    bars        : {bar_str}\n"
+            f"    conn_nodes  : {conn_str}\n"
+            f"    rPol        : {rPol_str}\n"
+            f"    aPol        : {aPol_str}\n"
+            f"    stiff       : {self.stiff}\n"
+        )
+
 
 @dataclass(eq=False)
-class Poleplan:
+class Poleplan(LoggerMixin):
 
     system: System
+    debug: bool = False
 
     _node_to_chains: Optional[dict] = field(init=False, default=None)
     _node_to_multiple_chains: Optional[dict] = field(init=False, default=None)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Initialise the pole‑plan and run the processing pipeline."""
+        self.logger.info("Poleplan initialisation started")
         from sstatics.core.preprocessing.poleplan.operation import (
-            ChainIdentifier, PoleIdentifier, Validator
-        )
-
-        steps: list[Type] = [
             ChainIdentifier,
             PoleIdentifier,
             Validator,
-        ]
+        )
 
+        steps: list[Type] = [ChainIdentifier, PoleIdentifier, Validator]
         results = {}
+
         for i, step_class in enumerate(steps):
+            step_name = step_class.__name__
+            self.logger.debug(
+                f"Running step {i + 1}/{len(steps)}: {step_name}")
+
             if i == 0:
-                step = step_class(self.system)
+                # First step receives the system directly.
+                step = step_class(self.system, debug=self.debug)
+                self.logger.debug("Created first step instance with system")
             else:
-                step = step_class(results.get('chains'),
-                                  results.get('node_to_chains'))
-            step()
-            results['chains'] = step.chains
+                # Subsequent steps receive data from previous results.
+                step = step_class(
+                    results.get("chains"),
+                    results.get("node_to_chains"),
+                    debug=self.debug
+                )
+                self.logger.debug(
+                    f"Created {step_name} with previous results: "
+                    f"chains={bool(results.get('chains'))}, "
+                    f"node_to_chains={bool(results.get('node_to_chains'))}"
+                )
 
+            try:
+                step()
+                self.logger.info(f"Step {step_name} executed successfully")
+            except Exception as exc:
+                self.logger.error(
+                    f"Error while executing step {step_name}: {exc}",
+                    exc_info=True,
+                )
+                raise
+
+            # Store and propagate intermediate results.
+            results["chains"] = step.chains
             self.node_to_chains = step.node_to_chains
+            results["node_to_chains"] = self.node_to_multiple_chains
+            self.logger.debug(
+                f"Updated results after {step_name}: "
+                f"{len(step.chains)} chains, "
+                f"{len(self.node_to_multiple_chains)} multiple‑chain nodes"
+            )
 
-            results['node_to_chains'] = self.node_to_multiple_chains
+            if i == 2:  # Validator step
+                results["solved"] = step.solved
+                self.logger.debug(f"Validator solved flag: {step.solved}")
 
-            if i == 2:
-                results['solved'] = step.solved
-
-        self.chains = results['chains']
-        self.solved = results['solved']
+        self.chains = results["chains"]
+        self.solved = results["solved"]
+        self.logger.info(
+            "Poleplan initialisation completed: "
+            f"{len(self.chains)} total chains, solved={self.solved}"
+        )
 
     @property
     def node_to_chains(self):
+        """Mapping of node → list of chains that contain the node."""
         return self._node_to_chains
 
     @node_to_chains.setter
-    def node_to_chains(self, value):
+    def node_to_chains(self, value: dict) -> None:
+        """Validate and store the node‑to‑chains dictionary."""
         if not isinstance(value, dict):
-            raise TypeError("Angle must be a dict")
+            msg = "node_to_chains must be a dict"
+            self.logger.error(msg)
+            raise TypeError(msg)
         self._node_to_chains = value
+        self.logger.debug(
+            f"node_to_chains set with {len(value)} entries"
+        )
+        # Invalidate cached multiple‑chain data.
+        self._node_to_multiple_chains = None
+        self.logger.debug("Cached node_to_multiple_chains cleared")
 
     @property
-    def node_to_multiple_chains(self):
+    def node_to_multiple_chains(self) -> dict:
+        """Cache of nodes that belong to more than one chain."""
         if self._node_to_multiple_chains is None:
-            self._node_to_multiple_chains = (
-                self._filter_multiple_chains(self.node_to_chains))
+            self._node_to_multiple_chains = self._filter_multiple_chains(
+                self.node_to_chains
+            )
+            self.logger.debug(
+                f"Computed node_to_multiple_chains: "
+                f"{len(self._node_to_multiple_chains)} nodes"
+            )
         return self._node_to_multiple_chains
 
     @staticmethod
-    def _filter_multiple_chains(conn):
-        return {key: chains for key, chains in conn.items() if len(chains) > 1}
+    def _filter_multiple_chains(conn: dict) -> dict:
+        """Return only those nodes that appear in > 1 chain."""
+        filtered = {k: v for k, v in conn.items() if len(v) > 1}
+        return filtered
 
-    def set_angle(self, target_chain, target_angle):
-        from sstatics.core.preprocessing.poleplan.operation import (
-            AngleCalculator
+    def set_angle(self, target_chain, target_angle) -> None:
+        """
+        Adjust the angle of ``target_chain`` to ``target_angle``.
+        """
+        self.logger.info(
+            f"Setting angle for chain \n {target_chain} to {target_angle}"
         )
-        angle_calculator = AngleCalculator(self.chains,
-                                           self.node_to_multiple_chains)
-        angle_calculator.calculate_angles(target_chain, target_angle)
+        from sstatics.core.preprocessing.poleplan.operation import \
+            AngleCalculator
+
+        try:
+            angle_calculator = AngleCalculator(
+                self.chains, self.node_to_multiple_chains
+            )
+            angle_calculator.calculate_angles(target_chain, target_angle)
+            self.logger.debug("Angle calculation completed")
+        except Exception as exc:
+            self.logger.error(
+                f"Failed to calculate angles: {exc}",
+                exc_info=True,
+            )
+            raise
 
     def get_displacement_figure(self):
+        """
+        Return a matplotlib figure (or similar) visualising displacement
+        of the pole‑plan.
+        """
+        self.logger.info("Generating displacement figure")
         from sstatics.core.preprocessing.poleplan.operation import (
-            DisplacementCalculator
+            DisplacementCalculator,
         )
-        return DisplacementCalculator(
-            self.chains, self.system.bars, self.node_to_multiple_chains
-        )()
+        try:
+            fig = DisplacementCalculator(
+                self.chains, self.system.bars, self.node_to_multiple_chains,
+                debug=self.debug
+            )()
+            self.logger.debug("Displacement figure created")
+            return fig
+        except Exception as exc:
+            self.logger.error(
+                f"Displacement calculation failed: {exc}",
+                exc_info=True,
+            )
+            raise
+
+    # def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
+    #     # TODO: Simplify get_chain to accept a single Bar object.
+    #     #   Original:
+    #     #     def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
+    #     #         """Returns chain containing any given bars."""
+    #     #         return next((chain for chain in self.chains
+    #     #                      if bars & chain.bars), None)
+    #     #   Simplified:
+    #     #     def get_chain(self, bar: Bar) -> Optional[Chain]:
+    #     #         """Returns chain containing the given bar."""
+    #     #         return next((chain for chain in self.chains
+    #     #                      if bar in chain.bars), None)
+    #     #   Add a separate method for multiple Bar objects:
+    #     #     def get_chain_containing_any(self, bars: set[Bar]):
+    #     #         """Returns chain containing any given bars."""
+    #     #         return next((chain for chain in self.chains
+    #     #                      if bars & chain.bars), None)
+    #     """Returns the chain that contains any of the given bars."""
+    #     return next(
+    #         (chain for chain in self.chains if bars & chain.bars), None
+    #     )
 
     def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
+        """
+        Returns the chain that contains any of the given bars.
+        """
         # TODO: Simplify get_chain to accept a single Bar object.
         #   Original:
         #     def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
@@ -415,50 +546,106 @@ class Poleplan:
         #         """Returns chain containing any given bars."""
         #         return next((chain for chain in self.chains
         #                      if bars & chain.bars), None)
-        """Returns the chain that contains any of the given bars."""
-        return next(
-            (chain for chain in self.chains if bars & chain.bars), None
+        self.logger.debug(
+            f"Searching for chain containing any of {len(bars)} bars"
         )
+        try:
+            chain = next(
+                (c for c in self.chains if bars & c.bars), None
+            )
+            if chain:
+                self.logger.debug(
+                    f"Found chain {chain} containing the bars"
+                )
+            else:
+                self.logger.warning("No chain contains the supplied bars")
+            return chain
+        except Exception as exc:
+            self.logger.error(
+                f"Error while searching for chain: {exc}",
+                exc_info=True,
+            )
+            raise
 
     def get_chain_node(self, node) -> Optional[Chain]:
-        """Returns the chain that is connected to the given node."""
-        return next(
-            (chain for chain in self.chains
-             if any(node.same_location(n)
-                    for n in chain.connection_nodes)), None
-        )
+        """
+        Returns the chain that is connected to the given node.
+        """
+        self.logger.debug(f"Looking up chain for node {node}")
+        try:
+            chain = next(
+                (
+                    c
+                    for c in self.chains
+                    if any(node.same_location(n) for n in c.connection_nodes)
+                ),
+                None,
+            )
+            if chain:
+                self.logger.debug(f"Node {node} belongs to chain {chain}")
+            else:
+                self.logger.warning(f"No chain found for node {node}")
+            return chain
+        except Exception as exc:
+            self.logger.error(
+                f"Failed to locate chain for node: {exc}",
+                exc_info=True,
+            )
+            raise
 
     def find_adjacent_chain(self, node, chain):
         # TODO: Refactor this method and get_chain_and_angle(…) of
         #  InfluenceLine class together.
+        """
+        Find a non‑stiff adjacent chain that shares ``node`` with ``chain``.
+        Returns ``(absolute_pole_coords, node_coords, adjacent_chain)`` or
+        ``(None, None, None)`` if none is found.
+        """
+        self.logger.debug(
+            f"Searching adjacent chains for node {node} and chain {chain}"
+        )
         conn_chain = self.node_to_multiple_chains.get(node, [])
 
-        if len(conn_chain) > 1:
-            print(' -> es gibt angrenzende Scheiben')
+        if len(conn_chain) <= 1:
+            self.logger.info(
+                "Node is connected to zero or one chain – no adjacency "
+                "possible"
+            )
+            return None, None, None
 
-            print('Gibt es Starre Scheiben?')
-            for c in conn_chain:
-                if c == chain:
-                    continue
-                print(
-                    self.chains.index(c))
-                if c.stiff:
-                    print('starr')
-                    continue
+        self.logger.info(
+            f"Node {node} is shared by {len(conn_chain)} chains"
+        )
+        for c in conn_chain:
+            if c == chain:
+                continue  # skip the original chain
+            self.logger.debug(f"Evaluating adjacent chain {c}")
 
-                # Falls nicht starr,
-                # die absoluten Koordinaten speichern
-                aPole_coords = c.absolute_pole.coords
+            if c.stiff:
+                self.logger.debug("Chain is stiff – skipping")
+                continue
 
-                # Die relative Pol-Koordinate ermitteln,
-                # falls der Knoten nicht übereinstimmt
-                for rPole in c.relative_pole:
-                    if not rPole.is_infinite:
-                        node_coords = rPole.coords
-                    else:
-                        node_coords = aPole_coords = np.array([
-                            [rPole.node.x],
-                            [rPole.node.z]
-                        ])
-                    return aPole_coords, node_coords, c
+            # Gather absolute pole coordinates.
+            aPole_coords = c.absolute_pole.coords
+            self.logger.debug(
+                f"Absolute pole coordinates: {aPole_coords.tolist()}"
+            )
+
+            # Determine relative pole coordinates.
+            for rPole in c.relative_pole:
+                if not rPole.is_infinite:
+                    node_coords = rPole.coords
+                    self.logger.debug(
+                        f"Finite relative pole found: {node_coords.tolist()}"
+                    )
+                else:
+                    node_coords = aPole_coords = np.array(
+                        [[rPole.node.x], [rPole.node.z]]
+                    )
+                    self.logger.debug(
+                        "Infinite relative pole – using absolute coordinates"
+                    )
+                return aPole_coords, node_coords, c
+
+        self.logger.warning("No suitable adjacent non‑stiff chain found")
         return None, None, None
