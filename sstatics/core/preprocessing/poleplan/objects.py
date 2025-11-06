@@ -481,22 +481,35 @@ class Poleplan(LoggerMixin):
             )
             raise
 
-    def get_displacement_figure(self):
+    def rigid_motion(self, n_disc: int = 2):
         """
-        Return a matplotlib figure (or similar) visualising displacement
-        of the pole‑plan.
+        Return a list of Rigid Body Displacement Objects. They can use for
+        plotting.
         """
-        self.logger.info("Generating displacement figure")
+        self.logger.info("Generating displacement vector for each bar")
         from sstatics.core.preprocessing.poleplan.operation import (
             DisplacementCalculator,
         )
+        from sstatics.core.postprocessing.results import RigidBodyDisplacement
         try:
             fig = DisplacementCalculator(
                 self.chains, self.system.bars, self.node_to_multiple_chains,
                 debug=self.debug
             )()
+            self.logger.info("Generating for each bar a "
+                             "rigid-body-displacement-object for plotting.")
+            # creating rigid-body-displacement-object for plotting
+            rbd_objects = []
+            for i, bar in enumerate(self.system.bars):
+                rdb = RigidBodyDisplacement(
+                    bar=bar,
+                    deform=fig[i],
+                    n_disc=n_disc
+                )
+                rbd_objects.append(rdb)
+
             self.logger.debug("Displacement figure created")
-            return fig
+            return rbd_objects
         except Exception as exc:
             self.logger.error(
                 f"Displacement calculation failed: {exc}",
