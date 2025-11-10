@@ -11,7 +11,7 @@ from sstatics.core.preprocessing.bar import Bar
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.system import System
 
-from sstatics.core.preprocessing.poleplan.objects import Chain, Pole
+from sstatics.core.solution.poleplan.objects import Chain, Pole
 
 
 def get_intersection_point(line1, line2):

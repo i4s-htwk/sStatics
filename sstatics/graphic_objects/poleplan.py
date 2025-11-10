@@ -3,7 +3,7 @@ from functools import cached_property
 
 import plotly.express as px
 
-from sstatics.core.preprocessing.poleplan import Poleplan, Chain, Pole
+from sstatics.core.solution.poleplan import Poleplan, Chain, Pole
 from sstatics.core.preprocessing.bar import Bar
 
 from sstatics.graphic_objects.utils import SingleGraphicObject

@@ -181,7 +181,7 @@ class Chain:
             if overwrite:
                 self.absolute_pole = pole
             else:
-                from sstatics.core.preprocessing.poleplan.operation import (
+                from sstatics.core.solution.poleplan.operation import (
                     get_intersection_point, validate_point_on_line
                 )
                 if (self.absolute_pole.same_location and
@@ -357,7 +357,7 @@ class Poleplan(LoggerMixin):
     def __post_init__(self) -> None:
         """Initialise the pole‑plan and run the processing pipeline."""
         self.logger.info("Poleplan initialisation started")
-        from sstatics.core.preprocessing.poleplan.operation import (
+        from sstatics.core.solution.poleplan.operation import (
             ChainIdentifier,
             PoleIdentifier,
             Validator,
@@ -465,7 +465,7 @@ class Poleplan(LoggerMixin):
         self.logger.info(
             f"Setting angle for chain \n {target_chain} to {target_angle}"
         )
-        from sstatics.core.preprocessing.poleplan.operation import \
+        from sstatics.core.solution.poleplan.operation import \
             AngleCalculator
 
         try:
@@ -487,7 +487,7 @@ class Poleplan(LoggerMixin):
         plotting.
         """
         self.logger.info("Generating displacement vector for each bar")
-        from sstatics.core.preprocessing.poleplan.operation import (
+        from sstatics.core.solution.poleplan.operation import (
             DisplacementCalculator,
         )
         from sstatics.core.postprocessing.results import RigidBodyDisplacement
