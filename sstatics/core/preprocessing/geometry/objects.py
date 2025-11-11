@@ -50,7 +50,7 @@ class Polygon:
     --------
     Create a rectangular polygon with no holes:
 
-    >>> from sstatics.core.geometry.objects import Polygon
+    >>> from sstatics.core.preprocessing.geometry.objects import Polygon
     >>> outer = [(0, 0), (4, 0), (4, 2), (0, 2), (0, 0)]
     >>> p = Polygon(points=outer)
 
@@ -135,7 +135,7 @@ class Polygon:
 
         Examples
         --------
-        >>> from sstatics.core.geometry.objects import Polygon
+        >>> from sstatics.core.preprocessing.geometry.objects import Polygon
 
         Without holes:
 
@@ -193,7 +193,7 @@ class Polygon:
 
         Examples
         --------
-        >>> from sstatics.core.geometry.objects import Polygon
+        >>> from sstatics.core.preprocessing.geometry.objects import Polygon
         >>> outer = [(0, 0), (4, 0), (4, 2), (0, 2), (0, 0)]
         >>> hole = [[(1, 0.5), (3, 0.5), (3, 1.5), (1, 1.5), (1, 0.5)]]
         >>> p = Polygon(points=outer, holes=hole)
@@ -238,7 +238,7 @@ class Polygon:
         --------
         Without holes:
 
-        >>> from sstatics.core.geometry.objects import Polygon
+        >>> from sstatics.core.preprocessing.geometry.objects import Polygon
         >>> outer = [(0, 0), (4, 0), (4, 2), (0, 2), (0, 0)]
         >>> p = Polygon(points=outer)
         >>> sz, sy = p.static_moment
@@ -846,18 +846,16 @@ class CircularSector:
             compute the centroid of the entire composite cross-section
             (see class CrossSection).
 
-        .. math::
+            .. math::
+                S_y = A \cdot z_c
 
-            S_y = A \cdot z_c
-
-        .. math::
-
-            S_z = A \cdot y_c
+            .. math::
+                S_z = A \cdot y_c
 
         Examples
         --------
         >>> from sstatics.core.preprocessing.geometry.objects import
-        >>>     CircularSector
+        >>> CircularSector
         >>> import numpy as np
         >>> c = CircularSector(center = (0,0), radius = 1, angle = np.pi/2,
         >>>                    start_angle = 0, positive = True

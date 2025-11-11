@@ -16,7 +16,7 @@ from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.dof import NodeDisplacement
 from sstatics.core.preprocessing.system import System
 from sstatics.core.solution.solver import Solver
-from sstatics.core.solution.second_order import SecondOrder
+from sstatics.core.calc_methods.second_order import SecondOrder
 from sstatics.core.preprocessing import BarSecond
 
 

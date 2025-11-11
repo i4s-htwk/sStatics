@@ -6,7 +6,7 @@ import numpy as np
 import logging
 from tabulate import tabulate
 
-from sstatics.core.postprocessing.calc_methods.equation_of_work import (
+from sstatics.core.postprocessing.equation_of_work import (
     EquationOfWork
 )
 from sstatics.core.postprocessing.results import SystemResult
@@ -215,8 +215,8 @@ class RED(PVK):
         ----------
         obj : :any:`Bar`
             The bar where the hinge will be inserted.
-        hinge : {'hinge_u_i', 'hinge_w_i', 'hinge_phi_i',
-                 'hinge_u_j', 'hinge_w_j', 'hinge_phi_j'}
+        hinge : {'hinge_u_i', 'hinge_w_i', 'hinge_phi_i','hinge_u_j', \
+                'hinge_w_j', 'hinge_phi_j'}
             The hinge to be applied and its location (node i or j).
         """
         self.modifier.insert_hinge(obj, hinge)

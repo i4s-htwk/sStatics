@@ -75,7 +75,7 @@ class SystemResult:
     >>> from sstatics.core.preprocessing import (
     >>>     Bar, BarLineLoad, CrossSection, Material, Node, System
     >>> )
-    >>> from sstatics.core.solution import FirstOrder
+    >>> from sstatics.core.calc_methods import FirstOrder
     >>> from sstatics.core.postprocessing import SystemResult
     >>>
     >>> n1 = Node(0, 0, u='fixed', w='fixed')
@@ -275,7 +275,7 @@ class DGL:
     --------
     >>> from sstatics.core.preprocessing import Bar, BarLineLoad, CrossSection
     >>> from sstatics.core.preprocessing import Material, Node, System
-    >>> from sstatics.core.solution import FirstOrder
+    >>> from sstatics.core.calc_methods import FirstOrder
     >>> from sstatics.core.postprocessing import BarResult
     >>> n1 = Node(0, 0, u='fixed', w='fixed')
     >>> n2 = Node(4, 0, w='fixed')
