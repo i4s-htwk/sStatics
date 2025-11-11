@@ -174,7 +174,7 @@ class BarResultGraphic(SingleGraphicObject):
         self.bar_result = bar_result
         self.origin = (bar_result.bar.node_i.x, bar_result.bar.node_i.z)
         self.inclination = bar_result.bar.inclination
-        self.length = bar_result.length_disc
+        self.length = bar_result.x
         self.results = results
         self.decimals = decimals
         self.sig_digits = sig_digits
