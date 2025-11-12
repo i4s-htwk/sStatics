@@ -119,7 +119,8 @@ class SystemResult:
         has_second_order = any(
             isinstance(bar, BarSecond) for bar in self.system.bars)
 
-        dgl_class = DGLSecond if has_second_order else DGL
+        de_class = DifferentialEquationSecond if has_second_order else (
+            DifferentialEquation)
 
         self.bars = []
         for i, mesh_bar in enumerate(self.system.mesh):
@@ -130,7 +131,7 @@ class SystemResult:
                 self.n_disc,
             ]
 
-            if dgl_class is DGLSecond:
+            if de_class is DifferentialEquationSecond:
                 f_axial = getattr(self.system.bars[i], "f_axial", None)
                 if f_axial is None:
                     raise AttributeError(
@@ -138,7 +139,7 @@ class SystemResult:
                     )
                 args.append(f_axial)
 
-            self.bars.append(dgl_class(*args))
+            self.bars.append(de_class(*args))
 
         self.nodes = [
             NodeResult(node,
@@ -249,7 +250,7 @@ class SystemResult:
 
 
 @dataclass
-class DGL:
+class DifferentialEquation:
     r"""Calculates discrete result vector for the provided bar.
 
     Parameters
@@ -286,7 +287,7 @@ class DGL:
     >>> system = System([bar])
     >>> fo = FirstOrder(system)
     >>> results = fo.bar_deform_list, fo.internal_forces
-    >>> dgl = DGL(bar, results[0][0], results[1][0], n_disc=10)
+    >>> de = DifferentialEquation(bar, results[0][0], results[1][0], n_disc=10)
     """
 
     bar: Bar
@@ -381,7 +382,7 @@ class DGL:
         Examples
         --------
         Polynomial for linearly distributed load in local x-direction
-        >>> dgl = DGL(...)
+        >>> dgl = DifferentialEquation(...)
         >>> dgl.x_coef[:, 0]
         array([ 0.  0.  0.  0.])
 
@@ -468,7 +469,7 @@ class DGL:
         --------
         Polynomial for the shear force function in local z-direction:
 
-        >>> dgl = DGL(...)
+        >>> dgl = DifferentialEquation(...)
         >>> dgl.z_coef[:, 1]
         array([ 2. -1. -0.  0.  0.  0.])
 
@@ -477,7 +478,7 @@ class DGL:
 
         Polynomial for the slope of the deflection curve in z-direction
 
-        >>> dgl = DGL(...)
+        >>> dgl = DifferentialEquation(...)
         >>> dgl.z_coef[:, 3]
         array([-4.58592008e-04 -0.00000000e+00  1.71972003e-04 -2.86620005e-05
         -0.00000000e+00  0.00000000e+00])
@@ -573,7 +574,7 @@ class DGL:
 
         Examples
         --------
-        >>> dgl = DGL(...)
+        >>> dgl = DifferentialEquation(...)
         >>> deforms = dgl.deform_disc
 
         The values can be accessed as:
@@ -615,7 +616,7 @@ class DGL:
 
         Examples
         --------
-        >>> dgl = DGL(...)
+        >>> dgl = DifferentialEquation(...)
         >>> forces = dgl.forces_disc
 
         The values can be accessed as:
@@ -628,11 +629,11 @@ class DGL:
         return np.vstack([self._eval_poly(c) for c in coef]).T
 
 
-BarResult = DGL
+BarResult = DifferentialEquation
 
 
 @dataclass(eq=False)
-class DGLSecond(DGL):
+class DifferentialEquationSecond(DifferentialEquation):
     r"""Calculates discrete result vector for the provided bar using
     second-order analysis.
 

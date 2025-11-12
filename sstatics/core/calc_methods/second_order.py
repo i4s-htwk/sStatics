@@ -1,16 +1,16 @@
 
 from dataclasses import dataclass, replace, field, fields
 from functools import cached_property
-import warnings
 import numpy as np
 from typing import Literal
+from sstatics.core.logger_mixin import LoggerMixin
 
 from sstatics.core.preprocessing import Bar, BarSecond, System, SystemModifier
 from sstatics.core.solution.solver import Solver
 
 
 @dataclass
-class SecondOrder:
+class SecondOrder(LoggerMixin):
     """Executes second-order structural analysis for the given system.
 
     This class performs analysis according to second-order theory,
@@ -49,6 +49,7 @@ class SecondOrder:
         iterations is exceeded.
     """
     system: 'System'
+    debug: bool = False
 
     _analytic_system: 'System' = field(default=None, init=False, repr=False)
     _p_delta_system: 'System' = field(default=None, init=False, repr=False)
@@ -275,10 +276,10 @@ class SecondOrder:
             If the analytic system has not been computed yet.
         """
         if self._analytic_system is None:
-            warnings.warn(
+            self.logger.warning(
                 "Analytic system not yet computed. "
-                "Run solver_analytic first.",
-                UserWarning)
+                "Run solver_analytic first.")
+            raise ValueError
         return self._analytic_system
 
     def get_p_delta_system(self):
@@ -295,10 +296,10 @@ class SecondOrder:
             If the P–Δ system has not been computed yet.
         """
         if self._p_delta_system is None:
-            warnings.warn(
-                "P-Delta system not yet computed. "
-                "Run solver_p_delta first.",
-                UserWarning)
+            self.logger.warning(
+                "Analytic system not yet computed. "
+                "Run solver_analytic first.")
+            raise ValueError
         return self._p_delta_system
 
     def get_taylor_system(self):
@@ -315,10 +316,10 @@ class SecondOrder:
             If the Taylor system has not been computed yet.
         """
         if self._taylor_system is None:
-            warnings.warn(
-                "Taylor system not yet computed. "
-                "Run solver_taylor first.",
-                UserWarning)
+            self.logger.warning(
+                "Analytic system not yet computed. "
+                "Run solver_analytic first.")
+            raise ValueError
         return self._taylor_system
 
     def get_iteration_system(self, iteration: int = -1):
