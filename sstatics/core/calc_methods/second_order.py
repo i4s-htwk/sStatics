@@ -48,12 +48,12 @@ class SecondOrder(LoggerMixin):
         recalculated until convergence is reached or the maximum number of
         iterations is exceeded.
     """
-    system: 'System'
+    system: System
     debug: bool = False
 
-    _analytic_system: 'System' = field(default=None, init=False, repr=False)
-    _p_delta_system: 'System' = field(default=None, init=False, repr=False)
-    _taylor_system: 'System' = field(default=None, init=False, repr=False)
+    _analytic_system: System = field(default=None, init=False, repr=False)
+    _p_delta_system: System = field(default=None, init=False, repr=False)
+    _taylor_system: System = field(default=None, init=False, repr=False)
     _iteration_results: list = field(default=None, init=False, repr=False)
 
     def _convert_bars(
@@ -89,7 +89,8 @@ class SecondOrder(LoggerMixin):
             for bar, f_axial in zip(bars, self.averaged_longitudinal_force)
         ]
 
-    def _transform_internal_forces(self, solver):
+    @staticmethod
+    def _transform_internal_forces(solver):
         """Rotates end forces using current bar-end rotations (phi_i, phi_j).
 
         The local force components are mapped with the instantaneous bar-end
@@ -118,7 +119,8 @@ class SecondOrder(LoggerMixin):
             forces_list.append(force_sec)
         return forces_list
 
-    def _update_geometry(self, system, node_deform_curr, node_deform_prev):
+    @staticmethod
+    def _update_geometry(system, node_deform_curr, node_deform_prev):
         """Apply incremental node displacements and update system geometry.
 
         The nodal coordinates are updated based on the incremental displacement
@@ -166,7 +168,8 @@ class SecondOrder(LoggerMixin):
 
         return replace(system, bars=bars_new), max_deform
 
-    def _solver_difference(self, solver_a, solver_b):
+    @staticmethod
+    def _solver_difference(solver_a, solver_b):
         """Compute difference between two solver states.
 
         Compares numerical attributes of two solvers (arrays, scalars, or lists
