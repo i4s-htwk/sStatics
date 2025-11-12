@@ -403,78 +403,70 @@ class CrossSection:
         """
         return self._mom_of_int_polygon() + self._mom_of_int_circular_sectors()
 
-    def _calc_height(self) -> float:
+    def boundary(self):
         """
-        Calculates the height of the cross-section in the z-direction.
+        Determines the overall geometric boundaries of the cross-section in
+        both the y- and z-directions.
 
         Returns
         -------
-        float
-            The vertical extent (height) of the entire cross-section.
+        tuple of list of float
+            ([y_min, y_max], [z_min, z_max]) representing the horizontal and
+            vertical extents of the cross-section.
 
         Notes
         -----
-        The height is defined as the difference between the maximum and minimum
-        z-coordinates of all geometric components in the cross-section.
-
-        - If the cross-section contains circular sectors, their individual
-          z-boundaries are evaluated using their `boundary()` method.
-        - If a polygon is present, its z-extent is also included in the
-          calculation.
-        - If no circular sectors are present, the height is determined directly
-          from the polygon.
+        - The boundaries are computed based on all geometric components
+          (polygon and circular sectors) that make up the cross-section.
+        - If a polygon is present, its vertex coordinates are included
+          directly.
+        - For each circular sector, the corresponding boundary extents are
+          obtained from its ``boundary()`` method.
+        - Only circular sectors marked as *positive* (i.e., material present)
+          are considered for determining the outer limits.
+        - If neither polygons nor circular sectors are defined, the method
+          returns zero boundaries.
         """
-        if self.circular_sector:
-            if self.polygon:
-                z_min = min(self.polygon.z)
-                z_max = max(self.polygon.z)
-            else:
-                z_min = self.circular_sector[0].boundary()[1][0]
-                z_max = self.circular_sector[0].boundary()[1][1]
+        y_vals, z_vals = [], []
 
+        if self.polygon:
+            y_vals.extend(self.polygon.y)
+            z_vals.extend(self.polygon.z)
+
+        if self.circular_sector:
             for c in self.circular_sector:
                 if c.positive:
-                    z_boundary = c.boundary()[1]
-                    z_min = min(z_min, z_boundary[0])
-                    z_max = max(z_max, z_boundary[1])
-            return z_max - z_min
+                    yb, zb = c.boundary()
+                    y_vals.extend(yb)
+                    z_vals.extend(zb)
 
-        return self.polygon.height
+        if not y_vals or not z_vals:
+            return ([0.0, 0.0],
+                    [0.0, 0.0])
+
+        return ([min(y_vals), max(y_vals)],
+                [min(z_vals), max(z_vals)])
 
     def _calc_width(self) -> float:
         """
-        Calculates the width of the cross-section in the y-direction.
+        Calculates the total width of the cross-section in the y-direction.
 
         Returns
         -------
         float
             The horizontal extent (width) of the entire cross-section.
-
-        Notes
-        -----
-        The width is defined as the difference between the maximum and minimum
-        y-coordinates of all geometric components in the cross-section.
-
-        - If the cross-section contains circular sectors, their individual
-          y-boundaries are evaluated using their `boundary()` method.
-        - If a polygon is present, its y-extent is also included in the
-          calculation.
-        - If no circular sectors are present, the width is determined directly
-          from the polygon.
         """
-        if self.circular_sector:
-            if self.polygon:
-                y_min = min(self.polygon.y)
-                y_max = max(self.polygon.y)
-            else:
-                y_min = self.circular_sector[0].boundary()[0][0]
-                y_max = self.circular_sector[0].boundary()[0][1]
+        yb, _ = self.boundary()
+        return yb[1] - yb[0]
 
-            for c in self.circular_sector:
-                if c.positive:
-                    y_boundary = c.boundary()[0]
-                    y_min = min(y_min, y_boundary[0])
-                    y_max = max(y_max, y_boundary[1])
-            return y_max - y_min
+    def _calc_height(self) -> float:
+        """
+        Calculates the total height of the cross-section in the z-direction.
 
-        return self.polygon.width
+        Returns
+        -------
+        float
+            The vertical extent (height) of the entire cross-section.
+        """
+        _, zb = self.boundary()
+        return zb[1] - zb[0]

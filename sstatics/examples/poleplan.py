@@ -4,7 +4,7 @@
 from sstatics.core.preprocessing import (Node, Bar, Material, CrossSection,
                                          System)
 from sstatics.graphic_objects import SystemGraphic
-from sstatics.graphic_objects.poleplan import PoleplanGraphic
+# from sstatics.graphic_objects.poleplan import PoleplanGraphic
 
 # define cross-section
 c_1 = CrossSection(mom_of_int=2769, area=76.84, height=20, width=10,
@@ -33,9 +33,10 @@ system = System(bars)
 # visualize system
 SystemGraphic(system=system).show()
 
+# TODO - Complete Polplan Example
 # Define Poleplan
-poleplan = system.polplan
-poleplan.set_angle(target_chain=poleplan.chains[0], target_angle=0.2)
-
+# poleplan = system.polplan
+# poleplan.set_angle(target_chain=poleplan.chains[0], target_angle=0.2)
+#
 # Visualize Poleplan
-PoleplanGraphic(poleplan=poleplan, show_annotations=False).show()
+# PoleplanGraphic(poleplan=poleplan, show_annotations=False).show()

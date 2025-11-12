@@ -138,13 +138,6 @@ class System:
     def bar_of(self, mesh_segment: Bar) -> Bar:
         return self._mesh.bar_of(mesh_segment)
 
-    @property
-    def polplan(self):
-        if not hasattr(self, "_polplan"):
-            from sstatics.core.preprocessing.poleplan.objects import Poleplan
-            self._polplan = Poleplan(self)
-        return self._polplan
-
     def create_mesh(self, user_divisions=None):
         self._mesh = Mesh(bars=self.bars, user_divisions=user_divisions)()
 

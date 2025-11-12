@@ -2,9 +2,8 @@
 from functools import cached_property
 
 import plotly.express as px
-import numpy as np
 
-from sstatics.core.preprocessing.poleplan import Poleplan, Chain, Pole
+from sstatics.core.solution.poleplan import Poleplan, Chain, Pole
 from sstatics.core.preprocessing.bar import Bar
 
 from sstatics.graphic_objects.utils import SingleGraphicObject
@@ -12,6 +11,8 @@ from sstatics.graphic_objects.node import NodeGraphic
 from sstatics.graphic_objects.bar import BarGraphic
 from sstatics.graphic_objects.geometry import (LineGraphic, PointGraphic,
                                                EllipseGraphic)
+
+from sstatics.graphic_objects import BarResultGraphic
 
 
 class PoleplanGraphic(SingleGraphicObject):
@@ -97,30 +98,39 @@ class PoleplanGraphic(SingleGraphicObject):
 
         # TODO: displacement_figure in eigene Klasse DisplacementGraphic
         #  auslagern
-        deform = poleplan.get_displacement_figure()
+        # deform = poleplan.get_displacement_figure()
 
-        self._displacement_figure = []
+        self._displacement_figure = [
+            BarResultGraphic(
+                bar_result, bar_result.deform_disc[:, 1],
+                self._base_scale, rotation=self.rotation,
+                scale=self.scale, scatter_options=self.scatter_kwargs,
+                annotation_options=self.annotation_kwargs
+            ) for i, bar_result in enumerate(poleplan.rigid_motion())
+        ]
 
-        for idx, bar in enumerate(self.bars):
-            deform_vals = np.dot(
-                bar.transformation_matrix(to_node_coord=False), deform[idx])
-
-            points = [
-                [bar.node_i.x + float(deform_vals[0]),
-                 bar.node_i.z + float(deform_vals[1])],
-                [bar.node_j.x + float(deform_vals[3]),
-                 bar.node_j.z + float(deform_vals[4])]
-            ]
-
-            self._displacement_figure.append(
-                LineGraphic.from_points(
-                    points,
-                    scatter_options=self.scatter_kwargs | {
-                        'line': dict(width=4),
-                        'line_color': 'red'
-                    }
-                )
-            )
+        # self._displacement_figure = []
+        #
+        # for idx, bar in enumerate(self.bars):
+        #     deform_vals = np.dot(
+        #         bar.transformation_matrix(to_node_coord=False), deform[idx])
+        #
+        #     points = [
+        #         [bar.node_i.x + float(deform_vals[0]),
+        #          bar.node_i.z + float(deform_vals[1])],
+        #         [bar.node_j.x + float(deform_vals[3]),
+        #          bar.node_j.z + float(deform_vals[4])]
+        #     ]
+        #
+        #     self._displacement_figure.append(
+        #         LineGraphic.from_points(
+        #             points,
+        #             scatter_options=self.scatter_kwargs | {
+        #                 'line': dict(width=4),
+        #                 'line_color': 'red'
+        #             }
+        #         )
+        #     )
 
     @cached_property
     def _base_scale(self):
