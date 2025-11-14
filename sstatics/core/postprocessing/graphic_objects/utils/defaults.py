@@ -165,6 +165,16 @@ DEFAULT_CHAMPED_SUPPORT = dict(
     height=2.0
 )
 
+DEFAULT_SPRING_PHI = dict(
+    width=3.5,
+    height=4.0
+)
+
+DEFAULT_SPRING_W = dict(
+    width=2.0,
+    height=2.75
+)
+
 PLOTLY = 'plotly'
 MPL = 'mpl'
 VALID_MODES = (PLOTLY, MPL)

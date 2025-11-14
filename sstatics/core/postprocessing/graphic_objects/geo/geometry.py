@@ -39,7 +39,7 @@ class PointGeo(ObjectGeo):
             f'origin={self._origin}, '
             f'point_style={self._point_style}, '
             f'text={self._text if self._text else None}, '
-            f'text_style={self._text_style['textfont']}, '
+            f'text_style={self._text_style}, '
             f'Transform={self._transform})'
         )
 

@@ -9,7 +9,7 @@ from sstatics.core.postprocessing.graphic_objects.geo.hinges import (
 )
 from sstatics.core.postprocessing.graphic_objects.geo.supports import (
     ChampedSupport, FixedSupportUPhi, FixedSupportUW, FixedSupportWPhi,
-    PinnedSupportGeo, RollerSupportGeo
+    PinnedSupportGeo, RollerSupportGeo, SpringPhi, SpringW
 )
 
 
@@ -30,4 +30,6 @@ __all__ = [
     'RectangleGeo',
     'RollerSupportGeo',
     'ShearHingeGeo',
+    'SpringPhi',
+    'SpringW',
 ]

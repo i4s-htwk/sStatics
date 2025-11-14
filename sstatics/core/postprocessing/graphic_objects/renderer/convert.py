@@ -107,7 +107,7 @@ def convert_plotly_to_mpl(style: dict) -> dict:
             mpl_style['linewidth'] = sl['width']
         if 'dash' in sl:
             if sl['dash'] not in LINESTYLE_MAP:
-                raise ValueError(f'Unrecognized line dash style: {sl['dash']}')
+                raise ValueError('Unrecognized line dash style: {sl[dash]}')
             mpl_style['linestyle'] = LINESTYLE_MAP[sl['dash']]
 
     if 'fillcolor' in style:

@@ -5,7 +5,7 @@ from functools import cached_property
 import numpy as np
 
 from sstatics.core.postprocessing.graphic_objects.geo.geometry import (
-    IsoscelesTriangleGeo, OpenCurveGeo, RectangleGeo, PointGeo
+    EllipseGeo, IsoscelesTriangleGeo, OpenCurveGeo, RectangleGeo, PointGeo
 )
 from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
     ObjectGeo
@@ -13,7 +13,8 @@ from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_SUPPORT, DEFAULT_ROLLER_SUPPORT, DEFAULT_PINNED_SUPPORT,
     DEFAULT_FIXED_SUPPORT_UW, DEFAULT_FIXED_SUPPORT_WPHI,
     DEFAULT_CHAMPED_SUPPORT, DEFAULT_FIXED_SUPPORT_UPHI, DEFAULT_SUPPORT_HATCH,
-    DEFAULT_CHAMPED_SUPPORT_HATCH
+    DEFAULT_CHAMPED_SUPPORT_HATCH, DEFAULT_SPRING_W, DEFAULT_FILL_WHITE,
+    DEFAULT_SPRING_PHI
 )
 
 
@@ -207,3 +208,78 @@ class FixedSupportWPhi(SupportGeo):
 ChampedSupport = DoubleLineHatchGeo
 """ Alias of :py:class:`DoubleLineHatchGeo` to make the use case of this
 class more clear. """
+
+
+class SpringW(SupportGeo):
+    CLASS_DIMENSIONS = DEFAULT_SPRING_W
+
+    @cached_property
+    def graphic_elements(self):
+
+        vertical_line_top = OpenCurveGeo(
+            [self._x0, self._x0],
+            [self._z0, self._z0 + 2 / 11 * self._height],
+            line_style=self._line_style
+        )
+
+        vertical_line_bottom = OpenCurveGeo(
+            [self._x0, self._x0],
+            [self._z0 + 9 / 11 * self._height, self._z0 + self._height],
+            line_style=self._line_style
+        )
+
+        bottom_line = OpenCurveGeo(
+            [self._x0 - self._width / 2, self._x0 + self._width / 2],
+            [self._z0 + self._height, self._z0 + self._height],
+            line_style=self._line_style
+        )
+
+        x_diagonal = [
+            self._x0, self._x0 - self._width / 4, self._x0 + self._width / 4,
+            self._x0 - self._width / 4, self._x0 + self._width / 4,
+            self._x0 - self._width / 4, self._x0 + self._width / 4,
+            self._x0
+        ]
+
+        z_diagonal = [
+            self._z0 + 2 / 11 * self._height, self._z0 + 3 / 11 * self._height,
+            self._z0 + 4 / 11 * self._height, self._z0 + 5 / 11 * self._height,
+            self._z0 + 6 / 11 * self._height, self._z0 + 7 / 11 * self._height,
+            self._z0 + 8 / 11 * self._height, self._z0 + 9 / 11 * self._height,
+        ]
+
+        diagonal_lines = OpenCurveGeo(
+            x_diagonal, z_diagonal, line_style=self._line_style)
+
+        circle = EllipseGeo((self._x0, self._z0 + self.height), self._width/8,
+                            self._height/11, line_style=self._line_style)
+
+        background = EllipseGeo(
+            (self._x0, self._z0 + self.height), self._width/8,
+            self._height/11, line_style=DEFAULT_FILL_WHITE, show_outline=False)
+
+        return [vertical_line_top, vertical_line_bottom, diagonal_lines,
+                bottom_line, circle, background]
+
+
+class SpringPhi(SupportGeo):
+    CLASS_DIMENSIONS = DEFAULT_SPRING_PHI
+
+    @cached_property
+    def graphic_elements(self):
+        x_line = [
+            self._x0 - self._width / 2, self._x0 - self._width / 2
+        ]
+
+        z_line = [
+            self._z0 + 3 / 10 * self._height, self._z0 + 11 / 20 * self._height
+        ]
+
+        vertical_line = OpenCurveGeo(
+            x_line, z_line, line_style=self._line_style)
+
+        ellipse = EllipseGeo(
+            (self._x0 - self._width / 2, self._z0), self._width,
+            self._height * 7 / 8, (np.pi / 2, 2 * np.pi))
+
+        return [vertical_line, ellipse]
