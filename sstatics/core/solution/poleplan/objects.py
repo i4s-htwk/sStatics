@@ -11,7 +11,78 @@ from sstatics.core.preprocessing.system import System
 
 @dataclass(eq=False)
 class Pole:
+    """
+    Represents a Pole in a Poleplan (Polplan) of a planar structural system.
 
+    A Pole is a point in the plane of the structure around which a chain
+    can rotate. Depending on its type and position, it defines the
+    relative or absolute motion of connected elements.
+
+    Types of Poles
+    ---------------
+    - Absolute Pole (Hauptpol):
+        A fixed point in the plane that does not translate. The associated
+        body rotates around this point. Examples include fixed supports or
+        rigid connections to fixed parts of the structure.
+
+    - Relative Pole (Nebenpol):
+        Defines the relative rotation between two connected bodies. For
+        example, a moment hinge (M = 0) directly gives the relative pole.
+        If shear or translational constraints are zero (N = 0 or Q = 0),
+        the relative pole lies at infinity perpendicular to the motion
+        direction. For non-adjacent bodies, the relative pole may lie
+        somewhere in the plane.
+
+    Attributes
+    ----------
+    node : Node
+        The node associated with the Pole, providing coordinates in the
+        plane.
+    same_location : bool, default=False
+        Indicates whether the Pole coincides exactly with the node
+        coordinates.
+    direction : float or None, default=None
+        Direction of the Pole for translation or Poles at infinity (in
+        radians). None if not applicable.
+    is_infinite : bool, default=False
+        Indicates whether the Pole is at infinity, corresponding to a
+        translational motion.
+
+    Properties
+    ----------
+    x : float or None
+        X-coordinate of the Pole if `same_location=True`, else None.
+    z : float or None
+        Z-coordinate of the Pole if `same_location=True`, else None.
+    coords : np.ndarray
+        2x1 array of the Pole coordinates, or None entries if coordinates
+        are undefined.
+
+    Methods
+    -------
+    line(node: Node = None)
+        Returns the slope and intercept [m, n] of the line passing
+        through the Pole in the specified direction, or special cases
+        for vertical lines. Returns False if the Pole has the same
+        location as a node.
+
+    Notes
+    -----
+    - Pollinie: Line connecting three Poles that defines the relative
+      motion of the involved bodies. Movable systems always have at
+      least three Poles on a Pollinie.
+    - Absolute Pollinie: Connects two absolute Poles and the relative
+      Pole of the connected bodies, e.g., (1)-(1/2)-(2).
+    - Relative Pollinie: Connects three relative Poles, e.g.,
+      (1/2)-(2/3)-(1/3), defining relative motion among the three
+      bodies.
+
+    References
+    ----------
+    .. [1] D. Dinkler. "Grundlagen der Baustatik: Modelle und
+           Berechnungsmethoden für ebene Stabtragwerke". Band 1,
+           pp. 95 ff., 2011.
+    """
     node: Node
     same_location: bool = False
     direction: float = None
@@ -58,16 +129,13 @@ class Pole:
         else:
             x, z = self.node.x, self.node.z
 
-        # Prüfen, ob die Gerade vertikal ist (cos(direction) ≈ 0)
         if np.isclose(np.cos(self.direction), 0, atol=1e-9):
-            return None, x  # Vertikale Gerade: x = x0
+            return None, x
         elif np.isclose(np.cos(self.direction), -1, atol=1e-9):
             return 0, z
 
-        # Steigung m = tan(direction)
         m = np.tan(self.direction)
 
-        # y-Achsenabschnitt n berechnen: z = m*x + n → n = z - m*x
         n = z - m * x
         return [m, n]
 
@@ -83,6 +151,87 @@ class Pole:
 
 @dataclass(eq=False)
 class Chain:
+    """
+    Represents a kinematic chain of bars and poles in a planar structural
+    system (Polplan).
+
+    A Chain corresponds to a "Scheibe" — a kinematically rigid subsystem.
+    Chains are composed of bars connected at nodes and are associated with
+    absolute and relative poles that define rotational and translational
+    motions. Chains can be used to determine Pollinien and relative motion
+    vectors in a Poleplan.
+
+    Attributes
+    ----------
+    bars : set of Bar
+        Set of bars that belong to this chain. Must contain at least one
+        bar.
+    relative_pole : set of Pole
+        Set of relative poles associated with this chain, defining relative
+        rotations between connected bodies.
+    absolute_pole : Pole or None
+        Absolute (fixed) pole of the chain, if known. Defines the rotation
+        center of the chain.
+    connection_nodes : set of Node
+        Nodes that connect bars of the chain.
+
+    _stiff : bool, default=False
+        Internal flag indicating whether the chain is kinematically stiff.
+    _angle_factor : float, default=0
+        Internal factor used for calculating rotation angles.
+    _angle : float, default=0
+        Current rotation angle of the chain.
+
+    Properties
+    ----------
+    solved : bool
+        True if the chain is fully solved (all poles known or chain stiff).
+    solved_absolute_pole : bool
+        True if the absolute pole is fully defined (coordinates or infinite).
+    solved_relative_pole : bool
+        True if all relative poles are fully defined (coordinates or infinite).
+    angle : float
+        Rotation angle of the chain.
+    angle_factor : float
+        Factor applied to calculate rotations.
+    stiff : bool
+        Indicates whether the chain is kinematically stiff.
+    nodes : list of Node
+        List of nodes that belong to the chain.
+    apole_lines : dict
+        Dictionary of absolute polelines for all relative poles.
+    displacement_to_rpoles : dict or None
+        Vectors from the absolute pole to each relative pole, or None if the
+        absolute pole is at infinity.
+
+    Methods
+    -------
+    add_connection_node(node)
+        Add a single node or a set of nodes to the chain's connection nodes.
+    set_absolute_pole(pole, overwrite=False)
+        Set or update the absolute pole of the chain.
+    add_relative_pole(pole)
+        Add one or multiple relative poles to the chain.
+    add_bars(bars)
+        Add multiple bars to the chain.
+
+    Notes
+    -----
+    - Scheibe: A kinematically rigid subsystem. In a system of connected
+      Scheiben, multiple chains are hinge-connected but cannot translate
+      relative to each other.
+    - Pollinien: Lines connecting poles that define relative motion among
+      chains. Chains with multiple relative poles may have multiple
+      absolute pollinien.
+    - The chain's stiffness (_stiff) becomes True if absolute and relative
+      poles are incompatible or overdetermined.
+
+    References
+    ----------
+    .. [1] D. Dinkler. "Grundlagen der Baustatik: Modelle und
+           Berechnungsmethoden für ebene Stabtragwerke". Band 1,
+           pp. 95 ff., 2011.
+    """
 
     bars: set = field(default_factory=set)
     relative_pole: set = field(default_factory=set)
@@ -347,12 +496,97 @@ class Chain:
 
 @dataclass(eq=False)
 class Poleplan(LoggerMixin):
+    """
+    Represents the Poleplan (Polplan) of a planar structural system.
+
+    The Poleplan captures the kinematic relationships of the system using
+    chains (Scheiben), absolute poles, and relative poles. It systematically
+    constructs all necessary poles and polelines to describe relative and
+    absolute motions of the rigid subsystems.
+
+    Construction Procedure
+    ---------------------
+    The creation of a Poleplan is performed in several steps [1]_:
+
+    1. Identification and naming of all chains (Scheiben) in the system.
+    2. Identification and naming of immediately recognizable absolute poles
+       (e.g., at fixed supports) and relative poles (e.g., at moment hinges).
+    3. Construction of directly visible polelines, e.g., perpendicular to
+       movable supports, normal force, and shear hinges.
+    4. Stepwise determination of additional poles using absolute and relative
+       polelines. Two geometric conditions (directions or lines) define the
+       intersection point of the unknown pole. If polelines are parallel, the
+       pole lies at infinity.
+    5. Verification of the complete Poleplan for consistency. Contradictions
+       arise, e.g., if a chain has multiple absolute poles or if two chains
+       share multiple relative poles. Contradictions indicate that the system
+       or parts of it are kinematically rigid. If no contradictions exist, the
+       system can be considered movable.
+
+    Attributes
+    ----------
+    system : System
+        The structural system being analyzed.
+    debug : bool, default=False
+        Enable debug logging for intermediate steps.
+    chains : list of Chain
+        All chains (Scheiben) identified in the system after processing.
+    solved : bool
+        True if the Poleplan is consistent and all chains/poles are solved.
+
+    _node_to_chains : dict, optional
+        Mapping of Node → list of chains that contain the node.
+    _node_to_multiple_chains : dict, optional
+        Cached mapping of nodes that belong to more than one chain.
+
+    Properties
+    ----------
+    node_to_chains : dict
+        Mapping of nodes to chains containing them. Setter validates input
+        and clears cached multiple-chain data.
+    node_to_multiple_chains : dict
+        Nodes that belong to more than one chain. Computed lazily from
+        node_to_chains.
+
+    Methods
+    -------
+    set_angle(target_chain, target_angle)
+        Adjust the rotation angle of a specified chain.
+    rigid_motion(n_disc=2)
+        Return a list of rigid body displacement objects for plotting.
+    get_chain_for(target)
+        Return the chain containing the given Bar or Node.
+    find_adjacent_chain(node, chain)
+        Find a non-stiff adjacent chain sharing a node with the specified
+        chain, returning absolute pole coordinates, node coordinates, and
+        the adjacent chain.
+
+    Notes
+    -----
+    - The Poleplan is constructed using a multi-step pipeline involving
+      ChainIdentifier, PoleIdentifier, and Validator classes.
+    - It captures kinematic constraints and relative motions of rigid
+      subsystems.
+    - Chains (Scheiben) are rigid but may be hinge-connected and
+      non-translating with respect to each other.
+    - Absolute poles define fixed rotation centers, while relative poles
+      define rotations between chains.
+    - Pollinien are lines connecting poles that define relative motion
+      geometry.
+
+    References
+    ----------
+    .. [1] D. Dinkler. "Grundlagen der Baustatik: Modelle und
+           Berechnungsmethoden für ebene Stabtragwerke". Band 1,
+           pp. 95 ff., 2011.
+    """
 
     system: System
     debug: bool = False
 
     _node_to_chains: Optional[dict] = field(init=False, default=None)
     _node_to_multiple_chains: Optional[dict] = field(init=False, default=None)
+    _set_angle: bool = field(init=False, default=False)
 
     def __post_init__(self) -> None:
         """Initialise the pole‑plan and run the processing pipeline."""
@@ -458,10 +692,12 @@ class Poleplan(LoggerMixin):
         filtered = {k: v for k, v in conn.items() if len(v) > 1}
         return filtered
 
-    def set_angle(self, target_chain, target_angle) -> None:
+    def set_angle(self, target_chain=None, target_angle: float = 1) -> None:
         """
         Adjust the angle of ``target_chain`` to ``target_angle``.
         """
+        if target_chain is None:
+            target_chain = self.chains[0]
         self.logger.info(
             f"Setting angle for chain \n {target_chain} to {target_angle}"
         )
@@ -470,10 +706,11 @@ class Poleplan(LoggerMixin):
 
         try:
             angle_calculator = AngleCalculator(
-                self.chains, self.node_to_multiple_chains
+                self.chains, self.node_to_multiple_chains, self.debug
             )
             angle_calculator.calculate_angles(target_chain, target_angle)
             self.logger.debug("Angle calculation completed")
+            self._set_angle = True
         except Exception as exc:
             self.logger.error(
                 f"Failed to calculate angles: {exc}",
@@ -611,3 +848,11 @@ class Poleplan(LoggerMixin):
 
         self.logger.warning("No suitable adjacent non‑stiff chain found")
         return None, None, None
+
+    def plot(self, mode: str = 'MPL'):
+        from sstatics.graphic_objects.poleplan import PoleplanGraphic
+
+        if not self._set_angle:
+            self.set_angle()
+
+        PoleplanGraphic(poleplan=self).show()

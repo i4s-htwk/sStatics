@@ -670,8 +670,7 @@ class InfluenceLine(LoggerMixin):
             result.bars = self.deflections
             ResultGraphic(system_result=result, kind='w').show()
         elif self._rigid_motions is not None:
-            from sstatics.graphic_objects.poleplan import PoleplanGraphic
-            PoleplanGraphic(poleplan=self.poleplan).show()
+            self.poleplan.plot()
         else:
             print(mode)
             raise AttributeError(
