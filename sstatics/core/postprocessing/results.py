@@ -1254,7 +1254,7 @@ class RigidBodyDisplacement:
             raise ValueError('"n_disc" has to be greater than 0')
 
     @cached_property
-    def length_disc(self):
+    def x(self):
         """Discrete positions along the bar length for evaluation."""
         return np.linspace(0, self.bar.length, self.n_disc + 1)
 
@@ -1280,7 +1280,7 @@ class RigidBodyDisplacement:
 
     def _eval_poly(self, coef: np.ndarray):
         """Evaluate a polynomial at all discrete positions along the bar."""
-        powers = np.vander(self.length_disc, N=len(coef), increasing=True)
+        powers = np.vander(self.x, N=len(coef), increasing=True)
         return powers @ coef
 
     @cached_property

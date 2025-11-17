@@ -116,35 +116,6 @@ def validate_point_on_line(line, point, debug=False, epsilon=1e-9):
     return result
 
 
-def get_angle(point, center, displacement: float = 1):
-    """
-    Calculate the angle between a point and a center.
-
-    Args:
-        point (numpy array): coordinates of the point.
-        center (numpy array): coordinates of the center.
-        displacement (float, optional): displacement factor. Defaults to 1.
-
-    Returns:
-        float: angle between the point and the center.
-    """
-    r = point - center
-
-    # Length of the vector
-    length = np.linalg.norm(r)
-
-    # Determine the sign
-    if np.all(center == 0):
-        sign = np.sign(r[0, 0])
-    else:
-        sign = np.sign(np.dot(r.T, center)).item()
-
-    if displacement == 1:
-        return sign / length
-    else:
-        return displacement / length
-
-
 # help functions for logger messages
 def dict_key_value_to_string(dictionary, all_chains) -> str:
     lines = []

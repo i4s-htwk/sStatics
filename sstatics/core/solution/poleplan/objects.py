@@ -517,93 +517,42 @@ class Poleplan(LoggerMixin):
             )
             raise
 
-    # def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
-    #     # TODO: Simplify get_chain to accept a single Bar object.
-    #     #   Original:
-    #     #     def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
-    #     #         """Returns chain containing any given bars."""
-    #     #         return next((chain for chain in self.chains
-    #     #                      if bars & chain.bars), None)
-    #     #   Simplified:
-    #     #     def get_chain(self, bar: Bar) -> Optional[Chain]:
-    #     #         """Returns chain containing the given bar."""
-    #     #         return next((chain for chain in self.chains
-    #     #                      if bar in chain.bars), None)
-    #     #   Add a separate method for multiple Bar objects:
-    #     #     def get_chain_containing_any(self, bars: set[Bar]):
-    #     #         """Returns chain containing any given bars."""
-    #     #         return next((chain for chain in self.chains
-    #     #                      if bars & chain.bars), None)
-    #     """Returns the chain that contains any of the given bars."""
-    #     return next(
-    #         (chain for chain in self.chains if bars & chain.bars), None
-    #     )
-
-    def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
+    def get_chain_for(self, target: Bar | Node) -> Optional[Chain]:
         """
-        Returns the chain that contains any of the given bars.
+        Returns the chain in which the given bar or node is contained.
         """
-        # TODO: Simplify get_chain to accept a single Bar object.
-        #   Original:
-        #     def get_chain(self, bars: set[Bar]) -> Optional[Chain]:
-        #         """Returns chain containing any given bars."""
-        #         return next((chain for chain in self.chains
-        #                      if bars & chain.bars), None)
-        #   Simplified:
-        #     def get_chain(self, bar: Bar) -> Optional[Chain]:
-        #         """Returns chain containing the given bar."""
-        #         return next((chain for chain in self.chains
-        #                      if bar in chain.bars), None)
-        #   Add a separate method for multiple Bar objects:
-        #     def get_chain_containing_any(self, bars: set[Bar]):
-        #         """Returns chain containing any given bars."""
-        #         return next((chain for chain in self.chains
-        #                      if bars & chain.bars), None)
-        self.logger.debug(
-            f"Searching for chain containing any of {len(bars)} bars"
-        )
         try:
-            chain = next(
-                (c for c in self.chains if bars & c.bars), None
-            )
-            if chain:
+            if isinstance(target, Bar):
                 self.logger.debug(
-                    f"Found chain {chain} containing the bars"
+                    f"Searching for chain containing bar {target}")
+                chain = next(
+                    (c for c in self.chains if target in c.bars), None
+                )
+            elif isinstance(target, Node):
+                self.logger.debug(f"Looking up chain for node {target}")
+                chain = next(
+                    (
+                        c for c in self.chains
+                        if any(target.same_location(n) for n in
+                               c.connection_nodes)
+                    ),
+                    None,
                 )
             else:
-                self.logger.warning("No chain contains the supplied bars")
-            return chain
-        except Exception as exc:
-            self.logger.error(
-                f"Error while searching for chain: {exc}",
-                exc_info=True,
-            )
-            raise
+                raise TypeError(
+                    f"Target must be a Bar or Node, got {type(target)}")
 
-    def get_chain_node(self, node) -> Optional[Chain]:
-        """
-        Returns the chain that is connected to the given node.
-        """
-        self.logger.debug(f"Looking up chain for node {node}")
-        try:
-            chain = next(
-                (
-                    c
-                    for c in self.chains
-                    if any(node.same_location(n) for n in c.connection_nodes)
-                ),
-                None,
-            )
             if chain:
-                self.logger.debug(f"Node {node} belongs to chain {chain}")
+                self.logger.debug(f"Found chain {chain} for target {target}")
             else:
-                self.logger.warning(f"No chain found for node {node}")
+                self.logger.warning(f"No chain found for target {target}")
+
             return chain
+
         except Exception as exc:
             self.logger.error(
-                f"Failed to locate chain for node: {exc}",
-                exc_info=True,
-            )
+                f"Error while searching for chain for {target}: {exc}",
+                exc_info=True)
             raise
 
     def find_adjacent_chain(self, node, chain):

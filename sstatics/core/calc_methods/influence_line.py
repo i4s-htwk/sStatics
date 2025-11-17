@@ -7,7 +7,7 @@ import numpy as np
 from sstatics.core.logger_mixin import LoggerMixin
 from sstatics.core.preprocessing import Bar, Node, SystemModifier, System
 from sstatics.core.solution import Solver
-from sstatics.core.solution.poleplan.operation import get_angle
+from sstatics.core.solution import Poleplan
 from sstatics.core.postprocessing import BarResult, RigidBodyDisplacement
 
 
@@ -52,7 +52,7 @@ class InfluenceLine(LoggerMixin):
     _solution: Solver | None = field(init=False, default=None)
     _norm_force: float | None = field(init=False, default=None)
     _deflections: List[BarResult] | None = field(init=False, default=None)
-    _poleplan: None = field(init=False, default=None)
+    _poleplan: Poleplan | None = field(init=False, default=None)
     _rigid_motions: List[RigidBodyDisplacement] | None = (
         field(init=False, default=None))
 
@@ -145,13 +145,11 @@ class InfluenceLine(LoggerMixin):
             self._create_deflection_objects(n_disc=n_disc)
 
         else:
-            from sstatics.core.solution import Poleplan
-
             self._poleplan = Poleplan(system=self.modified_system,
                                       debug=self.debug)
             chain, angle = self._compute_chain_angle(kind, obj, position)
-            self._poleplan.set_angle(target_chain=chain, target_angle=angle)
-            self._rigid_motions = self._poleplan.rigid_motion(n_disc=n_disc)
+            self.poleplan.set_angle(target_chain=chain, target_angle=angle)
+            self._rigid_motions = self.poleplan.rigid_motion(n_disc=n_disc)
 
         self.plot()
 
@@ -491,11 +489,42 @@ class InfluenceLine(LoggerMixin):
         --------
         :py:meth:`force` : Method that uses this angle calculation.
         """
+
+        def get_angle(point, center, displacement: float = 1):
+            """
+            Calculate the angle between a point and a center.
+
+            Args:
+                point (numpy array): coordinates of the point.
+                center (numpy array): coordinates of the center.
+                displacement (float, optional): displacement factor.
+                Defaults to 1.
+
+            Returns:
+                float: angle between the point and the center.
+            """
+            r = point - center
+
+            # Length of the vector
+            length = np.linalg.norm(r)
+
+            # Determine the sign
+            if np.all(center == 0):
+                sign = np.sign(r[0, 0])
+            else:
+                sign = np.sign(np.dot(r.T, center)).item()
+
+            if displacement == 1:
+                return sign / length
+            else:
+                return displacement / length
+
         angle = 0
+
         if isinstance(obj, Bar):
             idx = list(self.system.bars).index(obj)
             bar = self.modified_system.bars[idx]
-            chain = self._poleplan.get_chain(bars={bar})
+            chain = self.poleplan.get_chain_for(target=bar)
 
             if chain is None:
                 raise AttributeError("No valid chain found for the given bar.")
@@ -507,17 +536,17 @@ class InfluenceLine(LoggerMixin):
 
                     if chain.absolute_pole.is_infinite:
                         aPole_coords, node_coords, c = (
-                            self._poleplan.find_adjacent_chain(node, chain)
+                            self.poleplan.find_adjacent_chain(node, chain)
                         )
                         if aPole_coords is None:
                             for rPole in chain.relative_pole:
                                 if rPole != node:
                                     aPole_coords, node_coords, c = (
-                                        self._poleplan.find_adjacent_chain(
+                                        self.poleplan.find_adjacent_chain(
                                             rPole.node, chain)
                                     )
-                        idx_chain = self._poleplan.chains.index(chain)
-                        next_chain = self._poleplan.chains.index(c)
+                        idx_chain = self.poleplan.chains.index(chain)
+                        next_chain = self.poleplan.chains.index(c)
 
                         angle = get_angle(point=node_coords,
                                           center=aPole_coords,
@@ -543,7 +572,8 @@ class InfluenceLine(LoggerMixin):
 
             return chain, angle
         elif isinstance(obj, Node):
-            chain = self._poleplan.get_chain_node(obj)
+            chain = self.poleplan.get_chain_for(target=obj)
+
             if chain is None:
                 raise AttributeError(
                     "No valid chain found for the given node."
@@ -553,9 +583,7 @@ class InfluenceLine(LoggerMixin):
                 aPole_coords = chain.absolute_pole.coords
                 node_coords = np.array([[obj.x], [obj.z]])
 
-                angle = get_angle(point=node_coords,
-                                  center=aPole_coords,
-                                  displacement=1)
+                angle = get_angle(point=node_coords, center=aPole_coords)
             elif force == 'fm':
                 angle = -1
 
