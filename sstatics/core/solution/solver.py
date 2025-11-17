@@ -721,6 +721,27 @@ class Solver:
         :any:`bool`
             :python:`False` if the stiffness matrix is singular (unsolvable),
             :python:`True` otherwise.
+
+        Notes
+        -----
+        This method checks whether the system is kinematically movable by
+        examining the rank of the stiffness matrix (computed using
+        :func:`numpy.linalg.matrix_rank`, which internally uses singular value
+        decomposition for numerical stability) instead of computing its
+        determinant, which is computationally expensive and potentially
+        unstable for large systems. If the rank of the stiffness matrix is
+        smaller than its dimension, the matrix is singular, indicating a
+        kinematic system or an incorrect system description [1]_. Using the
+        rank in this way provides a robust and numerically stable check [2]_.
+
+        References
+        ----------
+        .. [1] D. Dinkler. "Grundlagen der Baustatik: Modelle und
+               Berechnungsmethoden für ebene Stabtragwerke". Band 1, 2011.
+
+        .. [2] J. Dankert, H. Dankert (Hrsg.). "Mathematik für die
+               Technische Mechanik". Online: http://www.tm-mathe.de/,
+               abgerufen am 22.03.2025.
         """
         k, p = self.boundary_conditions
         if np.linalg.matrix_rank(k) < k.shape[0]:

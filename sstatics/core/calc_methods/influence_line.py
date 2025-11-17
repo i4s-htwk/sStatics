@@ -27,7 +27,13 @@ class InfluenceLine(LoggerMixin):
     -----
     An influence line is a function that describes how a moving unit load
     affects a force or displacement quantity at a fixed location within the
-    structure.
+    structure [1]_.
+
+    References
+    ----------
+    .. [1] D. Dinkler. "Grundlagen der Baustatik: Modelle und
+           Berechnungsmethoden für ebene Stabtragwerke". Band 1, Seite 128,
+           2011.
 
     See Also
     --------
@@ -84,19 +90,31 @@ class InfluenceLine(LoggerMixin):
 
         1. Lagrange's release - Release the constraint conjugate to the desired
            force quantity at location k (position) and apply a unit load to
-           account for the imposed negative displacement.
+           account for the imposed negative displacement [1]_.
         2. Element stiffness matrix - Formulate stiffness relations of
-           individual elements considering hinges.
+           individual elements considering hinges [2]_.
         3. Global system assembly - Establish equation system for entire
-           structure including support conditions.
+           structure including support conditions [2]_.
         4. Mobility check - Use singular value decomposition to check for
-           mobility.
+           mobility [1]_.
         5. Solve equation system - Determine unknown nodal displacements, then
            compute total deformation at bar ends.
         6. Scale results - Multiply member deformations and end forces by
-           :math:`f = -1 / \delta_{k,act}`.
+           :math:`f = -1 / \delta_{k,act}` [3]_.
         7. Deflection curve - Determine deflection curve using beam
            differential equation.
+
+        References
+        ----------
+        .. [1] D. Dinkler. "Grundlagen der Baustatik: Modelle und
+               Berechnungsmethoden für ebene Stabtragwerke". Band 1,
+               Seite 105 ff., 2011.
+
+        .. [2] R. Dallmann. "Baustatik 3: Theorie II. Ordnung und
+               computerorientierte Methoden der Stabtragwerke". Band 2,
+               Seite 65 ff., 2015.
+
+        .. [3] W. Franke, T. Kunow. "Kleines Einmaleins der Baustatik", 2007.
 
         See Also
         --------
@@ -167,11 +185,18 @@ class InfluenceLine(LoggerMixin):
 
         Notes
         -----
+        The theory underlying this algorithm can be found in [1]_.
+
         1. Apply unit load conjugate to desired displacement quantity.
         2. Split loaded bar into two sub-bars and assign load to new node.
         3. Solve for unknown nodal displacements, derive deformations and
            end forces.
         4. Determine deflection curve using beam differential equation.
+
+        References
+        ----------
+        .. [1] D. Dinkler. "Grundlagen der Baustatik: Modelle und
+               Berechnungsmethoden für ebene Stabtragwerke". Band 1, 2011.
 
         See Also
         --------
