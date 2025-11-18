@@ -17,6 +17,8 @@ class AbstractRenderer(ABC):
         self._validate(mode)
         self._mode = mode
         self._all_graphic_elements = []
+        self._scene_boundaries = None  # später automatisch berechnet
+        self._scene_scale = None
 
     @abstractmethod
     def _layout(self):
@@ -30,6 +32,9 @@ class AbstractRenderer(ABC):
                 style = convert_style(style, self._mode)
                 self.add_graphic(x, z, **style)
 
+        self._update_scene_metrics()
+
+        for o in obj:
             for x, z, text, style in self._iter_text_elements(o):
                 style = convert_style(style, self._mode)
                 if self._mode == 'mpl':
@@ -53,80 +58,169 @@ class AbstractRenderer(ABC):
     def show(self):
         pass
 
-    def _iter_graphic_elements(self, obj, transform_fn=None):
-        if transform_fn is None:
-            def transform_fn(x, z):
-                return obj.transform(x, z)
+    def _update_scene_metrics(self):
+        """Berechnet Grenzen und Skalierung anhand aller gesammelten
+        Graphic-Elements."""
+        x_all, z_all = [], []
+        for x_list, z_list, _ in self._all_graphic_elements:
+            if x_list is None or z_list is None:
+                continue
+            if len(x_list) == 0 or len(z_list) == 0:
+                continue
+            x_all.extend(x for x in x_list if x is not None)
+            z_all.extend(z for z in z_list if z is not None)
 
-        else:
-            def transform_fn(x, z, prev=transform_fn, current=obj.transform):
-                x, z = prev(x, z)
-                return current(x, z)
+        if not x_all or not z_all:
+            self._scene_boundaries = (0.0, 0.0, 0.0, 0.0)
+            self._scene_scale = 0.05
+            return
 
+        x_min, x_max = min(x_all), max(x_all)
+        z_min, z_max = min(z_all), max(z_all)
+        self._scene_boundaries = (x_min, x_max, z_min, z_max)
+        self._scene_scale = 0.04 * max(x_max - x_min, 2*(z_max - z_min)) + 0.01
+
+    @property
+    def scene_boundaries(self):
+        """Gibt die aktuellen Szenen-Grenzen zurück."""
+        if self._scene_boundaries is None:
+            self._update_scene_metrics()
+        return self._scene_boundaries
+
+    @property
+    def scene_scale(self):
+        """Gibt den globalen Skalierungsfaktor der Szene zurück."""
+        if self._scene_scale is None:
+            self._update_scene_metrics()
+        return self._scene_scale
+
+    def _iter_graphic_elements(self, obj):
         for element in obj.graphic_elements:
-            if hasattr(element, "graphic_elements"):
-                yield from self._iter_graphic_elements(element, transform_fn)
+            if hasattr(element, 'graphic_elements'):
+                for x, z, style in self._iter_graphic_elements(element):
+                    x, z = obj.transform(x, z)
+                    yield x, z, style
             else:
                 x, z, style = element
-                x, z = transform_fn(x, z)
+                x, z = obj.transform(x, z)
                 yield x, z, style
 
-    def _iter_text_elements(self, obj, transform_fn=None):
-        if transform_fn is None:
-            def transform_fn(x, z):
-                return obj.transform(x, z)
-        else:
-            def transform_fn(x, z, prev=transform_fn, current=obj.transform):
-                x, z = prev(x, z)
-                return current(x, z)
-
-        for element in getattr(obj, "text_elements", []):
-            if isinstance(element, tuple) and len(element) == 4:
-                x, z, text, style = element
-                x, z = transform_fn(x, z)
-                x_opt, z_opt = self._find_optimal_text_position(x, z, obj)
+    def _iter_text_elements(self, obj):
+        for element in getattr(obj, 'text_elements', []):
+            if not isinstance(element, tuple) or len(element) != 4:
+                raise ValueError(
+                    'Each element in text_elements must be a tuple of length '
+                    '4.'
+                )
+            x, z, text, style = element
+            if text:
+                x, z = obj.transform(x, z)
+                x_opt, z_opt = self._find_optimal_text_position(x, z, *text)
                 yield x_opt, z_opt, text, style
 
-        # Rekursion für Unterobjekte (auch verschachtelt)
-        for sub in getattr(obj, "graphic_elements", []):
-            if (
-                    hasattr(sub, "text_elements")
-                    or hasattr(sub, "graphic_elements")
+        for sub in getattr(obj, 'graphic_elements', []):
+            if hasattr(sub, 'text_elements') or hasattr(
+                    sub, 'graphic_elements'
             ):
-                yield from self._iter_text_elements(sub, transform_fn)
+                for x, z, text, style in self._iter_text_elements(sub):
+                    x, z = obj.transform(x, z)
+                    yield x, z, text, style
 
-    def _find_optimal_text_position(self, x, z, obj):
+    def _find_optimal_text_position(self, x, z, text):
         """Berechnet die optimale Textposition nach Transformation."""
-        offset = self._base_text_offset(obj)
+        offset = self.scene_scale
         positions = [
-            (x, z + offset),
-            (x - offset, z),
             (x, z - offset),
-            (x + offset, z)
+            (x + offset, z),
+            (x, z + offset),
+            (x - offset, z)
         ]
         for x_try, z_try in positions:
-            if not self._text_collision(x_try, z_try):
+            if not self._text_collision(x_try, z_try, text):
                 return x_try, z_try
         return positions[0]
 
-    def _base_text_offset(self, obj):
-        try:
-            dx, dz = obj._max_dimensions
-            return 0.08 * max(dx, dz) + 0.02
-        except Exception:
-            return 0.05
+    def _estimate_text_bbox(self, text):
+        """Schätzt die Text-Bounding-Box basierend auf Textlänge und Szene."""
+        scene_scale = getattr(self, "scene_scale", 0.05)
+        # text = getattr(obj, "_text", "")
+        if not text:
+            return scene_scale * 0.6, scene_scale * 0.4
 
-    def _text_collision(self, x, z, margin=0.01):
+        text_width = len(str(text)) * 0.6 * scene_scale
+        text_height = 0.4 * scene_scale
+        return text_width, text_height
+
+    def _text_collision(self, x, z, text, margin=0.01):
+        """Prüft, ob der Text (als Rechteck) mit Linien kollidiert."""
+        text_width, text_height = self._estimate_text_bbox(text)
+        # Bestimme Textrechteck
+        x_min, x_max = x - text_width / 2, x + text_width / 2
+        z_min, z_max = z - text_height / 2, z + text_height / 2
+
         for px_list, pz_list, _ in self._all_graphic_elements:
             coords = [(xi, zi) for xi, zi in zip(px_list, pz_list)
                       if xi is not None and zi is not None]
             if len(coords) < 2:
                 continue
             for (x0, z0), (x1, z1) in zip(coords[:-1], coords[1:]):
-                dist = self._point_to_segment_distance(x, z, x0, z0, x1, z1)
-                if dist < margin:
+                # Wenn die Linie das Rechteck schneidet → Kollision
+                if self._line_intersects_rect(x0, z0, x1, z1,
+                                              x_min - margin, x_max + margin,
+                                              z_min - margin, z_max + margin):
                     return True
         return False
+
+    # TODO: Berechnung funktioniert nicht + Flächenberechnung einbauen
+    @staticmethod
+    def _line_intersects_rect(x0, z0, x1, z1, xmin, xmax, zmin, zmax):
+        """Prüft, ob eine Linie das Rechteck schneidet oder darin liegt."""
+        # Fall 1: Beide Punkte komplett außerhalb in derselben Richtung →
+        # kein Schnitt
+        if (x0 < xmin and x1 < xmin) or (x0 > xmax and x1 > xmax) or \
+                (z0 < zmin and z1 < zmin) or (z0 > zmax and z1 > zmax):
+            return False
+
+        # Fall 2: Einer der Punkte liegt im Rechteck → Schnitt
+        if xmin <= x0 <= xmax and zmin <= z0 <= zmax:
+            return True
+        if xmin <= x1 <= xmax and zmin <= z1 <= zmax:
+            return True
+
+        # Fall 3: Prüfe Schnitt mit jeder Rechteckkante
+        def line_intersect(xa, za, xb, zb, xc, zc, xd, zd):
+            """Hilfsfunktion: prüft Schnitt zweier Segmente."""
+
+            def ccw(x1, z1, x2, z2, x3, z3):
+                return (z3 - z1) * (x2 - x1) > (z2 - z1) * (x3 - x1)
+
+            return (ccw(xa, za, xc, zc, xd, zd) != ccw(xb, zb, xc, zc, xd,
+                                                       zd)) and \
+                (ccw(xa, za, xb, zb, xc, zc) != ccw(xa, za, xb, zb, xd, zd))
+
+        rect_edges = [
+            (xmin, zmin, xmax, zmin),  # unten
+            (xmax, zmin, xmax, zmax),  # rechts
+            (xmax, zmax, xmin, zmax),  # oben
+            (xmin, zmax, xmin, zmin)  # links
+        ]
+        for (xa, za, xb, zb) in rect_edges:
+            if line_intersect(x0, z0, x1, z1, xa, za, xb, zb):
+                return True
+
+        return False
+
+    @staticmethod
+    def _segments_intersect(x1, y1, x2, y2, x3, y3, x4, y4):
+        """Standard-Segment-Schnitt-Test (orientiert an CCW-Test)."""
+
+        def ccw(ax, ay, bx, by, cx, cy):
+            return (cy - ay) * (bx - ax) > (by - ay) * (cx - ax)
+
+        return (
+                ccw(x1, y1, x3, y3, x4, y4) != ccw(x2, y2, x3, y3, x4, y4)
+                and ccw(x1, y1, x2, y2, x3, y3) != ccw(x1, y1, x2, y2, x4, y4)
+        )
 
     @staticmethod
     def _point_to_segment_distance(px, pz, x0, z0, x1, z1):
@@ -149,7 +243,7 @@ class AbstractRenderer(ABC):
             )
         if mode not in (PLOTLY, MPL):
             raise ValueError(
-                f"Invalid mode {mode!r}. Expected one of: {PLOTLY!r}, {MPL!r}."
+                f'Invalid mode {mode!r}. Expected one of: {PLOTLY!r}, {MPL!r}.'
             )
 
     @property
