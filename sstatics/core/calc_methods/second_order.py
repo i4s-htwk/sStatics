@@ -2,8 +2,12 @@
 from dataclasses import dataclass, replace, field, fields
 from functools import cached_property
 import numpy as np
-from typing import Literal
+from typing import List, Literal, Optional
+
+from sstatics.core.postprocessing.results import DifferentialEquationSecond
+
 from sstatics.core.logger_mixin import LoggerMixin
+from sstatics.core.utils import get_differential_equation
 
 from sstatics.core.preprocessing import Bar, BarSecond, System, SystemModifier
 from sstatics.core.solution.solver import Solver
@@ -22,39 +26,426 @@ class SecondOrder(LoggerMixin):
     ----------
     system : :any:`System`
         The structural system to be analyzed according to second-order theory.
+    debug : bool, default=False
+        Enable debug logging for intermediate steps.
 
     Notes
     -----
-        **Matrix-based approach**
+    **1. Matrix-based approach**
 
-        This method modifies the element stiffness matrix and the member load
-        vector to account for second-order effects
-        (see class :any:`BarSecond`). It supports the
-        following formulations:
+    This formulation replaces each first-order bar element by a modified
+    second-order bar element (:class:`BarSecond`). Depending on the selected
+    approach, the geometric stiffness contributions are incorporated via:
 
-        - **Analytical solution**
-        - **Taylor series expansion**
-        - **P–Δ (P-Delta) effect**
+    - ``"analytic"`` — closed-form analytical second-order stiffness matrix
+    - ``"taylor"`` — Taylor series expansion of the exact formulation
+    - ``"p_delta"`` — classical P–Δ geometric stiffness formulation
 
-        The corresponding solver objects can be accessed through
-        :py:attr:`solver_analytic`, :py:attr:`solver_taylor`
-        and :py:attr:`solver_p_delta`. After initialization, each solver
-        provides methods to evaluate and retrieve results.
+    After selecting the formulation through :meth:`matrix_approach`, an
+    internally modified :class:`System` instance is created. This modified
+    system is then passed into a standard :class:`Solver`, which performs
+    load–displacement computation under linear assumptions but with modified
+    stiffness.
 
-        **Iterative approach**
+    **2. Iterative approach**
 
-        This method captures geometric nonlinearity through successive updates
-        of the nodal displacements. The system geometry is iteratively
-        recalculated until convergence is reached or the maximum number of
-        iterations is exceeded.
+    The iterative method computes geometric nonlinearity by repeatedly:
+
+    1. Solving the current system for nodal displacements
+    2. Updating the geometry
+    3. Recalculating the updated system
+    4. Checking convergence via displacement change (``tolerance``)
+
+    Depending on ``result_type``:
+
+    - ``"cumulative"`` — results represent total deformation/state at iteration
+        *i*
+    - ``"incremental"`` — results store the difference between iteration *i*
+      and iteration *i − 1*
+
+    All iteration steps, including geometric updates are
+    stored in ``_iteration_results``.
     """
     system: System
     debug: bool = False
 
-    _analytic_system: System = field(default=None, init=False, repr=False)
-    _p_delta_system: System = field(default=None, init=False, repr=False)
-    _taylor_system: System = field(default=None, init=False, repr=False)
-    _iteration_results: list = field(default=None, init=False, repr=False)
+    _modified_system_matrix: Optional[System] = field(init=False, default=None)
+    _solution_matrix: Optional[Solver] = field(init=False, default=None)
+    _iteration_results: List[dict] = field(
+        default_factory=list, init=False, repr=False)
+    _iteration_mode: Literal['cumulative', 'incremental'] | None = field(
+        init=False, default=None)
+
+    def matrix_approach(
+            self, approach: Literal['analytic', 'p_delta', 'taylor']):
+        r"""Configure and initialize the matrix-based second-order analysis.
+
+        This method selects the second-order formulation to be applied to each
+        structural element. A modified :class:`System` instance is constructed
+        internally in which each bar is replaced by a :class:`BarSecond`
+        element using the chosen theory.
+
+        Parameters
+        ----------
+        approach : {'analytic', 'p_delta', 'taylor'}
+            Selects the second-order formulation for the modified stiffness:
+
+            - ``'analytic'``
+              Closed-form exact geometric stiffness including axial force
+              effects.
+            - ``'p_delta'``
+              Classical P–Δ geometric stiffness formulation.
+            - ``'taylor'``
+              Taylor-series expansion of the analytical stiffness.
+
+        Notes
+        -----
+        After calling this method, the modified system can be accessed via
+        :attr:`system_matrix_approach` and the corresponding solver via
+        :attr:`solver_matrix_approach`.
+
+        Raises
+        ------
+        ValueError
+            If `approach` is not one of the supported options.
+        """
+
+        if approach not in ['analytic', 'p_delta', 'taylor']:
+            raise ValueError(
+                f'Matrix approach has to be either "analytic", "taylor" or '
+                f'"p_delta". '
+                f'Got "{approach}" instead.')
+
+        # Reset Results
+        self._solution_matrix = None
+        self._modified_system_matrix = None
+
+        # Set modified System
+        self._modified_system_matrix = System(self._convert_bars(approach))
+
+    @property
+    def solver_matrix_approach(self):
+        r"""Return the solver associated with the chosen matrix-based
+        second-order formulation.
+
+        A new :class:`Solver` instance is created on first access, using the
+        internally stored modified second-order system generated via
+        :meth:`matrix_approach`. Internal bar forces of the solver are replaced
+        by second-order transformed forces.
+
+        Returns
+        -------
+        :class:`Solver`
+            Solver instance operating on the modified second-order system.
+
+        Raises
+        ------
+        AttributeError
+            If no matrix-based system is available. Users must call
+            :meth:`matrix_approach` before accessing this property.
+        """
+        if self._modified_system_matrix is None:
+            raise AttributeError(
+                "The modified system has not been created yet. "
+                "Call `matrix_approach(...)` before accessing "
+                "`solver_matrix_approach`."
+            )
+        if self._solution_matrix is None:
+            solver = Solver(self._modified_system_matrix)
+            object.__setattr__(solver, 'internal_forces',
+                               self._transform_internal_forces(solver))
+            self._solution_matrix = solver
+        return self._solution_matrix
+
+    @property
+    def system_matrix_approach(self):
+        r"""Return the constructed second-order system.
+
+        This system represents the structure where each bar element is replaced
+        by its second-order equivalent using the formulation selected via
+        :meth:`matrix_approach`.
+
+        Returns
+        -------
+        :class:`System`
+            The modified second-order system.
+
+        Raises
+        ------
+        AttributeError
+            If no matrix-based system has been computed yet.
+        """
+        if self._modified_system_matrix is None:
+            raise AttributeError(
+                "The modified system has not been created yet. "
+                "Call `matrix_approach()` before accessing "
+                "`system_matrix_approach`."
+            )
+        return self._modified_system_matrix
+
+    def iterative_approach(
+            self, iterations: int = 10, tolerance: float = 1e-3,
+            result_type: Literal['cumulative', 'incremental'] = 'cumulative'):
+        r"""Execute an iterative geometric–nonlinear second-order analysis.
+
+        This method performs repeated updates of the system geometry, internal
+        forces and stiffness based on newly computed nodal displacements. The
+        process continues until convergence is reached or the maximum number of
+        iterations is exhausted.
+
+        Parameters
+        ----------
+        iterations : int, default=10
+            Maximum number of allowed iteration steps.
+        tolerance : float, default=1e-3
+            Convergence threshold based on displacement changes between
+            successive iterations.
+        result_type : {'cumulative', 'incremental'}, default='cumulative'
+            Determines the stored format of iteration results:
+
+            - ``'cumulative'``: total values at each iteration
+            - ``'incremental'``: differences between iteration *i* and *i–1*
+
+        Notes
+        -----
+        The results of each iteration are stored in ``_iteration_results`` and
+        can be accessed via :meth:`solver_iterative_approach`,
+        :meth:`system_iterative`, or :meth:`iteration_matrix`.
+
+        Raises
+        ------
+        ValueError
+            If `iterations` is not a positive integer.
+        ValueError
+            If `result_type` is invalid.
+        """
+
+        if not isinstance(iterations, int):
+            raise ValueError(
+                f'The number of iterations must be of type int. '
+                f'The current type is "{type(iterations)}".'
+            )
+
+        if iterations <= 0:
+            raise ValueError(
+                'The number of iterations has to be greater than zero.'
+            )
+
+        if result_type not in ('cumulative', 'incremental'):
+            raise ValueError(
+                f'Iteration mode has to be either "cumulative" or '
+                f'"incremental". Got "{result_type}" instead.'
+            )
+        # Reset Results
+        self._iteration_results = []
+        self._iteration_mode = None
+
+        # Calculate Iteration Results
+        self._iteration_results = self._run_iteration(
+            iterations, tolerance, result_type)
+        self._iteration_mode = result_type
+
+    def solver_iterative_approach(self, iteration: int = -1):
+        r"""Return a solver corresponding to a specific iteration step.
+
+        The solver is reconstructed by using the system state stored in the
+        iteration results. Negative indices may be used to access iterations
+        from the end (``-1`` = last iteration).
+
+        Parameters
+        ----------
+        iteration : int, default=-1
+            Index of the iteration to extract. Supports negative indexing.
+
+        Returns
+        -------
+        :class:`Solver`
+            Solver configured for the geometry and internal forces at the
+            selected iteration.
+
+        Raises
+        ------
+        AttributeError
+            If no iteration has been performed yet.
+        ValueError
+            If the requested iteration index does not exist.
+        """
+
+        if not self._iteration_results:
+            raise AttributeError(
+                "No iterations have been performed yet. "
+                "Run iterative_approach() first."
+            )
+        try:
+            entry = self._iteration_results[iteration]
+        except IndexError:
+            raise ValueError(f"Iteration {iteration} not found.")
+        return Solver(entry["system"])
+
+    def system_iterative(self, iteration: int = -1):
+        r"""Return the structural system for a specific iteration step.
+
+        Negative indices follow Python semantics (``-1`` returns the last
+        iteration). The returned :class:`System` reflects updated bar lengths,
+        orientations and nodal positions at that iteration.
+
+        Parameters
+        ----------
+        iteration : int, default=-1
+            Iteration index. Negative values count from the end.
+
+        Returns
+        -------
+        :class:`System`
+            The system geometry of the selected iteration step.
+
+        Raises
+        ------
+        RuntimeError
+            If no iterations have been carried out.
+        ValueError
+            If the index is out of range.
+        """
+
+        if not self._iteration_results:
+            raise RuntimeError(
+                "No iterations have been performed yet. "
+                "Run get_iteration_results() first."
+            )
+        try:
+            return self._iteration_results[iteration]["system"]
+        except IndexError:
+            raise ValueError(f"Iteration {iteration} not found.")
+
+    @property
+    def iteration_count(self):
+        r"""Return the total number of performed iteration steps.
+
+        Returns
+        -------
+        int
+            Number of computed iterations.
+
+        Raises
+        ------
+        RuntimeError
+            If no iterative analysis has been performed yet.
+        """
+        if not self._iteration_results:
+            raise RuntimeError(
+                "No iterations have been performed yet. "
+                "Run get_iteration_results() first."
+            )
+        return len(self._iteration_results)
+
+    def iteration_matrix(self):
+        r"""
+        Return all iteration results in structured matrix form.
+
+        Each entry corresponds to one iteration and contains internal forces,
+        nodal deformations, bar deformations, system deformation lists and
+        maximum geometric shift. Depending on the iteration mode:
+
+        - **cumulative mode** stores absolute values at each iteration
+        - **incremental mode** stores differences between consecutive
+            iterations
+
+        Returns
+        -------
+        list of dict
+            Each dictionary includes:
+
+            - ``iteration`` – iteration index
+            - ``internal_forces`` – internal bar forces
+            - ``node_deform_list`` – nodal displacements
+            - ``bar_deform_list`` – bar deformation states
+            - ``max_shift`` – maximum displacement increment
+
+        Raises
+        ------
+        RuntimeError
+            If no iteration results are available.
+        """
+
+        if not self._iteration_results:
+            raise RuntimeError(
+                "No iterations have been performed yet. "
+                "Run iterative_approach() first."
+            )
+
+        matrix = []
+        results = self._iteration_results
+
+        for i, r in enumerate(results):
+            if self._iteration_mode == "cumulative":
+                solver = self.solver_iterative_approach(i)
+                matrix.append({
+                    "iteration": r.get("iteration", i),
+                    "internal_forces": solver.internal_forces,
+                    "node_deform_list": solver.node_deform_list,
+                    "bar_deform_list": solver.bar_deform_list,
+                    "max_shift": r["max_shift"]
+                })
+            else:
+                matrix.append({
+                    "iteration": r.get("iteration", i),
+                    "internal_forces": r.get("internal_forces_diff"),
+                    "node_deform_list": r.get("node_deform_diff"),
+                    "bar_deform_list": r.get("bar_deform_diff"),
+                    "max_shift": r["max_shift"]
+                })
+        return matrix
+
+    @cached_property
+    def averaged_longitudinal_force(self):
+        r"""Transformation of normal and shear forces to longitudinal force.
+
+        The calculation of the longitudinal force is necessary to calculate
+        systems according to the matrix approach for second-order theory.
+
+        Since equilibrium according to second-order theory is determined on the
+        deformed system, it is common practice to replace the normal and shear
+        forces with their statically equivalent transverse force :math:`T` and
+        longitudinal force :math:`L`. The average longitudinal force is
+        required in second-order theory to adjust the element stiffness matrix
+        and the load vectors.
+
+        Notes
+        -----
+            The transformation is performed using the following equations:
+
+            At the start of the bar:
+
+            .. math:: L_{i} = N_{i} \cdot \cos(\varphi_{i}) + V_{i} \cdot \
+                            \sin(\varphi_{i})
+
+            At the end of the bar:
+
+            .. math:: L_{j} = N_{j} \cdot \cos(\varphi_{j}) + V_{j} \cdot \
+                    \sin(\varphi_{j})
+
+            Subsequently, the average longitudinal force over the entire bar is
+            calculated as:
+
+            .. math:: L_{avg} = \dfrac{L_{i} + L_{j}}{2}
+
+            This simplifies the assumption that the longitudinal force is
+            constant throughout the length of the bar.
+
+            If the longitudinal force is not constant, discretization errors
+            may occur. In such cases, it is recommended to divide the bar into
+            multiple segments, which improves the accuracy of the calculation.
+        """
+        solution = Solver(self.system)
+        l_avg = []
+        for deform, force in zip(solution.bar_deform_list,
+                                 solution.internal_forces):
+            l_i = -force[0, 0] * np.cos(deform[2, 0]) - force[1, 0] * np.sin(
+                deform[2, 0])
+            l_j = force[3, 0] * np.cos(deform[5, 0]) + force[4, 0] * np.sin(
+                deform[5, 0])
+            l_avg.append((l_i + l_j) / 2)
+        return l_avg
 
     def _convert_bars(
             self,
@@ -168,289 +559,10 @@ class SecondOrder(LoggerMixin):
 
         return replace(system, bars=bars_new), max_deform
 
-    @staticmethod
-    def _solver_difference(solver_a, solver_b):
-        """Compute difference between two solver states.
-
-        Compares numerical attributes of two solvers (arrays, scalars, or lists
-        of arrays) and returns a solver representing the incremental
-        difference.
-
-        Parameters
-        ----------
-        solver_a, solver_b : :class:`Solver`
-            Solvers to compare. Both must be based on compatible systems.
-
-        Returns
-        -------
-        :class:`Solver`
-            Solver object containing the element-wise or numerical differences
-            between the two input solvers.
-        """
-        diff_solver = solver_b
-
-        for key, value_b in vars(solver_b).items():
-            if key.startswith('_'):
-                continue
-            if not hasattr(solver_a, key):
-                continue
-
-            value_a = getattr(solver_a, key)
-            value = value_b
-
-            try:
-                if isinstance(value_b, np.ndarray) and isinstance(value_a,
-                                                                  np.ndarray):
-                    value = value_b - value_a
-                elif np.isscalar(value_b) and np.isscalar(value_a):
-                    value = value_b - value_a
-                elif isinstance(value_b, list) and all(
-                        isinstance(v, np.ndarray) for v in value_b):
-                    value = [b - a for a, b in zip(value_a, value_b)]
-            except Exception:
-                pass
-
-            object.__setattr__(diff_solver, key, value)
-
-        return diff_solver
-
-    @cached_property
-    def averaged_longitudinal_force(self):
-        r"""Transformation of normal and shear forces to longitudinal force.
-
-        The calculation of the longitudinal force is necessary to calculate
-        systems according to the matrix approach for second-order theory.
-
-        Since equilibrium according to second-order theory is determined on the
-        deformed system, it is common practice to replace the normal and shear
-        forces with their statically equivalent transverse force :math:`T` and
-        longitudinal force :math:`L`. The average longitudinal force is
-        required in second-order theory to adjust the element stiffness matrix
-        and the load vectors.
-
-        Notes
-        -----
-            The transformation is performed using the following equations:
-
-            At the start of the bar:
-
-            .. math:: L_{i} = N_{i} \cdot \cos(\varphi_{i}) + V_{i} \cdot \
-                            \sin(\varphi_{i})
-
-            At the end of the bar:
-
-            .. math:: L_{j} = N_{j} \cdot \cos(\varphi_{j}) + V_{j} \cdot \
-                    \sin(\varphi_{j})
-
-            Subsequently, the average longitudinal force over the entire bar is
-            calculated as:
-
-            .. math:: L_{avg} = \dfrac{L_{i} + L_{j}}{2}
-
-            This simplifies the assumption that the longitudinal force is
-            constant throughout the length of the bar.
-
-            If the longitudinal force is not constant, discretization errors
-            may occur. In such cases, it is recommended to divide the bar into
-            multiple segments, which improves the accuracy of the calculation.
-        """
-        solution = Solver(self.system)
-        l_avg = []
-        for deform, force in zip(solution.bar_deform_list,
-                                 solution.internal_forces):
-            l_i = -force[0, 0] * np.cos(deform[2, 0]) - force[1, 0] * np.sin(
-                deform[2, 0])
-            l_j = force[3, 0] * np.cos(deform[5, 0]) + force[4, 0] * np.sin(
-                deform[5, 0])
-            l_avg.append((l_i + l_j) / 2)
-        return l_avg
-
-    def get_analytic_system(self):
-        """Return the system computed by the analytic second-order solver.
-
-        Returns
-        -------
-        :any:`System`
-            The analytically computed second-order system.
-
-        Warns
-        -----
-        UserWarning
-            If the analytic system has not been computed yet.
-        """
-        if self._analytic_system is None:
-            self.logger.warning(
-                "Analytic system not yet computed. "
-                "Run solver_analytic first.")
-            raise ValueError
-        return self._analytic_system
-
-    def get_p_delta_system(self):
-        """Return the system computed by the P–Δ (P-Delta) solver.
-
-        Returns
-        -------
-        :any:`System`
-            The system considering P–Δ effects.
-
-        Raises
-        ------
-        UserWarning
-            If the P–Δ system has not been computed yet.
-        """
-        if self._p_delta_system is None:
-            self.logger.warning(
-                "Analytic system not yet computed. "
-                "Run solver_analytic first.")
-            raise ValueError
-        return self._p_delta_system
-
-    def get_taylor_system(self):
-        """Return the system computed by the Taylor series solver.
-
-        Returns
-        -------
-        :any:`System`
-            The system based on the Taylor series second-order approach.
-
-        Raises
-        ------
-        UserWarning
-            If the Taylor system has not been computed yet.
-        """
-        if self._taylor_system is None:
-            self.logger.warning(
-                "Analytic system not yet computed. "
-                "Run solver_analytic first.")
-            raise ValueError
-        return self._taylor_system
-
-    def get_iteration_system(self, iteration: int = -1):
-        """Return the system geometry from a specific iteration step.
-
-        By default, the last iteration system is returned.
-        Negative indices follow standard Python indexing, e.g., ``-1``
-        refers to the last computed iteration.
-
-        Parameters
-        ----------
-        iteration : int, default=-1
-            Iteration index to retrieve. ``-1`` corresponds to the latest
-            iteration.
-
-        Returns
-        -------
-        :any:`System`
-            System state from the specified iteration.
-
-        Raises
-        ------
-        RuntimeError
-            If no iterations have been performed.
-        ValueError
-            If the requested iteration index is not found.
-        """
-        if self._iteration_results is None:
-            raise RuntimeError(
-                "No iterations have been performed yet. "
-                "Run get_iteration_results() first."
-            )
-        try:
-            return self.get_iteration_results()[iteration]["system"]
-        except IndexError:
-            raise ValueError(f"Iteration {iteration} not found.")
-
-    @cached_property
-    def solver_analytic(self):
-        """Compute and return the analytic second-order solver.
-
-        Creates a solver instance using the analytic matrix-based formulation
-        and stores its associated system internally.
-
-        Returns
-        -------
-        :class:`Solver`
-            Solver configured for analytic second-order analysis.
-        """
-        self._analytic_system = System(self._convert_bars('analytic'))
-        solver = Solver(self._analytic_system)
-        object.__setattr__(solver, 'internal_forces',
-                           self._transform_internal_forces(solver))
-        return solver
-
-    @cached_property
-    def solver_p_delta(self):
-        """Compute and return the P–Δ (P-Delta) second-order solver.
-
-        Creates a solver instance based on the P–Δ approach and stores its
-        associated system internally.
-
-        Returns
-        -------
-        :class:`Solver`
-            Solver configured for P–Δ second-order analysis.
-        """
-        self._p_delta_system = System(self._convert_bars('p_delta'))
-        solver = Solver(self._p_delta_system)
-        object.__setattr__(solver, 'internal_forces',
-                           self._transform_internal_forces(solver))
-        return solver
-
-    @cached_property
-    def solver_taylor(self):
-        """Compute and return the Taylor series second-order solver.
-
-        Creates a solver instance using a Taylor expansion of nonlinear terms
-        and stores its associated system internally.
-
-        Returns
-        -------
-        :class:`Solver`
-            Solver configured for Taylor series second-order analysis.
-        """
-        self._taylor_system = System(self._convert_bars('taylor'))
-        solver = Solver(self._taylor_system)
-        object.__setattr__(solver, 'internal_forces',
-                           self._transform_internal_forces(solver))
-        return solver
-
-    def solver_iteration_cumulativ(self, iteration: int = -1):
-        """Return a solver instance for a specific iteration step.
-
-        By default, the last iteration solver is returned.
-        Negative indices follow standard Python indexing, e.g., ``-1``
-        refers to the last computed iteration.
-
-        Parameters
-        ----------
-        iteration : int, default=-1
-            Iteration index to generate a solver for. ``-1`` corresponds to the
-            latest iteration.
-
-        Returns
-        -------
-        :class:`Solver`
-            Solver for the specified iteration step.
-
-        Raises
-        ------
-        RuntimeError
-            If no iteration results are available.
-        ValueError
-            If the specified iteration index does not exist.
-        """
-        if self._iteration_results is None:
-            raise RuntimeError(
-                "No iterations have been performed yet. "
-                "Run get_iteration_results() first."
-            )
-        try:
-            system = self.get_iteration_results()[iteration]["system"]
-            return Solver(system)
-        except IndexError:
-            raise ValueError(f"Iteration {iteration} not found.")
-
-    def _run_iteration(self, iterations: int = 10, tolerance: float = 1e-3):
+    def _run_iteration(
+            self, iterations: int = 10, tolerance: float = 1e-3,
+            result_type: Literal['incremental', 'cumulative'] = 'cumulative'
+    ):
         """Perform iterative geometry updates to capture nonlinear effects.
 
         Runs a fixed or convergence-controlled iteration loop that successively
@@ -470,7 +582,7 @@ class SecondOrder(LoggerMixin):
             List containing iteration index, system state, and maximum nodal
             shift.
         """
-        results = []
+        results: List[dict] = []
         system_prev = SystemModifier(self.system).delete_loads()
         system_curr = self.system
 
@@ -487,11 +599,17 @@ class SecondOrder(LoggerMixin):
                 node_deform_prev
             )
 
-            results.append({
+            entry: dict = {
                 "iteration": i,
                 "system": system_curr,
                 "max_shift": max_shift
-            })
+            }
+
+            if result_type == 'incremental':
+                diffs = self._incremental_difference(solver_prev, solver_curr)
+                entry.update(diffs)
+
+            results.append(entry)
 
             if max_shift < tolerance:
                 break
@@ -501,173 +619,265 @@ class SecondOrder(LoggerMixin):
         self._iteration_results = results
         return results
 
-    def get_iteration_results(
-            self, iterations: int = 10, tolerance: float = 1e-3):
-        """Return stored iteration results or start computation if none exist.
+    @staticmethod
+    def _incremental_difference(prev, curr):
+        r"""
+        Compute incremental differences between two solver states.
+
+        This helper extracts the difference of deformation vectors, support
+        reactions and internal force distributions between two consecutive
+        iteration steps.
 
         Parameters
         ----------
-        iterations : int, default=10
-            Maximum number of iterations if computation is triggered.
-        tolerance : float, default=1e-3
-            Convergence tolerance for the iteration process.
+        prev : `Solver`
+            `Solver` instance representing the previous iteration.
+        curr : `Solver`
+            `Solver` instance representing the current iteration.
 
         Returns
         -------
-        list of dict
-            Stored or newly computed iteration results.
+        dict
+            A dictionary containing incremental differences for:
+
+            - ``internal_forces_diff``
+            - ``node_support_diff``
+            - ``system_support_diff``
+            - ``bar_deform_diff``
+            - ``node_deform_diff``
+
+            Each entry is either a list of elementwise differences or a
+            vector difference if the underlying data type is not a list.
+
+        Notes
+        -----
+        Differences are computed as ``curr - prev``. Lists are processed
+        element-wise, other numeric structures are subtracted directly.
         """
-        if self._iteration_results is None:
-            print("No iteration results found — starting computation.")
-            return self._run_iteration(iterations, tolerance)
-        return self._iteration_results
+        def diff(a, b):
+            if isinstance(a, list):
+                return [x - y for x, y in zip(a, b)]
+            else:
+                return a - b
 
-    @property
-    def iteration_count(self):
-        """Return the number of performed iterations.
+        return {
+            "internal_forces_diff": diff(curr.internal_forces,
+                                         prev.internal_forces),
+            "node_support_diff": diff(curr.node_support_forces,
+                                      prev.node_support_forces),
+            "system_support_diff": diff(curr.system_support_forces,
+                                        prev.system_support_forces),
+            "bar_deform_diff": diff(curr.bar_deform_list,
+                                    prev.bar_deform_list),
+            "node_deform_diff": diff(curr.node_deform,
+                                     prev.node_deform),
+        }
 
-        Returns
-        -------
-        int
-            Number of iteration steps computed.
-
-        Raises
-        ------
-        RuntimeError
-            If no iterations have been performed yet.
-        """
-        if self._iteration_results is None:
-            raise RuntimeError(
-                "No iterations have been performed yet. "
-                "Run get_iteration_results() first."
-            )
-        return len(self.get_iteration_results())
-
-    def solver_iteration_incremental(self, iteration_index: int = -1):
-        """Return the incremental solver between two successive iterations.
-
-        The resulting solver represents the difference between iteration
-        `iteration_index-1` and `iteration_index`.
-
-        Parameters
-        ----------
-        iteration_index : int, default=-1
-            Index of the current iteration. ``-1`` corresponds to the
-            latest iteration.
-
-        Returns
-        -------
-        :class:`Solver`
-            Solver containing incremental internal forces and deformations.
-
-        Raises
-        ------
-        RuntimeError
-            If no iteration results exist.
-        """
-        if self._iteration_results is None:
-            raise RuntimeError(
-                "No iterations have been performed yet. "
-                "Run get_iteration_results() first."
-            )
-
-        solver_prev = Solver(
-            self.get_iteration_results()[iteration_index - 1]["system"])
-        solver_curr = Solver(
-            self.get_iteration_results()[iteration_index]["system"])
-        diff_solver = Solver(solver_curr.system)
-
-        object.__setattr__(
-            diff_solver, 'internal_forces',
-            [c - p for p, c in zip(solver_prev.internal_forces,
-                                   solver_curr.internal_forces)]
-        )
-        object.__setattr__(
-            diff_solver, 'node_deform_list',
-            [c - p for p, c in zip(solver_prev.node_deform_list,
-                                   solver_curr.node_deform_list)]
-        )
-        object.__setattr__(
-            diff_solver, 'bar_deform_list',
-            [c - p for p, c in zip(solver_prev.bar_deform_list,
-                                   solver_curr.bar_deform_list)]
-        )
-        object.__setattr__(
-            diff_solver, 'system_deform_list',
-            [c - p for p, c in zip(solver_prev.system_deform_list,
-                                   solver_curr.system_deform_list)]
-        )
-        object.__setattr__(
-            diff_solver, 'node_support_forces',
-            [c - p for p, c in zip(solver_prev.node_support_forces,
-                                   solver_curr.node_support_forces)]
-        )
-        object.__setattr__(
-            diff_solver, 'system_support_forces',
-            [c - p for p, c in zip(solver_prev.system_support_forces,
-                                   solver_curr.system_support_forces)]
-        )
-
-        return diff_solver
-
-    def iteration_matrix(
-            self, mode: Literal['cumulative', 'incremental'] = "cumulative"):
-        """Return iteration results as a structured list of solver data.
-
-        Collects solver results from all iterations in either *cumulative* or
-        *incremental* mode. The output includes internal forces, deformation
-        lists and geometric shift data for each iteration.
-
-        Parameters
-        ----------
-        mode : {'cumulative', 'incremental'}, default='cumulative'
-            Defines how iteration results are interpreted:
-            - ``'cumulative'`` : total results up to each iteration step
-            - ``'incremental'`` : differences between consecutive iterations
-
-        Returns
-        -------
-        list of dict
-            Each dictionary contains solver data, including:
-            ``internal_forces``, ``node_deform_list``, ``bar_deform_list``, and
-            ``max_shift``.
-
-        Raises
-        ------
-        RuntimeError
-            If no iteration results are available.
-        ValueError
-            If `mode` is not one of {'cumulative', 'incremental'}.
-        """
-        if self._iteration_results is None:
-            raise RuntimeError(
-                "No iterations have been performed yet. "
-                "Run get_iteration_results() first."
-            )
-        if mode not in ['cumulative', 'incremental']:
+    @staticmethod
+    def _validation_approach_index(approach, iteration_index):
+        if approach not in ['matrix', 'iterative']:
             raise ValueError(
-                f'Iteration mode has to be either "cumulative" or '
-                f'"incremental". '
-                f'Got "{mode}" instead.'
+                f'Approach has to be either "matrix" or "iterative". '
+                f'Got "{approach}" instead.'
             )
-        matrix = []
-        results = self.get_iteration_results()
 
-        for i, r in enumerate(results):
-            solver = (
-                self.solver_iteration_cumulativ(i)
-                if mode == "cumulative"
-                else self.solver_iteration_incremental(i)
+        if approach == 'matrix' and iteration_index is not None:
+            raise ValueError(
+                'Matrix approach cannot have an iteration index.'
             )
-            if solver is None:
-                continue
-            matrix.append({
-                "iteration": r["iteration"],
-                "internal_forces": solver.internal_forces,
-                "node_deform_list": solver.node_deform_list,
-                "bar_deform_list": solver.bar_deform_list,
-                "system_deform_list": getattr(solver, "system_deform_list",
-                                              None),
-                "max_shift": r["max_shift"]
-            })
-        return matrix
+
+        if approach == 'iterative' and (iteration_index is None or
+                                        not isinstance(iteration_index, int)):
+            raise ValueError(
+                f'The Iteration Index has to be an int and not None. '
+                f'Got {type(iteration_index)} instead.'
+            )
+
+    def differential_equation(
+            self, approach: Literal['matrix', 'iterative'],
+            iteration_index: Optional[int] = None,
+            bar_index: Optional[int] = None,
+            n_disc: int = 10
+    ):
+        r"""Construct differential equation objects for bar deformation
+        analysis.
+
+        Depending on the chosen approach, this method generates instances of
+        :class:`DifferentialEquationSecond` (matrix-based approach) or generic
+        :class:`DifferentialEquation` instantiated through
+        :func:`get_differential_equation` (iterative approach).
+
+        Parameters
+        ----------
+        approach : {'matrix', 'iterative'}
+            Defines which second-order analysis results are used.
+        iteration_index : int, optional
+            Required for the iterative approach. Determines which iteration
+            step is used. Negative indexing is supported.
+        bar_index : int, optional
+            If provided, only the specified bar is processed. Negative indices
+            are allowed. If omitted, all bars are processed.
+        n_disc : int, default=10
+            Number of subdivisions used when constructing differential
+            equation functions.
+
+        Returns
+        -------
+        DifferentialEquation or list of DifferentialEquation
+            One object per bar or a list for all bars.
+
+        Raises
+        ------
+        ValueError
+            If the approach or iteration index is invalid.
+        AttributeError
+            If the matrix approach was requested before running
+            :meth:`matrix_approach`.
+        RuntimeError
+            If the iterative approach was requested but no iterations exist.
+
+        Notes
+        -----
+        - In cumulative mode, deformation and forces are taken directly from
+            the solver of the chosen iteration.
+        - In incremental mode, differential quantities from the stored
+          iteration history are used.
+            """
+        self._validation_approach_index(approach, iteration_index)
+
+        if approach == 'matrix':
+            bars = self._modified_system_matrix.mesh.bars
+            solver = self.solver_matrix_approach
+            if bar_index is not None:
+                return DifferentialEquationSecond(
+                    bar=bars[bar_index],
+                    deform=solver.bar_deform_list[bar_index],
+                    forces=solver.internal_forces[bar_index],
+                    n_disc=n_disc,
+                    f_axial=self.averaged_longitudinal_force[bar_index]
+                )
+            else:
+                return [
+                    DifferentialEquationSecond(
+                        bar=bars[i],
+                        deform=solver.bar_deform_list[i],
+                        forces=solver.internal_forces[i],
+                        n_disc=n_disc,
+                        f_axial=self.averaged_longitudinal_force[i]
+                    ) for i in range(len(bars))
+                ]
+        else:
+            if self._iteration_mode == 'cumulative':
+                solver = self.solver_iterative_approach(iteration_index)
+                return get_differential_equation(
+                    self.system,
+                    solver.bar_deform_list,
+                    solver.internal_forces,
+                    bar_index, n_disc
+                )
+            else:
+                entry = self._iteration_results[iteration_index]
+                return get_differential_equation(
+                    self.system,
+                    entry.get('bar_deform_diff'),
+                    entry.get('internal_forces_diff'),
+                    bar_index, n_disc
+                )
+
+    def plot(
+            self, approach: Literal['matrix', 'iterative'],
+            iteration_index: Optional[int] = None,
+            kind: Literal[
+                'normal', 'shear', 'moment', 'u', 'w', 'phi'] = 'normal',
+            bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
+            result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
+            decimals: Optional[int] = None, n_disc: int = 10
+    ):
+        r"""Plot second-order internal forces or deformation results.
+
+            This method constructs a :class:`SystemResult` object based on
+            either:
+
+            - matrix-based second-order theory, or
+            - (cumulative / incremental) iterative results,
+
+            and visualizes the selected quantity using
+            :class:`ResultGraphic`.
+
+            Parameters
+            ----------
+            approach : {'matrix', 'iterative'}
+                Defines whether the matrix-based or iterative results should
+                be plotted.
+            iteration_index : int, optional
+                Required for the iterative approach. Specifies the iteration
+                step.
+                Supports negative indices.
+            kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi'},
+                    default='normal'
+                Selects the result quantity to display.
+            bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
+                Mesh used for the graphic bar geometry.
+            result_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='mesh'
+                Mesh used for plotting the result distribution.
+            decimals : int, optional
+                Number of decimals for label annotation.
+            n_disc : int, default=10
+                Number of subdivisions for result interpolation.
+
+            Raises
+            ------
+            ValueError
+                If the approach or iteration index is invalid.
+            AttributeError
+                If the matrix-based approach was not initialized.
+            RuntimeError
+                If iterative results were requested but none exist.
+
+            Notes
+            -----
+            Incremental mode plots incremental quantities (differences between
+            consecutive iterations), whereas cumulative mode displays the
+            absolute state of the structure at that iteration.
+            """
+        self._validation_approach_index(approach, iteration_index)
+        from sstatics.graphic_objects import ResultGraphic
+        from sstatics.core.postprocessing import SystemResult
+
+        if approach == 'matrix':
+            solver = self.solver_matrix_approach
+            result = SystemResult(
+                self._modified_system_matrix,
+                solver.bar_deform_list,
+                solver.internal_forces,
+                solver.node_deform,
+                solver.node_support_forces,
+                solver.system_support_forces,
+                n_disc=n_disc
+            )
+        else:
+            if self._iteration_mode == 'cumulative':
+                solver = self.solver_iterative_approach(iteration_index)
+                result = SystemResult(
+                    self.system,
+                    solver.bar_deform_list,
+                    solver.internal_forces,
+                    solver.node_deform,
+                    solver.node_support_forces,
+                    solver.system_support_forces,
+                    n_disc=n_disc
+                )
+            else:
+                entry = self._iteration_results[iteration_index]
+                result = SystemResult(
+                    self.system,
+                    entry['bar_deform_diff'],
+                    entry['internal_forces_diff'],
+                    entry['node_deform_diff'],
+                    entry['node_support_diff'],
+                    entry['system_support_diff'],
+                    n_disc=n_disc
+                )
+
+        ResultGraphic(result, kind, bar_mesh_type, result_mesh_type,
+                      decimals).show()
