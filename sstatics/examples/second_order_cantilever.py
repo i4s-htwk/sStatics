@@ -35,18 +35,15 @@ print(forces_first)
 # Create a SecondOrder Object
 sec_order = SecondOrder(system)
 
-# Select and Run Second-Order Solver
-solution_analytic = sec_order.solver_analytic
-
-# Example of how to not use method
-print(sec_order.get_taylor_system())
-
-sec_order.solver_taylor
-print(sec_order.get_taylor_system())
+# Run matrix approach
+sec_order.matrix_approach('analytic')
+solution_analytic = sec_order.solver_matrix_approach
 
 # Comparing the bending moment at the beginning of the bar
-solution_taylor = sec_order.solver_taylor
-solution_p_delta = sec_order.solver_p_delta
+sec_order.matrix_approach('taylor')
+solution_taylor = sec_order.solver_matrix_approach
+sec_order.matrix_approach('p_delta')
+solution_p_delta = sec_order.solver_matrix_approach
 
 # Comparing the internal forces of the bending moment at the beginning of the
 # bar
