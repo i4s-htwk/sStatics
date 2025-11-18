@@ -25,9 +25,13 @@ class Solver:
 
     system: System
 
+    # INITIALIZATION -------------------------------------------------
     def __post_init__(self):
         self.dof = 3
+        self.mesh = self.system.mesh
+        self.nodes = self.system.nodes()
 
+    # ASSEMBLY -------------------------------------------------------
     def _get_zero_matrix(self):
         """Creates a zero matrix based on the number of nodes in the system.
 
@@ -74,7 +78,7 @@ class Solver:
         [0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0]])
         """
-        x = len(self.system.nodes()) * self.dof
+        x = len(self.nodes) * self.dof
         return np.zeros((x, x))
 
     def _get_zero_vec(self):
@@ -109,7 +113,7 @@ class Solver:
         >>> Solver(system)._get_zero_vec()
         array([[0], [0], [0], [0], [0], [0]])
         """
-        x = len(self.system.nodes()) * self.dof
+        x = len(self.nodes) * self.dof
         return np.zeros((x, 1))
 
     @cached_property
@@ -140,10 +144,10 @@ class Solver:
             superimposed at that node.
         """
         k_system = self._get_zero_matrix()
-        nodes = self.system.nodes()
         dof = self.dof
-        for bar in self.system.mesh:
-            i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
+        for bar in self.mesh:
+            i, j = (self.nodes.index(bar.node_i) * dof,
+                    self.nodes.index(bar.node_j) * dof)
             k = bar.stiffness_matrix()
 
             k_system[i:i + dof, i:i + dof] += k[:dof, :dof]
@@ -180,10 +184,10 @@ class Solver:
             node.
         """
         elastic = self._get_zero_matrix()
-        nodes = self.system.nodes()
         dof = self.dof
-        for bar in self.system.mesh:
-            i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
+        for bar in self.mesh:
+            i, j = (self.nodes.index(bar.node_i) * dof,
+                    self.nodes.index(bar.node_j) * dof)
 
             el_bar = np.block([
                 [bar.node_i.elastic_support, np.zeros((dof, dof))],
@@ -229,10 +233,10 @@ class Solver:
             all the bars in the system to assemble the total force vector.
         """
         f0_system = self._get_zero_vec()
-        nodes = self.system.nodes()
         dof = self.dof
-        for bar in self.system.mesh:
-            i, j = nodes.index(bar.node_i) * dof, nodes.index(bar.node_j) * dof
+        for bar in self.mesh:
+            i, j = (self.nodes.index(bar.node_i) * dof,
+                    self.nodes.index(bar.node_j) * dof)
             f0 = bar.f0()
 
             f0_system[i:i + dof, :] += f0[:dof, :]
@@ -258,7 +262,7 @@ class Solver:
             assembled in the vector based on the node indices.
         """
         p0 = self._get_zero_vec()
-        for i, node in enumerate(self.system.nodes()):
+        for i, node in enumerate(self.nodes):
             p0[i * self.dof:i * self.dof + self.dof, :] = node.load
         return p0
 
@@ -290,6 +294,7 @@ class Solver:
         """
         return self.p0 - self.f0
 
+    # APPLY BOUNDARY CONDITIONS --------------------------------------
     @cached_property
     def boundary_conditions(self):
         """Applies boundary conditions to the global system.
@@ -363,7 +368,7 @@ class Solver:
         """
         k = deepcopy(self.system_matrix)
         p = deepcopy(self.p)
-        for idx, node in enumerate(self.system.nodes()):
+        for idx, node in enumerate(self.nodes):
             node_offset = idx * self.dof
             for dof_nr, attribute in enumerate(['u', 'w', 'phi']):
                 if getattr(node, attribute, 'free') == 'fixed':
@@ -373,6 +378,45 @@ class Solver:
                     p[node_offset + dof_nr] = 0
         return k, p
 
+    # SOLVE SYSTEM ---------------------------------------------------
+    @cached_property
+    def solvable(self):
+        """Checks whether the stiffness matrix is regular, i.e., whether the
+        system of equations is solvable.
+
+        Returns
+        -------
+        :any:`bool`
+            :python:`False` if the stiffness matrix is singular (unsolvable),
+            :python:`True` otherwise.
+
+        Notes
+        -----
+        This method checks whether the system is kinematically movable by
+        examining the rank of the stiffness matrix (computed using
+        :func:`numpy.linalg.matrix_rank`, which internally uses singular value
+        decomposition for numerical stability) instead of computing its
+        determinant, which is computationally expensive and potentially
+        unstable for large systems. If the rank of the stiffness matrix is
+        smaller than its dimension, the matrix is singular, indicating a
+        kinematic system or an incorrect system description [1]_. Using the
+        rank in this way provides a robust and numerically stable check [2]_.
+
+        References
+        ----------
+        .. [1] D. Dinkler. "Grundlagen der Baustatik: Modelle und
+               Berechnungsmethoden für ebene Stabtragwerke". Band 1, 2011.
+
+        .. [2] J. Dankert, H. Dankert (Hrsg.). "Mathematik für die
+               Technische Mechanik". Online: http://www.tm-mathe.de/,
+               abgerufen am 22.03.2025.
+        """
+        k, p = self.boundary_conditions
+        if np.linalg.matrix_rank(k) < k.shape[0]:
+            return False
+        return True
+
+    # SOLUTION -------------------------------------------------------
     @cached_property
     def node_deform(self):
         r"""Solves the linear system for the nodal deformations.
@@ -393,6 +437,12 @@ class Solver:
             deformations.
 
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         modified_stiffness_matrix, modified_p = self.boundary_conditions
         return np.linalg.solve(modified_stiffness_matrix, modified_p)
 
@@ -416,17 +466,22 @@ class Solver:
             A list of (6, 1) arrays, one for each bar, containing the nodal
             deformations (3 DOFs per node) in the node coordinate system.
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         deform = self.node_deform
-        nodes = self.system.nodes()
         dof = self.dof
         return [
             np.vstack([
-                deform[nodes.index(bar.node_i) * dof:
-                       nodes.index(bar.node_i) * dof + dof],
-                deform[nodes.index(bar.node_j) * dof:
-                       nodes.index(bar.node_j) * dof + dof]
+                deform[self.nodes.index(bar.node_i) * dof:
+                       self.nodes.index(bar.node_i) * dof + dof],
+                deform[self.nodes.index(bar.node_j) * dof:
+                       self.nodes.index(bar.node_j) * dof + dof]
             ])
-            for bar in self.system.mesh
+            for bar in self.mesh
         ]
 
     @cached_property
@@ -449,17 +504,22 @@ class Solver:
             A list of (6, 1) arrays, each representing the bar deformation in
             the local bar coordinate system.
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         deform = self.node_deform
-        nodes = self.system.nodes()
         dof = self.dof
         return [
             np.transpose(bar.transformation_matrix()) @ np.vstack([
-                deform[nodes.index(bar.node_i) * dof:
-                       nodes.index(bar.node_i) * dof + dof],
-                deform[nodes.index(bar.node_j) * dof:
-                       nodes.index(bar.node_j) * dof + dof]
+                deform[self.nodes.index(bar.node_i) * dof:
+                       self.nodes.index(bar.node_i) * dof + dof],
+                deform[self.nodes.index(bar.node_j) * dof:
+                       self.nodes.index(bar.node_j) * dof + dof]
             ])
-            for bar in self.system.mesh
+            for bar in self.mesh
         ]
 
     @cached_property
@@ -473,10 +533,16 @@ class Solver:
             A list of (6, 1) arrays, each representing the deformation in
             the system coordinate system.
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         bar_deform = self.bar_deform
         return [
             bar.transformation_matrix(False) @ deform
-            for bar, deform in zip(self.system.mesh, bar_deform)
+            for bar, deform in zip(self.mesh, bar_deform)
         ]
 
     @cached_property
@@ -500,6 +566,12 @@ class Solver:
 
             .. math:: f^{'} = k^{'} \cdot \delta^{'} + f^{(0)'}
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         bar_deform = self.bar_deform
         return [
             bar.stiffness_matrix(
@@ -507,7 +579,7 @@ class Solver:
             bar.f0(
                 to_node_coord=False) + bar.f0_point
             for (bar, deform) in
-            (zip(self.system.mesh, bar_deform))
+            (zip(self.mesh, bar_deform))
         ]
 
     @cached_property
@@ -535,6 +607,12 @@ class Solver:
             In the calculation algorithm, the deformations from the elastic
             supports are also taken into account.
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         elastic_vec = np.vstack(np.diag(self.elastic_matrix))
         return (self.system_matrix @ self.node_deform + self.f0
                 - self.p0 - elastic_vec * self.node_deform)
@@ -565,8 +643,14 @@ class Solver:
 
             The transformation is only necessary if the node is rotated.
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         node_attribute = deepcopy(self.node_support_forces)
-        for idx, node in enumerate(self.system.nodes()):
+        for idx, node in enumerate(self.nodes):
             if node.rotation != 0:
                 node_attribute[idx * self.dof: (idx + 1) * self.dof, :] = (
                         transformation_matrix(-node.rotation) @
@@ -642,9 +726,15 @@ class Solver:
             The solution vector :math:x represents the total relative
             deformations caused by the hinges.
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         deform_list = []
         bar_deform_list = self.bar_deform
-        for i, bar in enumerate(self.system.mesh):
+        for i, bar in enumerate(self.mesh):
             delta_rel = np.zeros((6, 1))
             if True in bar.hinge:
                 k = bar.stiffness_matrix(hinge_modification=False)
@@ -679,10 +769,16 @@ class Solver:
         :any:`NodeDisplacement`
             For nodal displacement values in the global coordinate system.
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         return [
             np.transpose(bar.transformation_matrix())
             @ np.vstack((bar.node_i.displacement, bar.node_j.displacement))
-            for bar in self.system.mesh
+            for bar in self.mesh
         ]
 
     @cached_property
@@ -704,47 +800,15 @@ class Solver:
             of each bar in the system, expressed in the local bar coordinate
             system.
         """
+        if not self.solvable:
+            raise ValueError(
+                "The linear system is not solvable. "
+                "The stiffness matrix is singular or poorly conditioned. "
+                "Check the supports, hinges, or the overall system definition."
+            )
         combined_results = []
         for i in range(len(self.hinge_modifier)):
             result = (self.hinge_modifier[i] + self.bar_deform[i] +
                       self.bar_deform_displacements[i])
             combined_results.append(result)
         return combined_results
-
-    @cached_property
-    def solvable(self):
-        """Checks whether the stiffness matrix is regular, i.e., whether the
-        system of equations is solvable.
-
-        Returns
-        -------
-        :any:`bool`
-            :python:`False` if the stiffness matrix is singular (unsolvable),
-            :python:`True` otherwise.
-
-        Notes
-        -----
-        This method checks whether the system is kinematically movable by
-        examining the rank of the stiffness matrix (computed using
-        :func:`numpy.linalg.matrix_rank`, which internally uses singular value
-        decomposition for numerical stability) instead of computing its
-        determinant, which is computationally expensive and potentially
-        unstable for large systems. If the rank of the stiffness matrix is
-        smaller than its dimension, the matrix is singular, indicating a
-        kinematic system or an incorrect system description [1]_. Using the
-        rank in this way provides a robust and numerically stable check [2]_.
-
-        References
-        ----------
-        .. [1] D. Dinkler. "Grundlagen der Baustatik: Modelle und
-               Berechnungsmethoden für ebene Stabtragwerke". Band 1, 2011.
-
-        .. [2] J. Dankert, H. Dankert (Hrsg.). "Mathematik für die
-               Technische Mechanik". Online: http://www.tm-mathe.de/,
-               abgerufen am 22.03.2025.
-        """
-        k, p = self.boundary_conditions
-        if np.linalg.matrix_rank(k) < k.shape[0]:
-            print("Stiffness matrix is singular.")
-            return False
-        return True
