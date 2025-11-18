@@ -28,8 +28,8 @@ class SupportGeo(ObjectGeo, abc.ABC):
         super().__init_subclass__()
         if not hasattr(cls, 'CLASS_DIMENSIONS'):
             raise TypeError(
-                f"Class '{cls.__name__}' must define a CLASS_DIMENSIONS "
-                f"attribute."
+                f'Class "{cls.__name__}" must define a CLASS_DIMENSIONS '
+                f'attribute.'
             )
 
     def __init__(
@@ -78,6 +78,18 @@ class SupportGeo(ObjectGeo, abc.ABC):
     @property
     def height(self):
         return self._height
+
+    def __repr__(self):
+        return (
+            f'{self.__class__.__name__}('
+            f'origin={self._origin}, '
+            f'width={self._width}, '
+            f'height={self._height}, '
+            f'text={self._text}, '
+            f'line_style={self._line_style}, '
+            f'text_style={self._text_style}, '
+            f'Transform={self._transform})'
+        )
 
 
 class LineHatchGeo(SupportGeo):
@@ -156,7 +168,7 @@ class PinnedSupportGeo(SupportGeo):
         return [top_line, bottom_line, double_line_hatch, point]
 
 
-class FixedSupportUW(SupportGeo):
+class FixedSupportUWGeo(SupportGeo):
     CLASS_DIMENSIONS = DEFAULT_FIXED_SUPPORT_UW
 
     @cached_property
@@ -176,12 +188,12 @@ class FixedSupportUW(SupportGeo):
         return [triangle, hatch]
 
 
-FixedSupportUPhi = LineHatchGeo
-""" Alias of :py:class:`LineHatchGeo` to make the use case of this class more
-clear. """
+FixedSupportUPhiGeo = DoubleLineHatchGeo
+""" Alias of :py:class:`DoubleLineHatchGeo` to make the use case of this class
+more clear. """
 
 
-class FixedSupportWPhi(SupportGeo):
+class FixedSupportWPhiGeo(SupportGeo):
     CLASS_DIMENSIONS = DEFAULT_FIXED_SUPPORT_WPHI
 
     @cached_property
@@ -205,9 +217,9 @@ class FixedSupportWPhi(SupportGeo):
         return [top_line, bottom_line, line_hatch, point]
 
 
-ChampedSupport = DoubleLineHatchGeo
-""" Alias of :py:class:`DoubleLineHatchGeo` to make the use case of this
-class more clear. """
+ChampedSupportGeo = LineHatchGeo
+""" Alias of :py:class:`LineHatchGeo` to make the use case of this class more
+clear. """
 
 
 class SpringW(SupportGeo):

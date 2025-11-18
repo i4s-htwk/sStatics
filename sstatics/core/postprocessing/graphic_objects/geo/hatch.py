@@ -157,10 +157,10 @@ class HatchGeo(ObjectGeo):
 
     def __repr__(self):
         return (
-            f"HatchGeo("
-            f"shape={self._shape} "
-            f"spacing={self._spacing} "
-            f"angle={self._angle} "
-            f"line_style={self._line_style}, "
-            f"Transform={self._transform})"
+            f'{self.__class__.__name__}('
+            f'shape={self._shape} '
+            f'spacing={self._spacing} '
+            f'angle={self._angle} '
+            f'line_style={self._line_style}, '
+            f'Transform={self._transform})'
         )

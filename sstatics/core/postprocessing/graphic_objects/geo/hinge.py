@@ -26,8 +26,8 @@ class HingeGeo(ObjectGeo, abc.ABC):
         super().__init_subclass__()
         if not hasattr(cls, 'CLASS_DIMENSIONS'):
             raise TypeError(
-                f"Class '{cls.__name__}' must define a CLASS_DIMENSIONS "
-                f"attribute."
+                f'Class "{cls.__name__}" must define a CLASS_DIMENSIONS '
+                f'attribute.'
             )
 
     def __init__(
@@ -93,12 +93,12 @@ class HingeGeo(ObjectGeo, abc.ABC):
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}("
-            f"origin={self._origin}, "
-            f"width={self._width}, "
-            f"height={self._height}, "
-            f"line_style={self._line_style}, "
-            f"Transform={self._transform})"
+            f'{self.__class__.__name__}('
+            f'origin={self._origin}, '
+            f'width={self._width}, '
+            f'height={self._height}, '
+            f'line_style={self._line_style}, '
+            f'Transform={self._transform})'
         )
 
 
@@ -186,8 +186,7 @@ class CombiHingeGeo(ObjectGeo):
             x += self._x_off(i)
             hinge_cls = type(hinge)
             elements.append(hinge_cls(
-                (x, z), hinge.width, hinge.height,
-                line_style=hinge.line_style
+                (x, z), hinge.width, hinge.height, line_style=hinge.line_style
             ))
         return elements
 
@@ -233,3 +232,12 @@ class CombiHingeGeo(ObjectGeo):
     @property
     def total_width(self):
         return sum(h.width for h in self._hinges)
+
+    def __repr__(self):
+        return (
+            f'{self.__class__.__name__}('
+            f'origin={self._origin}, '
+            f'hinges={self._hinges}, '
+            f'line_style={self._line_style}, '
+            f'Transform={self._transform})'
+        )

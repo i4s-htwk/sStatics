@@ -66,7 +66,29 @@ class OpenCurveGeo(ObjectGeo):
 
     @cached_property
     def text_elements(self):
-        return [(*self._origin, self._text, self._text_style)]
+        text = self._text
+        if not text:
+            return []
+        n = len(text)
+        n_points = len(self._x)
+        if n == 1:
+            if n_points == 2:
+                (x0, x1) = self._x
+                (z0, z1) = self._z
+                return [((x0 + x1) / 2, (z0 + z1) / 2, text, self._text_style)]
+            return [(*self._origin, text, self._text_style)]
+        elif n == n_points:
+            return [
+                (self._x[i], self._z[i], [t], self._text_style)
+                for i, t in enumerate(text)
+            ]
+        else:
+            raise ValueError(
+                f'Invalid number of text entries: expected either 1 or'
+                f'{n_points}, but got {n}. The number of text labels must '
+                f'match the number of curve points (len(x) and len(z)) or be '
+                f'exactly one.'
+            )
 
     @classmethod
     def from_center(cls, origin: tuple[float, float], length: float, **kwargs):
@@ -130,12 +152,6 @@ class OpenCurveGeo(ObjectGeo):
 
     @staticmethod
     def _validate_coords(x, z):
-        if len(x) != len(z):
-            raise ValueError('x and z must have the same length.')
-
-        if len(x) < 2:
-            raise ValueError('A line requires at least two points.')
-
         if not isinstance(x, list):
             raise TypeError(f'x must be a list, got {type(x).__name__}.')
 
@@ -147,6 +163,12 @@ class OpenCurveGeo(ObjectGeo):
 
         if not all(isinstance(v, (int, float)) for v in z):
             raise TypeError('All z values must be a numbers.')
+
+        if len(x) != len(z):
+            raise ValueError('x and z must have the same length.')
+
+        if len(x) < 2:
+            raise ValueError('A line requires at least two points.')
 
     @staticmethod
     def _validate_slop_intercept(slope, intercept, boundaries):
@@ -194,13 +216,13 @@ class OpenCurveGeo(ObjectGeo):
 
     def __repr__(self):
         return (
-            f"LineGeo("
-            f"x={self._x}, "
-            f"z={self._z}, "
-            f"line_style={self._line_style}, "
-            f"text={self._text if self._text else None}, "
-            f"text_style={self._text_style['textfont']}, "
-            f"Transform={self._transform})"
+            f'{self.__class__.__name__}('
+            f'x={self._x}, '
+            f'z={self._z}, '
+            f'line_style={self._line_style}, '
+            f'text={self._text if self._text else None}, '
+            f'text_style={self._text_style}, '
+            f'Transform={self._transform})'
         )
 
 
@@ -239,7 +261,7 @@ class ClosedCurveGeo(ObjectGeo, abc.ABC):
 
     @cached_property
     def text_elements(self):
-        return [self._center_geo]
+        return []
 
     @cached_property
     @abc.abstractmethod
@@ -298,9 +320,9 @@ class ClosedCurveGeo(ObjectGeo, abc.ABC):
 
     @staticmethod
     def _style_without_outline(style: dict[str, Any]) -> dict[str, Any]:
-        style = {**style, "line": {**style.get("line", {}), "width": 0}}
-        if "fill" not in style and "fillcolor" in style:
-            style["fill"] = "toself"
+        style = {**style, 'line': {**style.get('line', {}), 'width': 0}}
+        if 'fill' not in style and 'fillcolor' in style:
+            style['fill'] = 'toself'
         return style
 
     @property
@@ -335,7 +357,7 @@ class PolygonGeo(ClosedCurveGeo):
             polygon: Polygon,
             **kwargs
     ):
-        self._validate_init(polygon)
+        self._validate_polygon(polygon)
         super().__init__(
             origin=(polygon.center_of_mass_y, polygon.center_of_mass_z),
             **kwargs
@@ -362,7 +384,7 @@ class PolygonGeo(ClosedCurveGeo):
         return [(x, z, self._line_style)]
 
     @staticmethod
-    def _validate_init(polygon):
+    def _validate_polygon(polygon):
         if not isinstance(polygon, Polygon):
             raise TypeError(f'polygon must be a Polygon, got {polygon!r}')
 
@@ -370,13 +392,13 @@ class PolygonGeo(ClosedCurveGeo):
         points_x = [x for x, _, _ in self._point_coords]
         points_z = [z for _, z, _ in self._point_coords]
         return (
-            f"PolygonGeo("
-            f"points_x={points_x}, points_z={points_z}, "
-            f"line_style={self._line_style}, "
-            f"point={self._center_geo}, "
-            f"hatch_style={self._hatch_style}, "
-            f"show_outline={self._show_outline}, "
-            f"Transform={self._transform})"
+            f'{self.__class__.__name__}('
+            f'points_x={points_x}, points_z={points_z}, '
+            f'line_style={self._line_style}, '
+            f'point={self._center_geo}, '
+            f'hatch_style={self._hatch_style}, '
+            f'show_outline={self._show_outline}, '
+            f'Transform={self._transform})'
         )
 
 
@@ -393,7 +415,7 @@ class EllipseGeo(ClosedCurveGeo):
     ):
         if height is None:
             height = width
-        self._validate_init(width, height, angle_range, n_points)
+        self._validate_ellipse(width, height, angle_range, n_points)
         super().__init__(origin=origin, **kwargs)
         self._a = width / 2
         self._b = height / 2
@@ -410,9 +432,8 @@ class EllipseGeo(ClosedCurveGeo):
         z = z0 + self._b * np.sin(angles)
         return [(x, z, self._line_style)]
 
-    def _validate_init(
-            self, width, height, angle_range, n_points
-    ):
+    @staticmethod
+    def _validate_ellipse(width, height, angle_range, n_points):
         if not isinstance(width, (int, float)):
             raise TypeError(f'"width" must be a number, got {width!r}')
 
@@ -424,10 +445,10 @@ class EllipseGeo(ClosedCurveGeo):
                 '"width" and "height" have to be a numbers greater than zero.'
             )
 
-        if not all(0 <= angle <= 2 * np.pi for angle in angle_range):
+        if not all(isinstance(angle, (int, float)) for angle in angle_range):
             raise ValueError(
-                'Both angles in "angle_range" have to be in the interval '
-                '[0, 2 * pi].'
+                f'Both angles in "angle_range" must be numbers, '
+                f'got {angle_range!r}.'
             )
 
         if not isinstance(n_points, int):
@@ -464,16 +485,16 @@ class EllipseGeo(ClosedCurveGeo):
 
     def __repr__(self):
         return (
-            f"EllipseGeo("
-            f"a={self._a}, "
-            f"b={self._b}, "
-            f"angle_range={self._angle_range}, "
-            f"n_points={self._n_points}, "
-            f"line_style={self._line_style}, "
-            f"point={self._center_geo}, "
-            f"hatch_style={self._hatch_style}, "
-            f"show_outline={self._show_outline}, "
-            f"Transform={self._transform})"
+            f'{self.__class__.__name__}('
+            f'a={self._a}, '
+            f'b={self._b}, '
+            f'angle_range={self._angle_range}, '
+            f'n_points={self._n_points}, '
+            f'line_style={self._line_style}, '
+            f'point={self._center_geo}, '
+            f'hatch_style={self._hatch_style}, '
+            f'show_outline={self._show_outline}, '
+            f'Transform={self._transform})'
         )
 
 
@@ -488,7 +509,7 @@ class IsoscelesTriangleGeo(ClosedCurveGeo):
     ):
         if height is None:
             height = width / 2
-        self._validate_init(width, height)
+        self._validate_triangle(width, height)
         super().__init__(origin=origin, **kwargs)
         self._width = width
         self._height = height
@@ -502,29 +523,30 @@ class IsoscelesTriangleGeo(ClosedCurveGeo):
         return [(x, z, self._line_style)]
 
     @staticmethod
-    def _validate_init(width, height):
+    def _validate_triangle(width, height):
         if not isinstance(width, (int, float)):
             raise TypeError(f'"width" must be a number, got {width!r}')
 
         if not isinstance(height, (int, float)):
             raise TypeError(f'"height" must be a number, got {height!r}')
 
-        if width <= 0 or height <= 0:
+        if width < 0 or height < 0:
             raise ValueError(
-                '"width" and "height" have to be a numbers greater than zero.'
+                '"width" and "height" have to be a numbers greater than or '
+                'equal to zero.'
             )
 
     def __repr__(self):
         return (
-            f"IsoscelesTriangleGeo("
-            f"origin={self._origin}, "
-            f"width={self._width}, "
-            f"height={self._height}, "
-            f"line_style={self._line_style}, "
-            f"point={self._center_geo}, "
-            f"hatch_style={self._hatch_style}, "
-            f"show_outline={self._show_outline}, "
-            f"Transform={self._transform})"
+            f'{self.__class__.__name__}('
+            f'origin={self._origin}, '
+            f'width={self._width}, '
+            f'height={self._height}, '
+            f'line_style={self._line_style}, '
+            f'point={self._center_geo}, '
+            f'hatch_style={self._hatch_style}, '
+            f'show_outline={self._show_outline}, '
+            f'Transform={self._transform})'
         )
 
 
@@ -539,7 +561,7 @@ class RectangleGeo(ClosedCurveGeo):
     ):
         if height is None:
             height = width / 2
-        self._validate_init(width, height)
+        self._validate_rectangle(width, height)
         super().__init__(origin=origin, **kwargs)
         self._width = width
         self._height = height
@@ -553,7 +575,7 @@ class RectangleGeo(ClosedCurveGeo):
         return [(x, z, self._line_style)]
 
     @staticmethod
-    def _validate_init(width, height):
+    def _validate_rectangle(width, height):
         if not isinstance(width, (int, float)):
             raise TypeError(f'"width" must be a number, got {width!r}')
 
@@ -567,13 +589,13 @@ class RectangleGeo(ClosedCurveGeo):
 
     def __repr__(self):
         return (
-            f"RectangleGeo("
-            f"origin={self._origin}, "
-            f"width={self._width}, "
-            f"height={self._height}, "
-            f"line_style={self._line_style}, "
-            f"point={self._center_geo}, "
-            f"hatch_style={self._hatch_style}, "
-            f"show_outline={self._show_outline}, "
-            f"Transform={self._transform})"
+            f'{self.__class__.__name__}('
+            f'origin={self._origin}, '
+            f'width={self._width}, '
+            f'height={self._height}, '
+            f'line_style={self._line_style}, '
+            f'point={self._center_geo}, '
+            f'hatch_style={self._hatch_style}, '
+            f'show_outline={self._show_outline}, '
+            f'Transform={self._transform})'
         )

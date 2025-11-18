@@ -175,10 +175,45 @@ DEFAULT_SPRING_W = dict(
     height=2.75
 )
 
+DEFAULT_ARROW = dict(
+    line=dict(width=2)
+)
+
+DEFAULT_ARROW_HEAD = dict(
+    fill='toself',
+    fillcolor='black'
+)
+
+DEFAULT_LOAD_DISTANCE = 1
+DEFAULT_ARROW_DISTANCE = 1
+
+DEFAULT_POINT_FORCE = dict(
+    width_head=0.28,
+    length_head=0.8,
+    length_tail=2.2,
+)
+
+DEFAULT_POINT_MOMENT = dict(
+    width_head=0.28,
+    length_head=0.4,
+    radius=1.3,
+    angle_span=(np.pi / 6, -np.pi / 4)
+)
+
 PLOTLY = 'plotly'
 MPL = 'mpl'
 VALID_MODES = (PLOTLY, MPL)
 DEFAULT_MODE = PLOTLY
+
+DEFAULT_LAYOUT_X = dict(
+    autorange=True
+)
+
+DEFAULT_LAYOUT_Y = dict(
+    autorange='reversed',
+    scaleanchor='x',
+    scaleratio=1
+)
 
 DEFAULT_SAVE: dict[Any, Any] = dict(
     width=2400,
