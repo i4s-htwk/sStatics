@@ -16,7 +16,7 @@ class ObjectGeo(abc.ABC):
 
     This class defines the interface and common functionality for objects that
     can be represented graphically with lines and text. It handles
-    transformation (translation, scaling, rotation) and style management.
+    transformation (post_translation, scaling, rotation) and style management.
 
     Parameters
     ----------
@@ -26,7 +26,9 @@ class ObjectGeo(abc.ABC):
         Rotation angle in radians, counterclockwise.
     scaling : float, default=1.0
         Uniform scaling factor applied relative to the origin.
-    translation : tuple[float, float], default=(0.0, 0.0)
+    pre_translation : tuple[float, float], default=(0.0, 0.0)
+        Translation vector applied before rotation and scaling.
+    post_translation : tuple[float, float], default=(0.0, 0.0)
         Translation vector applied after rotation and scaling.
     text : str, default=''
         Content of the label or annotation.
@@ -53,8 +55,9 @@ class ObjectGeo(abc.ABC):
             origin: tuple[float, float] = (0.0, 0.0),
             rotation: float = 0.0,
             scaling: float = 1.0,
-            translation: tuple[float, float] = (0.0, 0.0),
-            text: str = '',
+            pre_translation: tuple[float, float] = (0.0, 0.0),
+            post_translation: tuple[float, float] = (0.0, 0.0),
+            text: str | list[str] = '',
             line_style: dict[str, Any] | None = None,
             point_style: dict[str, Any] | None = None,
             text_style: dict[str, Any] | None = None
@@ -62,7 +65,7 @@ class ObjectGeo(abc.ABC):
         line_style = line_style or {}
         point_style = point_style or {}
         text_style = text_style or {}
-        self._validate(text, line_style, text_style, point_style)
+        self._validate_base(text, line_style, text_style, point_style)
         user_styles = {
             'line': line_style or {},
             'point': point_style or {},
@@ -71,10 +74,10 @@ class ObjectGeo(abc.ABC):
         class_styles = getattr(self, 'CLASS_STYLES', {})
         self._transform = Transform(
             origin=origin, rotation=rotation, scaling=scaling,
-            translation=translation
+            pre_translation=pre_translation, post_translation=post_translation
         )
         self._origin = self._transform.origin
-        self._text = text
+        self._text = text if isinstance(text, (list, tuple)) else [str(text)]
 
         self._line_style = self._merge_style(
             self.DEFAULT_STYLES['line'],
@@ -164,26 +167,15 @@ class ObjectGeo(abc.ABC):
 
         return min(x_coords), max(x_coords), min(z_coords), max(z_coords)
 
-    def _iter_graphic_elements(self, obj=None, transform_fn=None):
-        if obj is None:
-            obj = self
-
-        if transform_fn is None:
-            def transform_fn(x, z):
-                return obj.transform(x, z)
-        else:
-            def transform_fn(x, z, prev=transform_fn, current=obj.transform):
-                x, z = prev(x, z)
-                return current(x, z)
-
+    def _iter_graphic_elements(self, obj=None):
         for element in obj.graphic_elements:
-            if isinstance(element, ObjectGeo):
-                # Rekursion nur für Unterobjekte vom Typ ObjectGeo
-                yield from self._iter_graphic_elements(element, transform_fn)
+            if hasattr(element, 'graphic_elements'):
+                for x, z, style in self._iter_graphic_elements(element):
+                    x, z = obj.transform(x, z)
+                    yield x, z, style
             else:
-                # normales grafisches Element (x_list, z_list, style)
                 x, z, style = element
-                x, z = transform_fn(x, z)
+                x, z = obj.transform(x, z)
                 yield x, z, style
 
     @cached_property
@@ -246,7 +238,7 @@ class ObjectGeo(abc.ABC):
     @staticmethod
     def _deep_style_merge(
             default: dict,
-            override: dict[str, Any] | None = None
+            override: dict[str, Any]
     ) -> dict:
         """
         Recursively merge two dictionaries without modifying the originals.
@@ -255,7 +247,7 @@ class ObjectGeo(abc.ABC):
         ----------
         default : dict
             Base dictionary providing default values.
-        override : dict, optional
+        override : dict
             Dictionary with values to override the defaults.
 
         Returns
@@ -280,7 +272,7 @@ class ObjectGeo(abc.ABC):
         return result
 
     @staticmethod
-    def _validate(text, line_style, text_style, point_style):
+    def _validate_base(text, line_style, text_style, point_style):
         """
         Validate text, line_style and text_style parameters.
 
@@ -296,7 +288,7 @@ class ObjectGeo(abc.ABC):
         Raises
         ------
         TypeError
-            If `text` is not a String.
+            If `text` is not String, list, tuple, int or float.
             If `line_style` or `text_style` is not a dictionary.
 
         Notes
@@ -304,10 +296,16 @@ class ObjectGeo(abc.ABC):
         This method is called by the constructor to ensure the object receives
         valid style dictionaries.
         """
-        if not isinstance(text, str):
+        if not isinstance(text, (str, list, tuple, int, float)):
             raise TypeError(
-                f'text must be a String, got {type(text).__name__}'
+                f'text must be string, list, tuple, int or float, got '
+                f'{type(text).__name__}'
             )
+        if isinstance(text, (list, tuple)):
+            if not all(isinstance(t, (str, int, float)) for t in text):
+                raise TypeError(
+                    'all text elements must be strings, int or float'
+                )
 
         if not isinstance(line_style, dict):
             raise TypeError(
