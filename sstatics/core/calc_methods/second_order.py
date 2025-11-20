@@ -65,6 +65,24 @@ class SecondOrder(LoggerMixin):
 
     All iteration steps, including geometric updates are
     stored in ``_iteration_results``.
+
+    References
+    ----------
+    .. [1] R. Dallmann. "Baustatik 3: Theorie II. Ordnung und
+            computerorientierte Methoden der Stabtragwerke". 2. Auflage, 2015.
+
+    .. [2] H. Werkle. "Finite Elemente in der Baustatik: Statik und Dynamik der
+            Stab- und Flächentragwerke". 3. Auflage, 2008.
+
+    .. [3] W.B. Krätzig, R. Harte, C. Könke, Y.S. Petryna. "Tragwerke 2:
+            Theorie und Berechnungsmethoden statisch unbestimmter
+            Stabtragwerke". 5. Auflage, 2019.
+
+    .. [4] C. Spura. "Einführung in die Balkentheorie nach Timoshenko und
+            Euler- Bernoulli". 2019.
+
+    .. [5] H. Rothert, V. Gensichen. "Nichtlineare Stabstatik: Baustatische
+            Grundlagen und Anwendungen". 1. Auflage, 1987.
     """
     system: System
     debug: bool = False
@@ -109,19 +127,24 @@ class SecondOrder(LoggerMixin):
         ValueError
             If `approach` is not one of the supported options.
         """
+        self.logger.info(f"Matrix approach selected: '{approach}'.")
 
         if approach not in ['analytic', 'p_delta', 'taylor']:
-            raise ValueError(
-                f'Matrix approach has to be either "analytic", "taylor" or '
-                f'"p_delta". '
-                f'Got "{approach}" instead.')
+            msg = (f'Matrix approach has to be either "analytic", "taylor" or '
+                   f'"p_delta". Got "{approach}" instead.')
+            self.logger.error(msg)
+            raise ValueError(msg)
 
-        # Reset Results
+        self.logger.info("Resetting previous matrix-based results.")
         self._solution_matrix = None
         self._modified_system_matrix = None
 
-        # Set modified System
+        self.logger.debug(
+            "Converting bars to second-order elements (BarSecond).")
+        self.logger.debug(f"Number of bars: {len(self.system.bars)}")
+
         self._modified_system_matrix = System(self._convert_bars(approach))
+        self.logger.info("Modified second-order system successfully created.")
 
     @property
     def solver_matrix_approach(self):
@@ -144,17 +167,25 @@ class SecondOrder(LoggerMixin):
             If no matrix-based system is available. Users must call
             :meth:`matrix_approach` before accessing this property.
         """
+        self.logger.info("Accessing solver for matrix-based analysis.")
         if self._modified_system_matrix is None:
-            raise AttributeError(
-                "The modified system has not been created yet. "
-                "Call `matrix_approach(...)` before accessing "
-                "`solver_matrix_approach`."
-            )
+            msg = ("The modified system has not been created yet. "
+                   "Call `matrix_approach(...)` before accessing "
+                   "`solver_matrix_approach`.")
+            self.logger.error(msg)
+            raise AttributeError(msg)
         if self._solution_matrix is None:
             solver = Solver(self._modified_system_matrix)
+            self.logger.info("Creating new solver for modified matrix system.")
+
             object.__setattr__(solver, 'internal_forces',
                                self._transform_internal_forces(solver))
+            self.logger.debug(
+                "The 'internal_forces' attribute of the Solver has been "
+                "updated with the transformed second-order forces.")
+
             self._solution_matrix = solver
+        self.logger.debug("Returning cached matrix-based solver instance.")
         return self._solution_matrix
 
     @property
@@ -175,12 +206,13 @@ class SecondOrder(LoggerMixin):
         AttributeError
             If no matrix-based system has been computed yet.
         """
+        self.logger.info("Accessing modified system of matrix-based analysis.")
         if self._modified_system_matrix is None:
-            raise AttributeError(
-                "The modified system has not been created yet. "
-                "Call `matrix_approach()` before accessing "
-                "`system_matrix_approach`."
-            )
+            msg = ("The modified system has not been created yet. "
+                   "Call `matrix_approach()` before accessing "
+                   "`system_matrix_approach`.")
+            self.logger.error(msg)
+            raise AttributeError(msg)
         return self._modified_system_matrix
 
     def iterative_approach(
@@ -219,31 +251,38 @@ class SecondOrder(LoggerMixin):
         ValueError
             If `result_type` is invalid.
         """
+        self.logger.info(
+            f"Starting iterative second-order analysis "
+            f"(iterations={iterations}, tolerance={tolerance}, "
+            f"mode={result_type})."
+        )
 
         if not isinstance(iterations, int):
-            raise ValueError(
-                f'The number of iterations must be of type int. '
-                f'The current type is "{type(iterations)}".'
-            )
+            msg_1 = (f'The number of iterations must be of type int. '
+                     f'The current type is "{type(iterations)}".')
+            self.logger.error(msg_1)
+            raise ValueError(msg_1)
 
         if iterations <= 0:
-            raise ValueError(
-                'The number of iterations has to be greater than zero.'
-            )
+            msg_2 = 'The number of iterations has to be greater than zero.'
+            self.logger.error(msg_2)
+            raise ValueError(msg_2)
 
         if result_type not in ('cumulative', 'incremental'):
-            raise ValueError(
-                f'Iteration mode has to be either "cumulative" or '
-                f'"incremental". Got "{result_type}" instead.'
-            )
-        # Reset Results
+            msg_3 = (f'Iteration mode has to be either "cumulative" or '
+                     f'"incremental". Got "{result_type}" instead.')
+            self.logger.error(msg_3)
+            raise ValueError(msg_3)
+
+        self.logger.debug("Resetting previous iteration results.")
         self._iteration_results = []
         self._iteration_mode = None
 
-        # Calculate Iteration Results
+        self.logger.info("Running geometric-nonlinear iteration loop...")
         self._iteration_results = self._run_iteration(
             iterations, tolerance, result_type)
         self._iteration_mode = result_type
+        self.logger.debug("Completed iterative approach.")
 
     def solver_iterative_approach(self, iteration: int = -1):
         r"""Return a solver corresponding to a specific iteration step.
@@ -270,16 +309,25 @@ class SecondOrder(LoggerMixin):
         ValueError
             If the requested iteration index does not exist.
         """
+        self.logger.info(
+            "Calling the solver for the iterative approach of iteration: "
+            f"{iteration}")
 
         if not self._iteration_results:
-            raise AttributeError(
-                "No iterations have been performed yet. "
-                "Run iterative_approach() first."
-            )
+            msg = ("No iterations have been performed yet. "
+                   "Run iterative_approach() first.")
+            self.logger.error(msg)
+            raise AttributeError(msg)
         try:
             entry = self._iteration_results[iteration]
-        except IndexError:
-            raise ValueError(f"Iteration {iteration} not found.")
+        except Exception as exc:
+            self.logger.error(
+                f"Failed to find Iteration {exc}.",
+                exc_info=True
+            )
+            raise
+        self.logger.debug(
+            "Solver created for requested iteration.")
         return Solver(entry["system"])
 
     def system_iterative(self, iteration: int = -1):
@@ -306,16 +354,21 @@ class SecondOrder(LoggerMixin):
         ValueError
             If the index is out of range.
         """
+        self.logger.info(f"Returning system for iteration index {iteration}")
 
         if not self._iteration_results:
-            raise RuntimeError(
-                "No iterations have been performed yet. "
-                "Run get_iteration_results() first."
-            )
+            msg = ("No iterations have been performed yet. "
+                   "Run get_iteration_results() first.")
+            self.logger.error(msg)
+            raise RuntimeError(msg)
         try:
             return self._iteration_results[iteration]["system"]
-        except IndexError:
-            raise ValueError(f"Iteration {iteration} not found.")
+        except Exception as exc:
+            self.logger.error(
+                f"Failed to find Iteration {exc}.",
+                exc_info=True
+            )
+            raise
 
     @property
     def iteration_count(self):
@@ -332,10 +385,12 @@ class SecondOrder(LoggerMixin):
             If no iterative analysis has been performed yet.
         """
         if not self._iteration_results:
-            raise RuntimeError(
-                "No iterations have been performed yet. "
-                "Run get_iteration_results() first."
-            )
+            msg = ("No iterations have been performed yet. "
+                   "Run get_iteration_results() first.")
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+        self.logger.debug(f"Total iterations available: "
+                          f"{len(self._iteration_results)}")
         return len(self._iteration_results)
 
     def iteration_matrix(self):
@@ -366,17 +421,22 @@ class SecondOrder(LoggerMixin):
         RuntimeError
             If no iteration results are available.
         """
+        self.logger.info("Building iteration result matrix.")
+        self.logger.debug(f"Iteration mode: {self._iteration_mode}")
 
         if not self._iteration_results:
-            raise RuntimeError(
+            msg = (
                 "No iterations have been performed yet. "
                 "Run iterative_approach() first."
             )
+            self.logger.error(msg)
+            raise RuntimeError(msg)
 
         matrix = []
         results = self._iteration_results
 
         for i, r in enumerate(results):
+            self.logger.debug(f"Processing iteration step {i}")
             if self._iteration_mode == "cumulative":
                 solver = self.solver_iterative_approach(i)
                 matrix.append({
@@ -394,6 +454,7 @@ class SecondOrder(LoggerMixin):
                     "bar_deform_list": r.get("bar_deform_diff"),
                     "max_shift": r["max_shift"]
                 })
+        self.logger.info("Iteration result matrix completed.")
         return matrix
 
     @cached_property
@@ -436,15 +497,26 @@ class SecondOrder(LoggerMixin):
             may occur. In such cases, it is recommended to divide the bar into
             multiple segments, which improves the accuracy of the calculation.
         """
+        self.logger.info(
+            "Computing averaged longitudinal forces for all bars.")
         solution = Solver(self.system)
+        self.logger.debug(
+            "Created solver for original system to obtain bar "
+            "forces and deformations.")
         l_avg = []
-        for deform, force in zip(solution.bar_deform_list,
-                                 solution.internal_forces):
+        for i, (deform, force) in enumerate(
+                zip(solution.bar_deform_list,
+                    solution.internal_forces)):
+            self.logger.info(
+                f"[Bar {i}] Calculating averaged longitudinal force.")
             l_i = -force[0, 0] * np.cos(deform[2, 0]) - force[1, 0] * np.sin(
                 deform[2, 0])
             l_j = force[3, 0] * np.cos(deform[5, 0]) + force[4, 0] * np.sin(
                 deform[5, 0])
-            l_avg.append((l_i + l_j) / 2)
+            self.logger.debug(f"[Bar {i}] L_i={l_i}, L_j={l_j}")
+            l_av = (l_i + l_j) / 2
+            self.logger.info(f"[Bar {i}] L_avg={l_av}")
+            l_avg.append(l_av)
         return l_avg
 
     def _convert_bars(
@@ -469,9 +541,17 @@ class SecondOrder(LoggerMixin):
             List of converted bar objects ready for second-order matrix
             analysis.
         """
+        self.logger.info(
+            f"Converting bars to second-order elements "
+            f"using approach='{approach}'.")
         bars = list(self.system.bars)
         bar_field_names = {f.name for f in fields(Bar)}
-        return [
+
+        for i, f_axial in enumerate(self.averaged_longitudinal_force):
+            self.logger.debug(
+                f"[Bar {i}] Using averaged axial force f_axial={f_axial}")
+
+        converted = [
             BarSecond(
                 **{k: getattr(bar, k) for k in bar_field_names},
                 approach=approach,
@@ -480,8 +560,10 @@ class SecondOrder(LoggerMixin):
             for bar, f_axial in zip(bars, self.averaged_longitudinal_force)
         ]
 
-    @staticmethod
-    def _transform_internal_forces(solver):
+        self.logger.info("Bar conversion completed.")
+        return converted
+
+    def _transform_internal_forces(self, solver):
         """Rotates end forces using current bar-end rotations (phi_i, phi_j).
 
         The local force components are mapped with the instantaneous bar-end
@@ -492,13 +574,20 @@ class SecondOrder(LoggerMixin):
         list[np.ndarray]
             List of (6×1) force vectors per bar in local bar coordinates.
         """
+        self.logger.info(
+            "Transforming internal forces based on current bar-end rotations.")
         forces_list = []
-        for deform, force in zip(
-                solver.bar_deform_list,
-                solver.internal_forces):
+        for i, (deform, force) in (
+                enumerate(zip(solver.bar_deform_list,
+                              solver.internal_forces))):
+            self.logger.info(f"[Bar {i}] Transforming internal forces.")
             phi_i, phi_j = deform[2, 0], deform[5, 0]
             l_i, l_j = -force[0, 0], force[3, 0]
             t_i, t_j = -force[1, 0], force[4, 0]
+            self.logger.debug(f"[Bar {i}] φ_i={phi_i}, φ_j={phi_j}")
+            self.logger.debug(
+                f"[Bar {i}] Local forces: L_i={l_i}, T_i={t_i}, "
+                f"L_j={l_j}, T_j={t_j}")
             force_sec = np.array([
                 [-(l_i * np.cos(phi_i) - t_i * np.sin(phi_i))],
                 [-(t_i * np.cos(phi_i) + l_i * np.sin(phi_i))],
@@ -507,11 +596,13 @@ class SecondOrder(LoggerMixin):
                 [t_j * np.cos(phi_j) + l_j * np.sin(phi_j)],
                 [force[5, 0]]
             ])
+            self.logger.debug(
+                f"[Bar {i}] Transformed force vector:\n{force_sec}")
             forces_list.append(force_sec)
+        self.logger.debug("Internal force transformation completed.")
         return forces_list
 
-    @staticmethod
-    def _update_geometry(system, node_deform_curr, node_deform_prev):
+    def _update_geometry(self, system, node_deform_curr, node_deform_prev):
         """Apply incremental node displacements and update system geometry.
 
         The nodal coordinates are updated based on the incremental displacement
@@ -534,16 +625,22 @@ class SecondOrder(LoggerMixin):
         float
             Maximum nodal shift magnitude observed during this update.
         """
+        self.logger.info(
+            "Updating system geometry based on incremental deformations.")
         bars_new, max_deform = [], 0.0
 
-        for bar, deform_curr, deform_prev in zip(system.bars,
-                                                 node_deform_curr,
-                                                 node_deform_prev):
+        for i, (bar, deform_curr, deform_prev) in enumerate(
+                zip(system.bars, node_deform_curr, node_deform_prev)):
+            self.logger.info(f"[Bar {i}] Updating geometry.")
+
             delta_deform = deform_curr - deform_prev
             deform_x_i, deform_z_i = (float(delta_deform[0]),
                                       float(delta_deform[1]))
             deform_x_j, deform_z_j = (float(delta_deform[3]),
                                       float(delta_deform[4]))
+            self.logger.debug(
+                f"[Bar {i}] Δu_i=({deform_x_i}, {deform_z_i}), "
+                f"Δu_j=({deform_x_j}, {deform_z_j})")
 
             max_deform = max(
                 max_deform,
@@ -555,8 +652,12 @@ class SecondOrder(LoggerMixin):
                          z=bar.node_i.z + deform_z_i)
             nj = replace(bar.node_j, x=bar.node_j.x + deform_x_j,
                          z=bar.node_j.z + deform_z_j)
+            self.logger.debug(f"[Bar {i}] Updated node_i: ({ni.x}, {ni.z})")
+            self.logger.debug(f"[Bar {i}] Updated node_j: ({nj.x}, {nj.z})")
             bars_new.append(replace(bar, node_i=ni, node_j=nj))
 
+        self.logger.info(f"Geometry update completed. "
+                         f"Max nodal shift={max_deform}")
         return replace(system, bars=bars_new), max_deform
 
     def _run_iteration(
@@ -582,13 +683,23 @@ class SecondOrder(LoggerMixin):
             List containing iteration index, system state, and maximum nodal
             shift.
         """
+        self.logger.info(
+            f"Starting nonlinear iteration process: iterations={iterations}, "
+            f"tolerance={tolerance}, mode='{result_type}'."
+        )
         results: List[dict] = []
+        self.logger.debug(
+            "Preparing initial systems: system_prev (loads removed) "
+            "and system_curr (original).")
         system_prev = SystemModifier(self.system).delete_loads()
         system_curr = self.system
 
         for i in range(iterations):
+            self.logger.info(f"--- Iteration {i} ---")
             solver_prev = Solver(system_prev)
             solver_curr = Solver(system_curr)
+            self.logger.debug("Generated solver instances for "
+                              "previous and current systems.")
 
             node_deform_prev = solver_prev.node_deform_list
             node_deform_curr = solver_curr.node_deform_list
@@ -606,21 +717,24 @@ class SecondOrder(LoggerMixin):
             }
 
             if result_type == 'incremental':
+                self.logger.info(
+                    f"[Iteration {i}] Computing incremental differences.")
                 diffs = self._incremental_difference(solver_prev, solver_curr)
                 entry.update(diffs)
 
             results.append(entry)
 
             if max_shift < tolerance:
+                self.logger.info(f"Convergence reached at iteration {i}.")
                 break
 
             system_prev, system_curr = system_curr, system_next
 
+        self.logger.info("Iteration process completed.")
         self._iteration_results = results
         return results
 
-    @staticmethod
-    def _incremental_difference(prev, curr):
+    def _incremental_difference(self, prev, curr):
         r"""
         Compute incremental differences between two solver states.
 
@@ -654,6 +768,9 @@ class SecondOrder(LoggerMixin):
         Differences are computed as ``curr - prev``. Lists are processed
         element-wise, other numeric structures are subtracted directly.
         """
+        self.logger.debug(
+            "Computing incremental differences between iterations.")
+
         def diff(a, b):
             if isinstance(a, list):
                 return [x - y for x, y in zip(a, b)]
@@ -673,25 +790,25 @@ class SecondOrder(LoggerMixin):
                                      prev.node_deform),
         }
 
-    @staticmethod
-    def _validation_approach_index(approach, iteration_index):
+    def _validation_approach_index(self, approach, iteration_index):
+        self.logger.debug(f"[Validation] Checking approach={approach}, "
+                          f"iteration_index={iteration_index}")
         if approach not in ['matrix', 'iterative']:
-            raise ValueError(
-                f'Approach has to be either "matrix" or "iterative". '
-                f'Got "{approach}" instead.'
-            )
+            msg_1 = (f'Approach has to be either "matrix" or "iterative". '
+                     f'Got "{approach}" instead.')
+            self.logger.error(msg_1)
+            raise ValueError(msg_1)
 
         if approach == 'matrix' and iteration_index is not None:
-            raise ValueError(
-                'Matrix approach cannot have an iteration index.'
-            )
-
+            msg_2 = 'Matrix approach cannot have an iteration index.'
+            self.logger.error(msg_2)
+            raise ValueError(msg_2)
         if approach == 'iterative' and (iteration_index is None or
                                         not isinstance(iteration_index, int)):
-            raise ValueError(
-                f'The Iteration Index has to be an int and not None. '
-                f'Got {type(iteration_index)} instead.'
-            )
+            msg_3 = (f'The Iteration Index has to be an int and not None. '
+                     f'Got {type(iteration_index)} instead.')
+            self.logger.error(msg_3)
+            raise ValueError(msg_3)
 
     def differential_equation(
             self, approach: Literal['matrix', 'iterative'],
