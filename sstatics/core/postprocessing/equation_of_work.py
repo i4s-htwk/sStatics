@@ -521,6 +521,15 @@ class EquationOfWork:
                 )
         return work_matrix_nodes
 
+    @staticmethod
+    def _sum_matrix(matrix):
+        row_sums = np.sum(matrix, axis=1, keepdims=True)
+        matrix_with_row = np.hstack([matrix, row_sums])
+
+        col_sums = np.sum(matrix_with_row, axis=0, keepdims=True)
+        matrix_final = np.vstack([matrix_with_row, col_sums])
+        return matrix_final
+
     def log_work_contributions(
             self,
             delta: str = "m",
@@ -543,6 +552,28 @@ class EquationOfWork:
         """
         bars = self._create_work_matrix_bars()
         nodes = self._create_work_matrix_nodes()
+        #
+        # from sstatics.core.logger_mixin import table_matrix
+        # print(table_matrix(matrix=self._sum_matrix(bars),
+        #                    column_names=[
+        #                        "Bar",
+        #                        "Moment",
+        #                        "Normal",
+        #                        "Shear",
+        #                        "Temperature Constant",
+        #                        "Temperature Delta",
+        #                        "Sum",
+        #                    ]))
+        #
+        # print(table_matrix(matrix=self._sum_matrix(nodes),
+        #                    column_names=[
+        #                        "Node",
+        #                        "Elastic Support F",
+        #                        "Elastic Support M",
+        #                        "Displacements u and w",
+        #                        "Displacements phi",
+        #                        "Sum",
+        #                    ]))
 
         # Bars table with row and column sums
         bar_numbers = np.arange(1, bars.shape[0] + 1).astype(str)

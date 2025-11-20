@@ -1545,7 +1545,7 @@ class TestSolver(TestCase):
                  hinge_phi_i=True, hinge_w_i=True)
         # Case 1: hinge at i for w and phi
         assert_allclose(
-            Solver(System([b1])).hinge_modifier,
+            Solver(System([b1])).bar_deform_hinge,
             np.array([[[0], [2.485272459e-3], [1.104565538e-3],
                        [0], [0], [0]]]),
             err_msg='Unexpected hinge_modifier for hinge_phi_i and'
@@ -1554,7 +1554,7 @@ class TestSolver(TestCase):
         b2 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1),
                  hinge_u_i=True, hinge_phi_i=True, hinge_w_j=True)
         assert_allclose(
-            Solver(System([b2])).hinge_modifier,
+            Solver(System([b2])).bar_deform_hinge,
             np.array([[[0], [0], [-2.209131075e-3],
                        [0], [4.142120766e-3], [0]]]),
             err_msg='Unexpected hinge_modifier for hinge_u_i & hinge_phi_i (i)'

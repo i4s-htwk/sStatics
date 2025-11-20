@@ -1,4 +1,9 @@
+
+import numpy as np
+
 import logging
+from tabulate import tabulate
+
 from typing import Any
 
 
@@ -132,3 +137,74 @@ class LoggerMixin:
 
         # Replace or wrap the subclass's __post_init__ method
         cls.__post_init__ = wrapped_post
+
+
+def table_bar(list_of_vec_lists, mapping, header_lists, decimals: int = 6):
+    n_bars = len(list_of_vec_lists[0])
+
+    header = (["Bar nr.", "Node nr."] +
+              [h for group in header_lists for h in group])
+
+    data = []
+    for bar_idx in range(n_bars):
+
+        row_i = [bar_idx, mapping[bar_idx][0]]
+        row_j = ["", mapping[bar_idx][1]]
+
+        for vec_list in list_of_vec_lists:
+            vec = np.asarray(vec_list[bar_idx]).flatten()
+            row_i.extend(vec[:3])
+            row_j.extend(vec[3:6])
+
+        data += [row_i, row_j]
+
+    return tabulate(data, headers=header, tablefmt="grid",
+                    floatfmt=f".{decimals}f")
+
+
+def table_node_bar_index(bars, nodes):
+    mapping = {}
+
+    for bar_idx, bar in enumerate(bars):
+        i = nodes.index(bar.node_i)
+        j = nodes.index(bar.node_j)
+
+        mapping[bar_idx] = [i, j]
+
+    return mapping
+
+
+def table_node(vecs, columns_list, decimals: int = 6):
+    flat = [np.asarray(v).flatten() for v in vecs]
+    k = len(columns_list[0])
+    n_nodes = len(flat[0]) // k
+
+    header = ["Node nr."] + [h for cols in columns_list for h in cols]
+
+    data = []
+    for node in range(n_nodes):
+        row = [node + 1]
+        for fl in flat:
+            row.extend(fl[node*k:(node+1)*k])
+        data.append(row)
+
+    return tabulate(data, headers=header, tablefmt="grid",
+                    floatfmt=f".{decimals}f")
+
+
+def table_matrix(matrix, column_names=None, decimals=6):
+    matrix = np.asarray(matrix)
+    n_rows, n_cols = matrix.shape
+
+    if column_names is None:
+        column_names = [str(i) for i in range(n_cols)]
+
+    headers = column_names
+
+    data = []
+    for i in range(n_rows):
+        label = "Sum" if i == n_rows - 1 else i + 1
+        data.append([label] + matrix[i].tolist())
+
+    return tabulate(data, headers=headers, tablefmt="grid",
+                    floatfmt=f".{decimals}f")
