@@ -1,10 +1,232 @@
 
 from dataclasses import dataclass
 from functools import cached_property
+from typing import Literal
 
 import numpy as np
 
 from sstatics.core.preprocessing.bar import Bar
+from sstatics.core.preprocessing.node import Node
+from sstatics.core.preprocessing.system import System
+
+
+@dataclass
+class SystemResult:
+    r"""Represents the post-processing results of a structural system.
+
+    This class aggregates discrete bar deformations, internal forces,
+    nodal displacements, and support reactions from a solved
+    :py:class:`System`. It provides convenient access to per-bar and
+    per-node results for further analysis or visualization.
+
+    Parameters
+    ----------
+    system : :py:class:`System`
+        The analyzed structural system.
+    bar_deform_list : list of :any:`numpy.ndarray`
+        List of deformation vectors for each mesh bar in the system.
+        Each deformation array corresponds to a mesh bar in
+        :py:attr:`FirstOrder.bar_deform_list`.
+    bar_internal_forces : list of :any:`numpy.ndarray`
+        List of force vectors for each mesh bar in the system.
+        Each force array corresponds to a mesh bar in
+        :py:attr:`FirstOrder.bar_internal_forces`.
+    node_deform : :any:`numpy.ndarray`
+        A vector with dimensions (dof * number of nodes, 1) containing the
+        resulting displacement of each node in its local coordinate system
+        :py:attr:`FirstOrder.node_deform`.
+    node_support_forces : :any:`numpy.ndarray`
+        A vector with dimensions (dof * number of nodes, 1) containing the
+        support reactions in the nodal coordinate system
+        :py:attr:`FirstOrder.node_support_forces`.
+    system_support_forces : :any:`numpy.ndarray`
+        A vector with dimensions (dof * number of nodes, 1) that contains
+        the support reactions referenced to the global coordinate system
+        :py:attr:`FirstOrder.system_support_forces`.
+    dof : int, default=3
+        Number of degrees of freedom per node. Must be 3 for 2D systems
+        (translations ux, uz and rotation φ). The value 6 would correspond
+        to 3D systems (ux, uy, uz, φx, φy, φz), but 3D is currently not
+        implemented.
+    n_disc : :any:`int`, default=10
+        Number of discrete evaluation points along each bar for discretisation
+        of forces and deformations.
+
+    Raises
+    ------
+    ValueError
+        If the number of deformation or force vectors does not match the
+        number of bars, if the node vectors have inconsistent shapes,
+        or if `dof` or `n_disc` are invalid.
+    TypeError
+        If any of the input arrays are not instances of `numpy.ndarray`.
+
+
+    Attributes
+    ----------
+    bars : list of :py:class:`BarResult`
+        List containing the discrete results for each bar.
+    nodes : list of :py:class:`NodeResult`
+        List containing the displacement and support forces for each node.
+
+
+    Examples
+    --------
+    >>> from sstatics.core.preprocessing import (
+    >>>     Bar, BarLineLoad, CrossSection, Material, Node, System
+    >>> )
+    >>> from sstatics.core.solution import FirstOrder
+    >>> from sstatics.core.postprocessing import SystemResult
+    >>>
+    >>> n1 = Node(0, 0, u='fixed', w='fixed')
+    >>> n2 = Node(4, 0, w='fixed')
+    >>> cross = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
+    >>> mat = Material(210000000, 0.1, 81000000, 0.1)
+    >>> load = BarLineLoad(1, 1, 'z', 'bar', 'exact')
+    >>> bar = Bar(n1, n2, cross, mat, line_loads=load)
+    >>> system = System([bar])
+    >>> solution = FirstOrder(system)
+    >>> system_result = SystemResult(
+    >>>                     system=system,
+    >>>                     bar_deform_list=solution.bar_deform_list,
+    >>>                     bar_internal_forces=solution.internal_forces,
+    >>>                     node_deform=solution.node_deform,
+    >>>                     node_support_forces=solution.node_support_forces,
+    >>>                     system_support_forces=
+    >>>                         solution.system_support_forces
+    >>> )
+    >>> for bar in system_result.bars:
+    >>>     print(bar.x_coef)
+    array([[ 0. -0.  0.]
+           [ 0. -0. -0.]
+           [ 0. -0.  0.]
+           [ 0.  0.  0.]])
+    """
+
+    system: System
+    bar_deform_list: list[np.ndarray]
+    bar_internal_forces: list[np.ndarray]
+    node_deform: np.ndarray
+    node_support_forces: np.ndarray
+    system_support_forces: np.ndarray
+    dof: Literal[3, 6] = 3
+    n_disc: int = 10
+
+    def __post_init__(self):
+        self._validation()
+        self.bars = [
+            BarResult(bar,
+                      self.bar_deform_list[i],
+                      self.bar_internal_forces[i],
+                      self.n_disc)
+            for i, bar in enumerate(self.system.mesh)
+        ]
+        self.nodes = [
+            NodeResult(node,
+                       self.node_deform[
+                            i * self.dof: i * self.dof + self.dof],
+                       self.node_support_forces[
+                            i * self.dof: i * self.dof + self.dof],
+                       self.system_support_forces[
+                            i * self.dof: i * self.dof + self.dof])
+            for i, node in enumerate(self.system.nodes())
+        ]
+
+    def _validation(self):
+        # DOF check
+        if self.dof not in (3, 6):
+            raise ValueError(
+                f'"dof" must be either 3 (2D space) or 6 (3D space),'
+                f'got {self.dof}.'
+            )
+        if self.dof == 6:
+            raise ValueError(
+                '"dof=6" (3D systems) is not yet implemented.'
+            )
+        if self.n_disc < 1:
+            raise ValueError('"n_disc" must be a positive integer.')
+
+        # Check list lengths
+        n_bars = len(self.system.mesh)
+        if len(self.bar_deform_list) != n_bars:
+            raise ValueError(
+                f'Expected {n_bars} bar deformations, got '
+                f'{len(self.bar_deform_list)}.'
+            )
+        if len(self.bar_internal_forces) != n_bars:
+            raise ValueError(
+                f'Expected {n_bars} bar force vectors, got '
+                f'{len(self.bar_internal_forces)}.'
+            )
+
+        # Type and shape validation for lists
+        for i, arr in enumerate(self.bar_deform_list):
+            if not isinstance(arr, np.ndarray):
+                raise TypeError(
+                    f'bar_deform_list[{i}] must be a numpy.ndarray.'
+                )
+        for i, arr in enumerate(self.bar_internal_forces):
+            if not isinstance(arr, np.ndarray):
+                raise TypeError(
+                    f'bar_internal_forces[{i}] must be a numpy.ndarray.'
+                )
+
+        # Shape checks for node-related arrays
+        shapes = [self.node_deform.shape,
+                  self.node_support_forces.shape,
+                  self.system_support_forces.shape]
+        if not all(s == shapes[0] for s in shapes):
+            raise ValueError(
+                f'"node_deform", "node_support_forces", '
+                f'and "system_support_forces" must all have the same shape, '
+                f'got {shapes}.'
+            )
+
+        n_nodes = len(self.system.nodes(mesh_type="mesh"))
+        expected_size = n_nodes * self.dof
+        if self.node_deform.shape[0] != expected_size:
+            raise ValueError(
+                f'Expected {expected_size} rows for {n_nodes} nodes × '
+                f'{self.dof} DOF, but got {self.node_deform.shape[0]}.'
+            )
+
+        if self.node_deform.ndim != 2 or self.node_deform.shape[1] != 1:
+            raise ValueError(
+                f'"node_deform" must be a column vector of shape '
+                f'({expected_size}, 1), but got {self.node_deform.shape}.'
+            )
+
+    @cached_property
+    def deforms_disc(self):
+        r"""Discrete deformation vectors evaluated at discrete points.
+
+        Returns
+        -------
+        list of :any:`numpy.ndarray`
+            Each array contains the deformation vectors evaluated along
+            the length of the corresponding mesh bar.
+
+        See Also
+        --------
+        :py:attr:`BarResult.deform_disc`
+        """
+        return [result.deform_disc for result in self.bars]
+
+    @cached_property
+    def forces_disc(self):
+        r"""Discrete force vectors evaluated at discrete points.
+
+        Returns
+        -------
+        list of :any:`numpy.ndarray`
+            Each array contains the force vectors evaluated along
+            the length of the corresponding mesh bar.
+
+        See Also
+        --------
+        :py:attr:`BarResult.forces_disc`
+        """
+        return [result.forces_disc for result in self.bars]
 
 
 @dataclass
@@ -385,3 +607,97 @@ class BarResult:
         """
         coef = [self.x_coef[:, 1], self.z_coef[:, 1], self.z_coef[:, 2]]
         return np.vstack([self._eval_poly(c) for c in coef]).T
+
+
+@dataclass
+class NodeResult:
+    r"""Represents the result vectors associated with a single node.
+
+    This class stores the displacement and support reaction vectors
+    for a given node, both in the nodal and global coordinate system.
+
+    Parameters
+    ----------
+    node : :py:class:`Node`
+        The node for which the results are stored.
+    deform : numpy.ndarray
+        Displacement vector of the node in its local coordinate system,
+        with shape (3, 1).
+    node_support : numpy.ndarray
+        Support reaction vector in the nodal coordinate system,
+        with shape (3, 1).
+    system_support : numpy.ndarray
+        Support reaction vector in the global coordinate system,
+        with shape (3, 1).
+
+    Raises
+    ------
+    TypeError
+        If ``node`` is not an instance of :py:class:`Node` or any of the
+        vectors are not ``numpy.ndarray``.
+    ValueError
+        If any of the vectors do not have shape (3, 1) or contain
+        invalid values (NaN or infinite).
+    TypeError
+        If any of the vectors are not of type ``float32`` or ``float64``.
+
+    Attributes
+    ----------
+    node : :py:class:`Node`
+        Reference to the corresponding node object.
+    deform : numpy.ndarray
+        Local displacement vector of the node.
+    node_support : numpy.ndarray
+        Support reactions in the nodal coordinate system.
+    system_support : numpy.ndarray
+        Support reactions in the global coordinate system.
+
+    Examples
+    --------
+    >>> from sstatics.core.preprocessing import Node
+    >>> import numpy as np
+    >>>
+    >>> n1 = Node(0, 0, u="fixed", w="fixed", phi='fixed')
+    >>> deform = np.zeros((3, 1))
+    >>> node_support = np.array([[0.0], [10.0], [0.0]])
+    >>> system_support = np.array([[0.0], [10.0], [0.0]])
+    >>> node_result = NodeResult(
+    ...     node=n1,
+    ...     deform=deform,
+    ...     node_support=node_support,
+    ...     system_support=system_support
+    ... )
+    >>> node_result.deform
+    array([[0.],
+           [0.],
+           [0.]])
+    """
+
+    node: Node
+    deform: np.ndarray
+    node_support: np.ndarray
+    system_support: np.ndarray
+
+    def __post_init__(self):
+        self._validation()
+
+    def _validation(self):
+        if not isinstance(self.node, Node):
+            raise TypeError('"node" must be an instance of Node.')
+
+        for name, arr in [
+            ("deform", self.deform),
+            ("node_support", self.node_support),
+            ("system_support", self.system_support),
+        ]:
+            if not isinstance(arr, np.ndarray):
+                raise TypeError(f'"{name}" must be a numpy.ndarray.')
+            if arr.shape != (3, 1):
+                raise ValueError(
+                    f'"{name}" must have shape (3, 1), got {arr.shape}.')
+            if not np.isfinite(arr).all():
+                raise ValueError(f'"{name}" contains NaN or infinite values.')
+            if arr.dtype not in (np.float32, np.float64):
+                raise TypeError(
+                    f'"{name}" must be of type float32 or float64, '
+                    f'got {arr.dtype}.')
