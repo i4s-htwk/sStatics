@@ -1,10 +1,8 @@
 
-from sstatics.core.solution.first_order import FirstOrder
-from sstatics.core.solution.influence_line import InfluenceLine
-from sstatics.core.solution.second_order import SecondOrder
+from sstatics.core.solution.solver import Solver
+from sstatics.core.solution.poleplan import Poleplan
 
 __all__ = [
-    'FirstOrder',
-    'InfluenceLine',
-    'SecondOrder',
+    'Poleplan',
+    'Solver',
 ]

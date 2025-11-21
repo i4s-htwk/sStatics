@@ -1,14 +1,20 @@
 
 from sstatics.core.postprocessing.results import (
-    BarResult, NodeResult, SystemResult
+    BarResult, DifferentialEquation, DifferentialEquationSecond, SystemResult,
+    RigidBodyDisplacement
 )
-from sstatics.core.postprocessing import calc_methods
-from sstatics.core.postprocessing.calc_methods import *  # noqa: F401, F403
+from sstatics.core.postprocessing.equation_of_work import EquationOfWork
+from sstatics.core.postprocessing.stress import (BarStressDistribution,
+                                                 CrossSectionStress)
 
 
 __all__ = [
+    'BarStressDistribution',
     'BarResult',
-    'calc_methods',
-    'NodeResult',
+    'CrossSectionStress',
+    'RigidBodyDisplacement',
+    'DifferentialEquation',
+    'DifferentialEquationSecond',
+    'EquationOfWork',
     'SystemResult',
 ]

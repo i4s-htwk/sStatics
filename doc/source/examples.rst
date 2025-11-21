@@ -28,3 +28,6 @@ Analysis
     examples/analysis/identify_unstable_system
     examples/analysis/poleplan
     examples/analysis/advanced_poleplan
+    examples/analysis/second_order_cantilever
+    examples/analysis/second_order_bar_second
+    examples/analysis/second_order_iteration

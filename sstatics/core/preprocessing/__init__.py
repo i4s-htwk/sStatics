@@ -1,6 +1,6 @@
 
 from sstatics.core.preprocessing import geometry
-from sstatics.core.preprocessing.bar import Bar
+from sstatics.core.preprocessing.bar import Bar, BarSecond
 from sstatics.core.preprocessing.cross_section import CrossSection
 from sstatics.core.preprocessing.dof import DegreesOfFreedom, NodeDisplacement
 from sstatics.core.preprocessing.geometry import *  # noqa: F401, F403
@@ -14,7 +14,6 @@ from sstatics.core.preprocessing.material import Material
 from sstatics.core.preprocessing.modifier import SystemModifier
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.system import Mesh, System
-from sstatics.core.preprocessing.poleplan import objects, operation
 from sstatics.core.preprocessing.temperature import BarTemp
 
 
@@ -23,6 +22,7 @@ __all__ = [
     'BarLineLoad',
     'BarPointLoad',
     'BarTemp',
+    'BarSecond',
     'CrossSection',
     'DegreesOfFreedom',
     'geometry',
@@ -31,8 +31,6 @@ __all__ = [
     'Node',
     'NodeDisplacement',
     'NodePointLoad',
-    'objects',
-    'operation',
     'PointLoad',
     'System',
     'SystemModifier',

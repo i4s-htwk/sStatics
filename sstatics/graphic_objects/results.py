@@ -4,7 +4,8 @@ import math
 from functools import cached_property
 from typing import Literal, Tuple, List, Any
 
-from sstatics.core.postprocessing.results import BarResult, SystemResult
+from sstatics.core.postprocessing.results import (
+    BarResult, SystemResult, RigidBodyDisplacement)
 
 from sstatics.graphic_objects.utils import SingleGraphicObject, transform
 from sstatics.graphic_objects.geometry import LineGraphic
@@ -152,12 +153,10 @@ class SystemResultGraphic(SingleGraphicObject):
 class BarResultGraphic(SingleGraphicObject):
 
     def __init__(
-            self, bar_result: BarResult, results: np.ndarray,
-            decimals: int | None = None, sig_digits: int | None = None,
-            base_scale=None, max_value=None, **kwargs
+            self, bar_result: BarResult | RigidBodyDisplacement,
+            results: np.ndarray, decimals: int | None = None, sig_digits:
+            int | None = None, base_scale=None, max_value=None, **kwargs
     ):
-        if not isinstance(bar_result, BarResult):
-            raise TypeError('"bar_result" has to be an instance of BarResult')
         if not isinstance(results, np.ndarray) or results.ndim != 1:
             raise TypeError('"results" must be a one-dimensional NumPy array')
         if decimals is not None and sig_digits is not None:
@@ -174,7 +173,7 @@ class BarResultGraphic(SingleGraphicObject):
         self.bar_result = bar_result
         self.origin = (bar_result.bar.node_i.x, bar_result.bar.node_i.z)
         self.inclination = bar_result.bar.inclination
-        self.length = bar_result.length_disc
+        self.length = bar_result.x
         self.results = results
         self.decimals = decimals
         self.sig_digits = sig_digits

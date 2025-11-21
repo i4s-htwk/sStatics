@@ -11,4 +11,5 @@ Contents
 
     api/preprocessing_methods
     api/solution
+    api/calc_methods
     api/postprocessing_methods
