@@ -36,6 +36,7 @@ class AbstractRenderer(ABC):
 
         for o in obj:
             for x, z, text, style in self._iter_text_elements(o):
+                x, z = self._find_optimal_text_position(x, z, *text)
                 style = convert_style(style, self._mode)
                 if self._mode == 'mpl':
                     self.add_text(x, z, text, **style, ha='center')
@@ -113,10 +114,10 @@ class AbstractRenderer(ABC):
                     '4.'
                 )
             x, z, text, style = element
-            if text:
+
+            if text != ['']:
                 x, z = obj.transform(x, z)
-                x_opt, z_opt = self._find_optimal_text_position(x, z, *text)
-                yield x_opt, z_opt, text, style
+                yield x, z, text, style
 
         for sub in getattr(obj, 'graphic_elements', []):
             if hasattr(sub, 'text_elements') or hasattr(
