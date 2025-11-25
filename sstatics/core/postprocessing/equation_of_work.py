@@ -6,7 +6,8 @@ import numpy as np
 from tabulate import tabulate
 
 from sstatics.core.postprocessing.results import (
-    SystemResult, BarResult, NodeResult)
+    SystemResult, BarResult, NodeResult
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
