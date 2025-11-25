@@ -13,12 +13,12 @@ from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_SUPPORT, DEFAULT_ROLLER_SUPPORT, DEFAULT_PINNED_SUPPORT,
     DEFAULT_FIXED_SUPPORT_UW, DEFAULT_FIXED_SUPPORT_WPHI,
     DEFAULT_CHAMPED_SUPPORT, DEFAULT_FIXED_SUPPORT_UPHI, DEFAULT_SUPPORT_HATCH,
-    DEFAULT_CHAMPED_SUPPORT_HATCH, DEFAULT_SPRING_W, DEFAULT_FILL_WHITE,
-    DEFAULT_SPRING_PHI
+    DEFAULT_CHAMPED_SUPPORT_HATCH, DEFAULT_TRANSLATIONAL_SPRING,
+    DEFAULT_FILL_WHITE, DEFAULT_TORSIONAL_SPRING, DEFAULT_FREE_NODE
 )
 
 
-class SupportGeo(ObjectGeo, abc.ABC):
+class ConstraintGeo(ObjectGeo, abc.ABC):
     CLASS_STYLES = {
         'line': DEFAULT_SUPPORT
     }
@@ -66,7 +66,7 @@ class SupportGeo(ObjectGeo, abc.ABC):
         if not isinstance(height, (int, float)):
             raise TypeError(f'"height" must be a number, got {height!r}')
 
-        if width <= 0 or height <= 0:
+        if width < 0 or height < 0:
             raise ValueError(
                 '"width" and "height" have to be a numbers greater than zero.'
             )
@@ -92,7 +92,7 @@ class SupportGeo(ObjectGeo, abc.ABC):
         )
 
 
-class LineHatchGeo(SupportGeo):
+class LineHatchGeo(ConstraintGeo):
     CLASS_DIMENSIONS = DEFAULT_CHAMPED_SUPPORT
 
     @cached_property
@@ -111,7 +111,7 @@ class LineHatchGeo(SupportGeo):
         return [line, hatch]
 
 
-class DoubleLineHatchGeo(SupportGeo):
+class DoubleLineHatchGeo(ConstraintGeo):
     CLASS_DIMENSIONS = DEFAULT_FIXED_SUPPORT_UPHI
 
     @cached_property
@@ -128,23 +128,31 @@ class DoubleLineHatchGeo(SupportGeo):
         return [line, line_hatch]
 
 
-class RollerSupportGeo(SupportGeo):
+class FreeNodeGeo(ConstraintGeo):
+    CLASS_DIMENSIONS = DEFAULT_FREE_NODE
+
+    @cached_property
+    def graphic_elements(self):
+        return [PointGeo(origin=self._origin, point_style=self._point_style)]
+
+
+class RollerSupportGeo(ConstraintGeo):
     CLASS_DIMENSIONS = DEFAULT_ROLLER_SUPPORT
 
     @cached_property
     def graphic_elements(self):
         triangle = IsoscelesTriangleGeo(
-            self._origin, width=self._width, height=3 / 4 * self._height,
-            line_style=self._line_style
+            origin=self._origin, width=self._width,
+            height=3 / 4 * self._height, line_style=self._line_style
         )
         line = OpenCurveGeo.from_center(
-            (self._x0, self._z0 + self._height), length=self._width,
+            origin=(self._x0, self._z0 + self._height), length=self._width,
             line_style=self._line_style
         )
         return [triangle, line]
 
 
-class PinnedSupportGeo(SupportGeo):
+class PinnedSupportGeo(ConstraintGeo):
     CLASS_DIMENSIONS = DEFAULT_PINNED_SUPPORT
 
     @cached_property
@@ -168,7 +176,7 @@ class PinnedSupportGeo(SupportGeo):
         return [top_line, bottom_line, double_line_hatch, point]
 
 
-class FixedSupportUWGeo(SupportGeo):
+class FixedSupportUWGeo(ConstraintGeo):
     CLASS_DIMENSIONS = DEFAULT_FIXED_SUPPORT_UW
 
     @cached_property
@@ -193,7 +201,7 @@ FixedSupportUPhiGeo = DoubleLineHatchGeo
 more clear. """
 
 
-class FixedSupportWPhiGeo(SupportGeo):
+class FixedSupportWPhiGeo(ConstraintGeo):
     CLASS_DIMENSIONS = DEFAULT_FIXED_SUPPORT_WPHI
 
     @cached_property
@@ -217,13 +225,13 @@ class FixedSupportWPhiGeo(SupportGeo):
         return [top_line, bottom_line, line_hatch, point]
 
 
-ChampedSupportGeo = LineHatchGeo
+ClampedSupportGeo = LineHatchGeo
 """ Alias of :py:class:`LineHatchGeo` to make the use case of this class more
 clear. """
 
 
-class SpringW(SupportGeo):
-    CLASS_DIMENSIONS = DEFAULT_SPRING_W
+class TranslationalSpringGeo(ConstraintGeo):
+    CLASS_DIMENSIONS = DEFAULT_TRANSLATIONAL_SPRING
 
     @cached_property
     def graphic_elements(self):
@@ -263,19 +271,22 @@ class SpringW(SupportGeo):
         diagonal_lines = OpenCurveGeo(
             x_diagonal, z_diagonal, line_style=self._line_style)
 
-        circle = EllipseGeo((self._x0, self._z0 + self.height), self._width/8,
-                            self._height/11, line_style=self._line_style)
+        circle = EllipseGeo(
+            origin=(self._x0, self._z0 + self.height), width=self._width / 8,
+            height=self._height / 11, line_style=self._line_style
+        )
 
         background = EllipseGeo(
             (self._x0, self._z0 + self.height), self._width/8,
-            self._height/11, line_style=DEFAULT_FILL_WHITE, show_outline=False)
+            self._height/11, line_style=DEFAULT_FILL_WHITE, show_outline=False
+        )
 
         return [vertical_line_top, vertical_line_bottom, diagonal_lines,
-                bottom_line, circle, background]
+                bottom_line, background, circle]
 
 
-class SpringPhi(SupportGeo):
-    CLASS_DIMENSIONS = DEFAULT_SPRING_PHI
+class TorsionalSpringGeo(ConstraintGeo):
+    CLASS_DIMENSIONS = DEFAULT_TORSIONAL_SPRING
 
     @cached_property
     def graphic_elements(self):
@@ -288,10 +299,13 @@ class SpringPhi(SupportGeo):
         ]
 
         vertical_line = OpenCurveGeo(
-            x_line, z_line, line_style=self._line_style)
+            x=x_line, z=z_line, line_style=self._line_style
+        )
 
         ellipse = EllipseGeo(
-            (self._x0 - self._width / 2, self._z0), self._width,
-            self._height * 7 / 8, (np.pi / 2, 2 * np.pi))
+            origin=(self._x0 - self._width / 2, self._z0), width=self._width,
+            height=self._height * 7 / 8, angle_range=(np.pi / 2, 2 * np.pi),
+            line_style=self._line_style
+        )
 
         return [vertical_line, ellipse]

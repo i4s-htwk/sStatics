@@ -1,80 +1,107 @@
+import abc
 from types import NoneType
 
 import numpy as np
 from sympy.core.cache import cached_property
 
+from sstatics.core.preprocessing.dof import NodeDisplacement
 from sstatics.core.preprocessing.loads import PointLoad, BarLineLoad
-from sstatics.core.postprocessing.graphic_objects.geo.arrow import (
-    StraightArrowGeo, CurvedArrowGeo, LineArrowGeo
-)
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_POINT_FORCE, DEFAULT_LOAD_DISTANCE, DEFAULT_POINT_MOMENT,
-    DEFAULT_ARROW_DISTANCE
+    DEFAULT_ARROW_DISTANCE, DEFAULT_DISPLACEMENT
 )
 from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
     ObjectGeo
+from sstatics.core.postprocessing.graphic_objects.geo.arrow import (
+    StraightArrowGeo, CurvedArrowGeo, LineArrowGeo
+)
 
 
-class PointLoadGeo(ObjectGeo):
+class PointEffectGeo(ObjectGeo):
+
+    _DEFAULT_FORCE = DEFAULT_POINT_FORCE
+    _DEFAULT_MOMENT = DEFAULT_POINT_MOMENT
 
     def __init__(
             self,
             origin: tuple[float, float],
-            load: PointLoad,
+            effect: NodeDisplacement | PointLoad,
             distance: float | None = None,
-            flip_moment: bool = False,
+            show_text: bool = True,
             **kwargs
     ):
         super().__init__(origin=origin, **kwargs)
-        self._validate_point_load(load, distance, flip_moment)
-        self._load = load
+        self._validate_point_effect(effect, distance, show_text)
+        self._effect = effect
         self._distance = distance or DEFAULT_LOAD_DISTANCE
-        self._flip_moment = flip_moment
+        self._show_text = show_text
 
     @cached_property
     def graphic_elements(self):
+        effect = self._effect
+        effect_rot = self._effect_rotation
+        flip_rot = self._flip_moment_rotation
+        post_trans_z = self._effect_transformation_z
         elements = []
-        if self._load.x:
-            elements.append(self._create_force(np.pi / 2, self._load.x))
-        if self._load.z:
-            elements.append(self._create_force(0, self._load.z))
-        if self._load.phi:
-            elements.append(self._create_moment)
+        if effect.x:
+            elements.append(self._create_force(
+                np.pi / 2 + effect_rot, (0.0, 0.0), effect.x
+            ))
+        if effect.z:
+            elements.append(self._create_force(
+                effect_rot, (0.0, post_trans_z), effect.z)
+            )
+        if effect.phi:
+            elements.append(self._create_moment(effect_rot + flip_rot))
         return elements
 
     @cached_property
     def text_elements(self):
         return []
 
-    def _create_force(self, base_rot: float, value: float):
+    def _create_force(
+            self, rotation: float, post_trans: tuple[float, float],
+            value: float
+    ):
         sign_rot = 0 if value > 0 else np.pi
         return StraightArrowGeo(
-            self._origin, **DEFAULT_POINT_FORCE, distance=self._distance,
-            text=abs((float(value))),
-            rotation=base_rot + self._load.rotation + sign_rot,
+            self._origin, **self._DEFAULT_FORCE, distance=self._distance,
+            text=self._text_value(value, is_phi=False),
+            rotation=rotation + sign_rot, post_translation=post_trans,
             line_style=self._line_style
         )
 
-    @property
-    def _create_moment(self):
-        flip_rot = np.pi if self._flip_moment else 0
-        angle_span = DEFAULT_POINT_MOMENT['angle_span']
-        if self._load.phi < 0:
+    def _create_moment(self, rotation: float):
+        angle_span = self._DEFAULT_MOMENT['angle_span']
+        if self._effect.phi < 0:
             angle_span = angle_span[::-1]
         return CurvedArrowGeo(
-            self._origin, **{**DEFAULT_POINT_MOMENT, 'angle_span': angle_span},
-            text=abs(float(self._load.phi)),
-            rotation=self._load.rotation + flip_rot,
+            self._origin, **{**self._DEFAULT_MOMENT, 'angle_span': angle_span},
+            text=self._text_value(self._effect.phi, is_phi=True),
+            rotation=rotation,
             line_style=self._line_style
         )
 
+    @abc.abstractmethod
+    def _text_value(self, value: int | float, is_phi: bool):
+        pass
+
+    @property
+    def _effect_rotation(self):
+        return 0
+
+    @property
+    def _flip_moment_rotation(self):
+        return 0
+
+    @property
+    def _effect_transformation_z(self):
+        return 0
+
     @staticmethod
-    def _validate_point_load(load, distance, flip_moment):
-        if not isinstance(load, PointLoad):
-            raise TypeError(
-                f'"load" must be NodePointLoad or BarPointLoad, got '
-                f'{type(load).__name__!r}'
-            )
+    def _validate_point_effect(effect, distance, show_text):
+        if not all(hasattr(effect, a) for a in ('x', 'z', 'phi')):
+            raise TypeError('"effect" must have numeric attributes x, z, phi')
 
         if not isinstance(distance, (int, float, NoneType)):
             raise TypeError(
@@ -82,19 +109,113 @@ class PointLoadGeo(ObjectGeo):
                 f'{type(distance).__name__!r}'
             )
 
+        if not isinstance(show_text, bool):
+            raise TypeError(
+                f'"show_text" must be a boolean, got '
+                f'{type(show_text).__name__!r}'
+            )
+
+    @property
+    def distance(self):
+        return self._distance
+
+    @property
+    def show_text(self):
+        return self._show_text
+
+
+class DisplacementGeo(PointEffectGeo):
+
+    _DEFAULT_MOMENT = DEFAULT_DISPLACEMENT
+
+    def __init__(
+            self,
+            origin: tuple[float, float],
+            displacement: NodeDisplacement,
+            **kwargs
+    ):
+        self._validate_displacement(displacement)
+        super().__init__(origin=origin, effect=displacement, **kwargs)
+
+    def _text_value(self, value: int | float, is_phi: bool):
+        start = '\u03C6 = ' if is_phi else '\u03B4 = '
+        end = ' rad' if is_phi else ' LE'
+        text = start + str(abs(float(value))) + end if self._show_text else ''
+        return text
+
+    @property
+    def _effect_transformation_z(self):
+        return (
+                self._DEFAULT_FORCE['length_head']
+                + self._DEFAULT_FORCE['length_tail']
+                + self._distance * 2
+        ) if self._effect.z > 0 else 0
+
+    @staticmethod
+    def _validate_displacement(displacement):
+        if not isinstance(displacement, NodeDisplacement):
+            raise TypeError(
+                f'"displacement" must be NodeDisplacement, got '
+                f'{type(displacement).__name__!r}'
+            )
+
+    @property
+    def displacement(self):
+        return self._effect
+
+    def __repr__(self):
+        return (
+            f'{self.__class__.__name__}('
+            f'origin={self._origin}, '
+            f'displacement={self._effect}, '
+            f'distance={self._distance}, '
+            f'show_text={self._show_text}, '
+            f'line_style={self._line_style}, '
+            f'Transform={self._transform})'
+        )
+
+
+class PointLoadGeo(PointEffectGeo):
+
+    def __init__(
+            self,
+            origin: tuple[float, float],
+            load: PointLoad,
+            flip_moment: bool = False,
+            **kwargs
+    ):
+        self._validate_point_load(load, flip_moment)
+        super().__init__(origin=origin, effect=load, **kwargs)
+        self._flip_moment = flip_moment
+
+    def _text_value(self, value: int | float, is_phi: bool):
+        return abs(float(value)) if self._show_text else ''
+
+    @property
+    def _effect_rotation(self):
+        return self._effect.rotation
+
+    @property
+    def _flip_moment_rotation(self):
+        return np.pi if self._flip_moment else 0
+
+    @staticmethod
+    def _validate_point_load(load, flip_moment):
+        if not isinstance(load, PointLoad):
+            raise TypeError(
+                f'"load" must be NodePointLoad or BarPointLoad, got '
+                f'{type(load).__name__!r}'
+            )
+
         if not isinstance(flip_moment, bool):
             raise TypeError(
-                f'"flip_moment" must be a bbolean, got '
+                f'"flip_moment" must be a boolean, got '
                 f'{type(flip_moment).__name__!r}'
             )
 
     @property
     def load(self):
-        return self._load
-
-    @property
-    def distance(self):
-        return self._distance
+        return self._effect
 
     @property
     def flip_moment(self):
@@ -104,9 +225,10 @@ class PointLoadGeo(ObjectGeo):
         return (
             f'{self.__class__.__name__}('
             f'origin={self._origin}, '
-            f'load={self._load}, '
+            f'load={self._effect}, '
             f'distance={self._distance}, '
             f'flip_moment={self._flip_moment}, '
+            f'show_text={self._show_text}, '
             f'line_style={self._line_style}, '
             f'Transform={self._transform})'
         )

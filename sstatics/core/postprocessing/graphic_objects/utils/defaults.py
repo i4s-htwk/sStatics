@@ -135,6 +135,11 @@ DEFAULT_CHAMPED_SUPPORT_HATCH = dict(
     angle=np.pi / 4
 )
 
+DEFAULT_FREE_NODE = dict(
+    width=0.0,
+    height=0.0
+)
+
 DEFAULT_ROLLER_SUPPORT = dict(
     width=2.0,
     height=2.0
@@ -165,14 +170,14 @@ DEFAULT_CHAMPED_SUPPORT = dict(
     height=2.0
 )
 
-DEFAULT_SPRING_PHI = dict(
-    width=3.5,
-    height=4.0
-)
-
-DEFAULT_SPRING_W = dict(
+DEFAULT_TRANSLATIONAL_SPRING = dict(
     width=2.0,
     height=2.75
+)
+
+DEFAULT_TORSIONAL_SPRING = dict(
+    width=3.5,
+    height=4.0
 )
 
 DEFAULT_ARROW = dict(
@@ -186,6 +191,13 @@ DEFAULT_ARROW_HEAD = dict(
 
 DEFAULT_LOAD_DISTANCE = 1
 DEFAULT_ARROW_DISTANCE = 1
+
+DEFAULT_DISPLACEMENT = dict(
+    width_head=0.28,
+    length_head=0.4,
+    radius=1.0,
+    angle_span=(-np.pi / 4, -3 * np.pi / 4)
+)
 
 DEFAULT_POINT_FORCE = dict(
     width_head=0.28,
