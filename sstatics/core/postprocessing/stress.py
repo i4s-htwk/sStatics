@@ -765,7 +765,7 @@ class BarStressDistribution:
             - 'normal': Axial normal stress from normal force
             - 'shear': Transverse shear stress from shear force
             - 'bending': Bending stress from bending moment
-        **kwargs : dict
+        **kwargs : float
             Additional parameters to pass to the stress calculation function.
             Common parameters include:
             - z : float, optional

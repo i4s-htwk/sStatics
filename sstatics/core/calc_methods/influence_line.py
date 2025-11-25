@@ -147,8 +147,8 @@ class InfluenceLine(LoggerMixin):
         else:
             self._poleplan = Poleplan(system=self.modified_system,
                                       debug=self.debug)
-            chain, angle = self._compute_chain_angle(kind, obj, position)
-            self.poleplan.set_angle(target_chain=chain, target_angle=angle)
+            chain_idx, angle = self._compute_chain_angle(kind, obj, position)
+            self.poleplan.set_angle(chain_idx=chain_idx, angle=angle)
             self._rigid_motions = self.poleplan.rigid_motion(n_disc=n_disc)
 
         self.plot()
@@ -478,7 +478,8 @@ class InfluenceLine(LoggerMixin):
         Returns
         -------
         tuple
-            A tuple containing the chain and the angle.
+            A tuple containing the index of chain in the chain-list and the
+            angle.
 
         Raises
         ------
@@ -569,8 +570,6 @@ class InfluenceLine(LoggerMixin):
                     angle = 1
                 else:
                     angle = (1 - position) / obj.length
-
-            return chain, angle
         elif isinstance(obj, Node):
             chain = self.poleplan.get_chain_for(target=obj)
 
@@ -587,7 +586,7 @@ class InfluenceLine(LoggerMixin):
             elif force == 'fm':
                 angle = -1
 
-            return chain, angle
+        return self.poleplan.chains.index(chain), angle
 
     def _create_deflection_objects(self, n_disc: int = 10):
         """

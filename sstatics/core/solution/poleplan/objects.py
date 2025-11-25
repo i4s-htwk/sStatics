@@ -692,14 +692,21 @@ class Poleplan(LoggerMixin):
         filtered = {k: v for k, v in conn.items() if len(v) > 1}
         return filtered
 
-    def set_angle(self, target_chain=None, target_angle: float = 1) -> None:
+    def set_angle(self, chain_idx: int = 0, angle: float = 1) -> None:
         """
         Adjust the angle of ``target_chain`` to ``target_angle``.
         """
-        if target_chain is None:
-            target_chain = self.chains[0]
         self.logger.info(
-            f"Setting angle for chain \n {target_chain} to {target_angle}"
+            f"Starting to set target chain at index {chain_idx} "
+            f"to angle {angle}")
+        if chain_idx >= len(self.chains) or chain_idx < 0:
+            self.logger.error(
+                f"Chain index {chain_idx} is out of range. "
+                f"Valid indices: 0 to {len(self.chains) - 1}")
+            raise IndexError(f"Chain index {chain_idx} is not in self.chains")
+        target_chain = self.chains[chain_idx]
+        self.logger.info(
+            f"Setting angle for chain index: {chain_idx} to {angle}"
         )
         from sstatics.core.solution.poleplan.operation import \
             AngleCalculator
@@ -708,7 +715,7 @@ class Poleplan(LoggerMixin):
             angle_calculator = AngleCalculator(
                 self.chains, self.node_to_multiple_chains, self.debug
             )
-            angle_calculator.calculate_angles(target_chain, target_angle)
+            angle_calculator.calculate_angles(target_chain, angle)
             self.logger.debug("Angle calculation completed")
             self._set_angle = True
         except Exception as exc:
@@ -747,6 +754,42 @@ class Poleplan(LoggerMixin):
 
             self.logger.debug("Displacement figure created")
             return rbd_objects
+        except Exception as exc:
+            self.logger.error(
+                f"Displacement calculation failed: {exc}",
+                exc_info=True,
+            )
+            raise
+
+    def fig(self, n_disc: int = 2):
+        """
+        Return a list of Rigid Body Displacement Objects. They can use for
+        plotting.
+        """
+        self.logger.info("Generating displacement vector for each bar")
+        from sstatics.core.solution.poleplan.operation import (
+            DisplacementCalculator,
+        )
+        from sstatics.core.postprocessing.results import RigidBodyDisplacement
+        try:
+            fig = DisplacementCalculator(
+                self.chains, self.system.bars, self.node_to_multiple_chains,
+                debug=self.debug
+            )()
+            self.logger.info("Generating for each bar a "
+                             "rigid-body-displacement-object for plotting.")
+            # creating rigid-body-displacement-object for plotting
+            rbd_objects = []
+            for i, bar in enumerate(self.system.bars):
+                rdb = RigidBodyDisplacement(
+                    bar=bar,
+                    deform=fig[i],
+                    n_disc=n_disc
+                )
+                rbd_objects.append(rdb)
+
+            self.logger.debug("Displacement figure created")
+            return fig
         except Exception as exc:
             self.logger.error(
                 f"Displacement calculation failed: {exc}",
