@@ -32,7 +32,7 @@ class FirstOrder(Solver):
             self, bar_index: int | None = None, n_disc: int = 10
     ):
         return get_differential_equation(
-            self.system.mesh, self.bar_deform_list, self.internal_forces,
+            self.system, self.bar_deform_list, self.internal_forces,
             bar_index, n_disc
         )
 
