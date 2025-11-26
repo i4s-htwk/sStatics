@@ -4,6 +4,7 @@ from typing import Literal
 
 from sstatics.core.preprocessing.system import Bar
 from sstatics.core.solution.solver import Solver
+from sstatics.core.postprocessing import BarStressDistribution
 from sstatics.core.utils import get_differential_equation
 
 
@@ -36,6 +37,17 @@ class FirstOrder(Solver):
             bar_index, n_disc
         )
 
+    def stress_distribution(self, n_disc: int = 10):
+        return [
+            BarStressDistribution(
+                bar=bar,
+                deform=self.bar_deform_list[i],
+                force=self.internal_forces[i],
+                n_disc=n_disc,
+            )
+            for i, bar in enumerate(self.system.mesh)
+        ]
+
     def plot(
             self,
             kind: Literal[
@@ -52,3 +64,23 @@ class FirstOrder(Solver):
             self.system_support_forces, n_disc=n_disc)
         ResultGraphic(
             result, kind, bar_mesh_type, result_mesh_type, decimals).show()
+
+    def plot_stress(
+            self,
+            kind: Literal['normal', 'shear', 'bending_top', 'bending_bottom'],
+            z: float | None = None,
+            bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
+            result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
+            decimals: int | None = None,
+            n_disc: int = 10
+    ):
+        # TODO: not implemented yet
+        stress = [
+            sd.stress_at_z(z) if z is not None else sd.stress_disc
+            for sd in self.stress_distribution(n_disc)
+        ]
+        print(stress)
+        print(kind)
+        print(bar_mesh_type)
+        print(result_mesh_type)
+        print(decimals)
