@@ -1,82 +1,70 @@
 """
 Example 09:
-Stress distribution in a bar under a constant line load
+Stress distribution in a beam under constant line load
 
 This example demonstrates how to compute normal, shear, and bending stresses
 along a beam using the `BarStressDistribution` class.
 
-A single-span beam (Einfeldträger) is defined between two nodes:
-- Node 1: fixed in horizontal (u) and vertical (w) displacement
-- Node 2: fixed only in vertical displacement
+A simply supported beam with one fixed and one vertically restrained node
+is loaded by a constant line load. After solving the system using a
+first-order (linear-elastic) analysis, the stress distribution is evaluated
+at 10 points along the bar.
 
-A constant line load is applied to the bar. The system is solved with a
-first-order (linear-elastic) analysis using the displacement method.
-The resulting deformation and internal forces are then used to compute
-stress distributions.
+The example prints:
+- normal stresses σ(x)
+- shear stresses τ(x)
+- bending stresses σ_b,top(x) and σ_b,bottom(x)
 
-The stress distribution is evaluated at 10 equally spaced points along the bar.
-Finally, the normal, shear, and bending stresses are printed and plotted.
+Additionally, stresses are evaluated at a specific cross-section height z.
 """
 
 from sstatics.core.preprocessing import (
-    Bar, System, Material, Node, CrossSection, BarLineLoad
+    Bar, System, Material, Node, NodePointLoad, CrossSection, BarLineLoad
 )
 from sstatics.core.preprocessing.geometry import Polygon
 from sstatics.core.calc_methods import FirstOrder
-from sstatics.core.postprocessing import BarStressDistribution
 
 
-# 1. Define material
-mat = Material(210_000_000, 0.1, 81_000_000, 0.1)  # steel S235
+# 1. Define Material
+mat = Material(210_000_000, 81_000_000, 0.1, 0.1)
 
-
-# 2. Define rectangular cross-section (width=10, height=40)
+# 2. Define Cross-section (rectangle 10 × 40)
 rect = Polygon(points=[(0, 0), (10, 0), (10, 40), (0, 40), (0, 0)])
 cs = CrossSection(geometry=[rect])
 
-
-# 3. Create a simple single-span beam (Einfeldträger)
+# 3. Define System: single-span beam (4 m)
 n1 = Node(0, 0, u='fixed', w='fixed')
-n2 = Node(4, 0, w='fixed')
+n2 = Node(4, 0, w='fixed', loads=(NodePointLoad(x=1)))
 
-# Constant line load along the bar
 line_load = BarLineLoad(1, 1)
-
-# Create bar and system
 b1 = Bar(n1, n2, cs, mat, line_loads=line_load)
 system = System([b1])
 
-
-# 4. Solve with first-order theory (linear elastic)
+# 4. Solve system
 solution = FirstOrder(system)
 
+# 5. Stress distribution along the bar
+n_disc = 10
+stress_list = solution.stress_distribution(n_disc=n_disc)
 
-# 5. Compute stress distributions from solution
-stressbar = BarStressDistribution(
-    bar=b1,
-    deform=solution.bar_deform_list[0],
-    force=solution.internal_forces[0],
-    disc=10  # number of sampling points
-)
-
-# Stress types
-normal_stresses = stressbar.compute('normal')
-shear_stresses = stressbar.compute('shear', z=0.5)
-bending_stresses = stressbar.compute('bending')
+for i, bar_stress in enumerate(stress_list):
+    sigma = bar_stress.stress_disc
+    print(f"\nBar {i}: Stress distribution at {n_disc+1} points")
+    print("  σ_normal(x):        ", sigma[:, 0])
+    print("  τ_shear(x):         ", sigma[:, 1])
+    print("  σ_bending_bottom(x):", sigma[:, 2])
+    print("  σ_bending_top(x):   ", sigma[:, 3])
 
 
-# 6. Output results
-print("Normal stresses (array at discretization points):")
-print(normal_stresses)
+# 6. Stress at a specific height z of the cross-section
+z = 0
 
-print("Shear stresses at z = 0.5:")
-print(shear_stresses)
+print(f"\nStress evaluation at z = {z}:")
 
-print("Bending stresses:")
-print(bending_stresses)
-
-
-# 7. Plot stress distributions
-stressbar.plot('normal')
-stressbar.plot('bending')
-stressbar.plot('shear')
+for i, bar_stress in enumerate(stress_list):
+    sigma_z = bar_stress.stress_at_z(z)
+    print(f"\nBar {i}: Stress distribution at {n_disc+1} points at height "
+          f"z = {z}")
+    print("  σ_normal(x): ", sigma_z[:, 0])
+    print("  τ_shear(x):  ", sigma_z[:, 1])
+    print("  σ_bending(x):", sigma_z[:, 2])
