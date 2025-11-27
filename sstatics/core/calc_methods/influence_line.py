@@ -393,7 +393,7 @@ class InfluenceLine(LoggerMixin):
         elif kind in deform_kinds:
             if is_bar:
                 return modifier.modify_bar_deform_influ(obj, kind, position)
-            return modifier.modify_node_deform(obj, kind, position)
+            return modifier.modify_node_deform(obj, kind, virt_force)
 
         else:
             force_deform_kinds = force_kinds | deform_kinds
@@ -648,7 +648,7 @@ class InfluenceLine(LoggerMixin):
             If no influence line data is available.
         """
         if self._differential_equation is not None:
-            self.solution.plot(kind='w')
+            self.solution.plot(kind='bending_line')
         elif self._rigid_motions is not None:
             self.poleplan.plot()
         else:
