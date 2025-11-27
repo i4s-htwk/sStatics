@@ -51,7 +51,8 @@ class FirstOrder(Solver):
     def plot(
             self,
             kind: Literal[
-                'normal', 'shear', 'moment', 'u', 'w', 'phi'] = 'normal',
+                'normal', 'shear', 'moment', 'u', 'w', 'phi',
+                'bending_line'] = 'normal',
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
             result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
             decimals: int | None = None, n_disc: int = 10
