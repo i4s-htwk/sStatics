@@ -34,7 +34,7 @@ bar_2 = Bar(node_2, node_3, c_1, m_1)
 system = System([bar_1, bar_2])
 
 # 4. Define Influence line module
-il = InfluenceLine(system, True)
+il = InfluenceLine(system)
 
 # 5. Influence line for vertical force fm in bar_1 at xi = 0.5
 il.force('fm', bar_1, 0.5)
