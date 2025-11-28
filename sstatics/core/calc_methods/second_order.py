@@ -1,4 +1,3 @@
-
 from dataclasses import dataclass, replace, field, fields
 from functools import cached_property
 import numpy as np
@@ -284,8 +283,10 @@ class SecondOrder(LoggerMixin):
         self._iteration_mode = result_type
         self.logger.debug("Completed iterative approach.")
 
-    def solver_iterative_approach(self, iteration: int = -1):
-        r"""Return a solver corresponding to a specific iteration step.
+    def solver_iteration_cumulative(
+            self, iteration: int = -1):
+        r"""Return a solver corresponding to a specific iteration step for
+        the iteration mode 'cumulative'.
 
         The solver is reconstructed by using the system state stored in the
         iteration results. Negative indices may be used to access iterations
@@ -326,9 +327,106 @@ class SecondOrder(LoggerMixin):
                 exc_info=True
             )
             raise
+        return Solver(entry["system"])
+
+    def results_iterative_growth(
+            self, iteration: int = -1, difference: Literal[
+                'internal_forces', 'bar_deform_list', 'node_deform',
+                'node_support_forces', 'system_support_forces']
+            = 'internal_forces'
+    ):
+        r"""Retrieve the incremental growth result for a specific iteration
+        step.
+
+        This method returns a specific difference field for the given
+        iteration, if the chosen iteration mode is incremental.
+
+        The function reconstructs the incremental data from the stored
+        iteration results. Negative indices are supported
+        (e.g., ``-1`` refers to the last iteration).
+
+        Parameters
+        ----------
+        iteration : int, default=-1
+            The iteration index to extract. Supports negative indexing to count
+            from the end of the iteration history.
+
+        difference : {'internal_forces', 'bar_deform_list', 'node_deform',
+                      'node_support_forces', 'system_support_forces'},
+                      default='internal_forces'
+            Specifies which incremental data field to return when using the
+            incremental iteration mode.
+
+        Returns
+        -------
+        Any
+            The incremental difference dataset associated with the chosen
+            `difference` type.
+
+        Raises
+        ------
+        AttributeError
+            If no iterations have been performed yet.
+
+        ValueError
+            - If the function is called while the iteration mode is
+            ``cumulative``.
+            - If the requested `difference` type is invalid.
+
+        IndexError
+            If the requested iteration index does not exist.
+    """
+        self.logger.info(
+            "Calling the iterative growth for the incremental iterative "
+            f"approach of iteration: {iteration}")
+
+        if not self._iteration_results:
+            msg = ("No iterations have been performed yet. "
+                   "Run iterative_approach() first.")
+            self.logger.error(msg)
+            raise AttributeError(msg)
+
+        if self._iteration_mode == 'cumulative':
+            msg = ("If the chosen result_type is 'cumulative', it is not "
+                   "possible to show the iterative growth.")
+            self.logger.error(msg)
+            raise ValueError(msg)
+
+        if difference not in [
+            'internal_forces', 'bar_deform_list', 'node_deform',
+                'node_support_forces', 'system_support_forces']:
+            msg = ("difference has to be either 'internal_forces', "
+                   "'bar_deform_list', 'node_deform', 'node_support_forces' "
+                   "or 'system_support_forces'")
+            self.logger.error(msg)
+            raise ValueError(msg)
+        try:
+            entry = self._iteration_results[iteration]
+        except Exception as exc:
+            self.logger.error(
+                f"Failed to find Iteration {exc}.",
+                exc_info=True
+            )
+            raise
         self.logger.debug(
             "Solver created for requested iteration.")
-        return Solver(entry["system"])
+        if self._iteration_mode == 'cumulative':
+            return Solver(entry["system"])
+        else:
+            return entry[difference + '_diff']
+
+    @property
+    def max_shift(self):
+        if not self._iteration_results:
+            msg = ("No iterations have been performed yet. "
+                   "Run iterative_approach() first.")
+            self.logger.error(msg)
+            raise AttributeError(msg)
+
+        max_shift = []
+        for i in range(self.iteration_count):
+            max_shift.append(self._iteration_results[i]['max_shift'])
+        return max_shift
 
     def system_iterative(self, iteration: int = -1):
         r"""Return the structural system for a specific iteration step.
@@ -392,70 +490,6 @@ class SecondOrder(LoggerMixin):
         self.logger.debug(f"Total iterations available: "
                           f"{len(self._iteration_results)}")
         return len(self._iteration_results)
-
-    def iteration_matrix(self):
-        r"""
-        Return all iteration results in structured matrix form.
-
-        Each entry corresponds to one iteration and contains internal forces,
-        nodal deformations, bar deformations, system deformation lists and
-        maximum geometric shift. Depending on the iteration mode:
-
-        - **cumulative mode** stores absolute values at each iteration
-        - **incremental mode** stores differences between consecutive
-            iterations
-
-        Returns
-        -------
-        list of dict
-            Each dictionary includes:
-
-            - ``iteration`` – iteration index
-            - ``internal_forces`` – internal bar forces
-            - ``node_deform_list`` – nodal displacements
-            - ``bar_deform_list`` – bar deformation states
-            - ``max_shift`` – maximum displacement increment
-
-        Raises
-        ------
-        RuntimeError
-            If no iteration results are available.
-        """
-        self.logger.info("Building iteration result matrix.")
-        self.logger.debug(f"Iteration mode: {self._iteration_mode}")
-
-        if not self._iteration_results:
-            msg = (
-                "No iterations have been performed yet. "
-                "Run iterative_approach() first."
-            )
-            self.logger.error(msg)
-            raise RuntimeError(msg)
-
-        matrix = []
-        results = self._iteration_results
-
-        for i, r in enumerate(results):
-            self.logger.debug(f"Processing iteration step {i}")
-            if self._iteration_mode == "cumulative":
-                solver = self.solver_iterative_approach(i)
-                matrix.append({
-                    "iteration": r.get("iteration", i),
-                    "internal_forces": solver.internal_forces,
-                    "node_deform_list": solver.node_deform_list,
-                    "bar_deform_list": solver.bar_deform_list,
-                    "max_shift": r["max_shift"]
-                })
-            else:
-                matrix.append({
-                    "iteration": r.get("iteration", i),
-                    "internal_forces": r.get("internal_forces_diff"),
-                    "node_deform_list": r.get("node_deform_diff"),
-                    "bar_deform_list": r.get("bar_deform_diff"),
-                    "max_shift": r["max_shift"]
-                })
-        self.logger.info("Iteration result matrix completed.")
-        return matrix
 
     @cached_property
     def averaged_longitudinal_force(self):
@@ -613,10 +647,10 @@ class SecondOrder(LoggerMixin):
         ----------
         system : :any:`System`
             Current system geometry.
-        node_deform_curr : list of np.ndarray
-            (6×1) vectors representing current iteration displacements.
-        node_deform_prev : list of np.ndarray
-            (6×1) vectors representing previous iteration displacements.
+        node_deform_curr : np.ndarray
+            Global nodal displacement vector (size = num_nodes * dof)
+        node_deform_prev : np.ndarray
+            Global nodal displacement vector from previous iteration.
 
         Returns
         -------
@@ -627,20 +661,28 @@ class SecondOrder(LoggerMixin):
         """
         self.logger.info(
             "Updating system geometry based on incremental deformations.")
-        bars_new, max_deform = [], 0.0
 
-        for i, (bar, deform_curr, deform_prev) in enumerate(
-                zip(system.bars, node_deform_curr, node_deform_prev)):
-            self.logger.info(f"[Bar {i}] Updating geometry.")
+        bars_new = []
+        max_deform = 0.0
+        node_map = {}
+        nodes = system.nodes()
+        dof = 3
 
-            delta_deform = deform_curr - deform_prev
-            deform_x_i, deform_z_i = (float(delta_deform[0]),
-                                      float(delta_deform[1]))
-            deform_x_j, deform_z_j = (float(delta_deform[3]),
-                                      float(delta_deform[4]))
-            self.logger.debug(
-                f"[Bar {i}] Δu_i=({deform_x_i}, {deform_z_i}), "
-                f"Δu_j=({deform_x_j}, {deform_z_j})")
+        def get_delta(i):
+            u_curr = node_deform_curr[i * dof:(i + 1) * dof]
+            u_prev = node_deform_prev[i * dof:(i + 1) * dof]
+            return u_curr - u_prev
+
+        for i_bar, bar in enumerate(system.bars):
+
+            i = nodes.index(bar.node_i)
+            j = nodes.index(bar.node_j)
+
+            delta_i = get_delta(i)
+            delta_j = get_delta(j)
+
+            deform_x_i, deform_z_i = float(delta_i[0]), float(delta_i[1])
+            deform_x_j, deform_z_j = float(delta_j[0]), float(delta_j[1])
 
             max_deform = max(
                 max_deform,
@@ -648,16 +690,37 @@ class SecondOrder(LoggerMixin):
                 np.hypot(deform_x_j, deform_z_j)
             )
 
-            ni = replace(bar.node_i, x=bar.node_i.x + deform_x_i,
-                         z=bar.node_i.z + deform_z_i)
-            nj = replace(bar.node_j, x=bar.node_j.x + deform_x_j,
-                         z=bar.node_j.z + deform_z_j)
-            self.logger.debug(f"[Bar {i}] Updated node_i: ({ni.x}, {ni.z})")
-            self.logger.debug(f"[Bar {i}] Updated node_j: ({nj.x}, {nj.z})")
+            self.logger.info(f"[Bar {i_bar}] Updating geometry.")
+            self.logger.debug(
+                f"[Bar {i_bar}] Δu_i=({deform_x_i}, {deform_z_i}), "
+                f"Δu_j=({deform_x_j}, {deform_z_j})"
+            )
+
+            if bar.node_i not in node_map:
+                node_map[bar.node_i] = replace(
+                    bar.node_i,
+                    x=bar.node_i.x + deform_x_i,
+                    z=bar.node_i.z + deform_z_i
+                )
+            ni = node_map[bar.node_i]
+
+            if bar.node_j not in node_map:
+                node_map[bar.node_j] = replace(
+                    bar.node_j,
+                    x=bar.node_j.x + deform_x_j,
+                    z=bar.node_j.z + deform_z_j
+                )
+            nj = node_map[bar.node_j]
+
+            self.logger.debug(
+                f"[Bar {i_bar}] Updated node_i: ({ni.x}, {ni.z})")
+            self.logger.debug(
+                f"[Bar {i_bar}] Updated node_j: ({nj.x}, {nj.z})")
+
             bars_new.append(replace(bar, node_i=ni, node_j=nj))
 
-        self.logger.info(f"Geometry update completed. "
-                         f"Max nodal shift={max_deform}")
+        self.logger.info(
+            f"Geometry update completed. Max nodal shift={max_deform}")
         return replace(system, bars=bars_new), max_deform
 
     def _run_iteration(
@@ -701,8 +764,8 @@ class SecondOrder(LoggerMixin):
             self.logger.debug("Generated solver instances for "
                               "previous and current systems.")
 
-            node_deform_prev = solver_prev.node_deform_list
-            node_deform_curr = solver_curr.node_deform_list
+            node_deform_prev = solver_prev.node_deform
+            node_deform_curr = solver_curr.node_deform
 
             system_next, max_shift = self._update_geometry(
                 system_curr,
@@ -780,12 +843,12 @@ class SecondOrder(LoggerMixin):
         return {
             "internal_forces_diff": diff(curr.internal_forces,
                                          prev.internal_forces),
-            "node_support_diff": diff(curr.node_support_forces,
-                                      prev.node_support_forces),
-            "system_support_diff": diff(curr.system_support_forces,
-                                        prev.system_support_forces),
-            "bar_deform_diff": diff(curr.bar_deform_list,
-                                    prev.bar_deform_list),
+            "node_support_forces_diff": diff(curr.node_support_forces,
+                                             prev.node_support_forces),
+            "system_support_forces_diff": diff(curr.system_support_forces,
+                                               prev.system_support_forces),
+            "bar_deform_list_diff": diff(curr.bar_deform_list,
+                                         prev.bar_deform_list),
             "node_deform_diff": diff(curr.node_deform,
                                      prev.node_deform),
         }
@@ -885,7 +948,7 @@ class SecondOrder(LoggerMixin):
                 ]
         else:
             if self._iteration_mode == 'cumulative':
-                solver = self.solver_iterative_approach(iteration_index)
+                solver = self.solver_iteration_cumulative(iteration_index)
                 return get_differential_equation(
                     self.system,
                     solver.bar_deform_list,
@@ -974,7 +1037,7 @@ class SecondOrder(LoggerMixin):
             )
         else:
             if self._iteration_mode == 'cumulative':
-                solver = self.solver_iterative_approach(iteration_index)
+                solver = self.solver_iteration_cumulative(iteration_index)
                 result = SystemResult(
                     self.system,
                     solver.bar_deform_list,
@@ -988,11 +1051,11 @@ class SecondOrder(LoggerMixin):
                 entry = self._iteration_results[iteration_index]
                 result = SystemResult(
                     self.system,
-                    entry['bar_deform_diff'],
+                    entry['bar_deform_list_diff'],
                     entry['internal_forces_diff'],
                     entry['node_deform_diff'],
-                    entry['node_support_diff'],
-                    entry['system_support_diff'],
+                    entry['node_support_forces_diff'],
+                    entry['system_support_forces_diff'],
                     n_disc=n_disc
                 )
 
