@@ -7,12 +7,13 @@ from shapely.geometry import MultiPolygon, Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 from shapely.set_operations import difference
 
+from sstatics.core.logger_mixin import LoggerMixin
 from sstatics.core.preprocessing.geometry.objects import (
     CircularSector, Polygon
 )
 
 
-class PolygonMerge:
+class PolygonMerge(LoggerMixin):
     r"""
     Represents a combination of multiple positive and negative polygons,
     and provides methods to compute their geometric difference.
@@ -53,28 +54,67 @@ class PolygonMerge:
         Union geometry of all negative polygons, or None if empty.
     """
 
+    # noinspection PyMissingConstructor
     def __init__(self,
                  positive: List[Polygon] = None,
-                 negative: List[Polygon] = None):
+                 negative: List[Polygon] = None,
+                 debug: bool = False):
+        # allow LoggerMixin to initialize first (wrapped automatically)
+        _ = debug  # PyCharm quiet
+
+        self.logger.debug("Initializing PolygonMerge...")
+
         self.positive = positive or []
         self.negative = negative or []
 
-        # if not self.positive:
-        #     raise ValueError("At least one positive polygon is required.")
+        self.logger.debug(
+            "Input contains %d positive and %d negative polygons.",
+            len(self.positive), len(self.negative)
+        )
 
+        # ---- Validation -----------------------------------------------------
         if not all(isinstance(p, Polygon) for p in self.positive):
+            self.logger.error(
+                "Invalid type detected in 'positive' list. Elements: %s",
+                [type(p).__name__ for p in self.positive]
+            )
             raise TypeError(
                 "All elements in 'positive' must be Polygon instances."
             )
+
         if not all(isinstance(p, Polygon) for p in self.negative):
+            self.logger.error(
+                "Invalid type detected in 'negative' list. Elements: %s",
+                [type(p).__name__ for p in self.negative]
+            )
             raise TypeError(
                 "All elements in 'negative' must be Polygon instances."
             )
 
-        self.unary_pos = unary_union([p.polygon for p in self.positive]) \
-            if self.positive else None
-        self.unary_neg = unary_union([p.polygon for p in self.negative]) \
-            if self.negative else None
+        # ---- Compute unary unions -------------------------------------------
+        if self.positive:
+            self.logger.debug("Computing unary union of positive polygons...")
+            self.unary_pos = unary_union([p.polygon for p in self.positive])
+            self.logger.debug(
+                "Unary positive union created with geometry type: %s",
+                self.unary_pos.geom_type
+            )
+        else:
+            self.unary_pos = None
+            self.logger.debug("No positive polygons provided.")
+
+        if self.negative:
+            self.logger.debug("Computing unary union of negative polygons...")
+            self.unary_neg = unary_union([p.polygon for p in self.negative])
+            self.logger.debug(
+                "Unary negative union created with geometry type: %s",
+                self.unary_neg.geom_type
+            )
+        else:
+            self.unary_neg = None
+            self.logger.debug("No negative polygons provided.")
+
+        self.logger.debug("PolygonMerge initialized successfully.")
 
     def difference(self) -> Polygon:
         r"""
@@ -93,27 +133,61 @@ class PolygonMerge:
             If the resulting geometry is a `MultiPolygon`, which is
             currently not supported.
         """
+        self.logger.debug("Executing difference computation...")
+
         positive_flag = True
+
+        # Case 1: positive exists
         if self.unary_pos:
             result = self.unary_pos
-            positive_flag = True
-            if self.unary_neg:
-                result = difference(result, self.unary_neg)
+            self.logger.debug(
+                "Starting with positive union (%s).",
+                self.unary_pos.geom_type
+            )
 
+            if self.unary_neg:
+                self.logger.debug(
+                    "Negative union present → applying difference operation..."
+                )
+                result = difference(result, self.unary_neg)
+            else:
+                self.logger.debug("No negative union → skipping subtraction.")
+
+        # Case 2: only negative exists
         elif self.unary_neg:
             result = self.unary_neg
             positive_flag = False
+            self.logger.debug(
+                "No positive union. Using negative union directly."
+            )
 
+        else:
+            self.logger.error("Neither positive nor negative polygons exist.")
+            raise ValueError("Cannot compute difference without any input.")
+
+        # Multipolygon check --------------------------------------------------
         if isinstance(result, MultiPolygon):
-            # TODO: handle multipolygons explicitly if needed
+            self.logger.error(
+                "Difference resulted in unsupported MultiPolygon. "
+                "Number of sub-geometries: %d",
+                len(result.geoms)
+            )
             raise NotImplementedError(
                 "Difference resulted in a MultiPolygon, "
-                "which is not yet handled.")
+                "which is not yet handled."
+            )
+
+        self.logger.debug(
+            "Difference successful. Result polygon has %d exterior points "
+            "and %d holes.",
+            len(result.exterior.coords),
+            len(result.interiors)
+        )
 
         return Polygon(
             points=list(result.exterior.coords),
             holes=[list(interior.coords) for interior in result.interiors],
-            positive=positive_flag
+            positive=positive_flag,
         )
 
     def __call__(self) -> Polygon:
@@ -127,10 +201,11 @@ class PolygonMerge:
             The resulting `Polygon` after applying the difference
             between positive and negative areas.
         """
+        self.logger.debug("__call__ invoked → computing difference()")
         return self.difference()
 
 
-class SectorToPolygonHandler:
+class SectorToPolygonHandler(LoggerMixin):
     r"""
     Handles the interaction between regular polygons and circular sectors.
 
@@ -163,21 +238,44 @@ class SectorToPolygonHandler:
         converted.
     """
 
+    # noinspection PyMissingConstructor
     def __init__(self,
                  polygons: List[Polygon],
-                 circular: List[CircularSector]):
+                 circular: List[CircularSector],
+                 debug: bool = False):
+        # allow LoggerMixin to initialize first (wrapped automatically)
+        _ = debug  # PyCharm quiet
+        self.logger.debug("Initializing SectorToPolygonHandler...")
+
         self.polygons = polygons
         self.circular_sector = circular
 
-        if not all(isinstance(p, Polygon) for p in self.polygons):
-            raise TypeError(
-                "All elements in 'polygons' must be instances of Polygon.")
+        self.logger.debug(
+            "Received %d polygons and %d circular sectors.",
+            len(self.polygons), len(self.circular_sector)
+        )
 
-        if not all(isinstance(cs, CircularSector) for cs in
-                   self.circular_sector):
+        # ---------------- VALIDATION ----------------
+        if not all(isinstance(p, Polygon) for p in self.polygons):
+            types = [type(p).__name__ for p in self.polygons]
+            self.logger.error(
+                "Invalid element in 'polygons': Types = %s", types
+            )
             raise TypeError(
-                "All elements in 'circular' must be CircularSector "
-                "instances.")
+                "All elements in 'polygons' must be instances of Polygon."
+            )
+
+        if not all(
+                isinstance(cs, CircularSector) for cs in self.circular_sector):
+            types = [type(cs).__name__ for cs in self.circular_sector]
+            self.logger.error(
+                "Invalid element in 'circular': Types = %s", types
+            )
+            raise TypeError(
+                "All elements in 'circular' must be CircularSector instances."
+            )
+
+        self.logger.debug("SectorToPolygonHandler successfully initialized.")
 
     @staticmethod
     def bounding_boxes_overlap(a: ShapelyPolygon, b: ShapelyPolygon) -> bool:
@@ -246,50 +344,85 @@ class SectorToPolygonHandler:
               converted from intersecting sectors.
             - A list of circular sectors that did not intersect any polygon.
         """
+        self.logger.debug("Starting sector-to-polygon processing...")
+
+        # simple pass-through
         if len(self.polygons) == 0 and len(self.circular_sector) == 1:
+            self.logger.debug(
+                "Early exit: 0 polygons and 1 circular sector "
+                "(no interactions)."
+            )
             return self.polygons, self.circular_sector
+
         polygons_extended = self.polygons.copy()
         circular_sector_remaining = []
 
+        # Convert all circular sectors to polygons first if more than one
+        # exists
         if len(self.circular_sector) > 1:
-            circ_to_poly = [
-                i.convert_to_polygon() for i in self.circular_sector
-            ]
-            circ_to_poly_shapely = [i.polygon for i in circ_to_poly]
-
-            combined, contained = (
-                self.find_duplicates_overlaps_contained(circ_to_poly_shapely)
+            self.logger.debug(
+                "Preparing %d sectors for pre-checking via conversion...",
+                len(self.circular_sector)
             )
 
+            circ_to_poly = [i.convert_to_polygon() for i in
+                            self.circular_sector]
+            circ_to_poly_shapely = [i.polygon for i in circ_to_poly]
+
+            combined, contained = \
+                self.find_duplicates_overlaps_contained(circ_to_poly_shapely)
+
+            if combined:
+                self.logger.info(
+                    "%d circular sectors flagged to be converted to "
+                    "polygons: %s",
+                    len(combined), combined
+                )
+
+            # Add combined sectors as polygons
             for i in combined:
-                print(
-                    f"Note: A circular sector {i} intersects a polygon. "
-                    "It is discrete into 100 points and "
-                    "treated as a polygon."
+                self.logger.debug(
+                    "Sector %d overlaps/duplicates → converting to polygon.",
+                    i
                 )
                 polygons_extended.append(circ_to_poly[i])
 
-            self.circular_sector = [elem for i, elem in enumerate(
-                self.circular_sector) if i not in combined]
+            # Remove processed ones
+            self.circular_sector = [
+                elem for i, elem in enumerate(self.circular_sector)
+                if i not in combined
+            ]
 
-        for i in self.circular_sector:
-            sec_as_polygon = i.convert_to_polygon(num_points=100)
+        # Check remaining circular sectors individually
+        for i, sector in enumerate(self.circular_sector):
+            sec_poly = sector.convert_to_polygon(num_points=100)
 
-            if any(
-                    self.bounding_boxes_overlap(sec_as_polygon.polygon,
-                                                sp.polygon) and
-                    sec_as_polygon.polygon.overlaps(
-                        sp.polygon)
-                    for sp in polygons_extended
-            ):
-                print(
-                    f"Note: A circular sector {i} intersects a polygon. "
-                    "It is discrete into 100 points and "
-                    "treated as a polygon."
+            intersects = any(
+                self.bounding_boxes_overlap(sec_poly.polygon, sp.polygon)
+                and sec_poly.polygon.overlaps(sp.polygon)
+                for sp in polygons_extended
+            )
+
+            if intersects:
+                self.logger.info(
+                    "Circular sector %d intersects an existing polygon → "
+                    "converted to polygon (100-point discretization).",
+                    i
                 )
-                polygons_extended.append(sec_as_polygon)
+                polygons_extended.append(sec_poly)
             else:
-                circular_sector_remaining.append(i)
+                self.logger.debug(
+                    "Circular sector %d does not intersect any polygon.",
+                    i
+                )
+                circular_sector_remaining.append(sector)
+
+        self.logger.debug(
+            "Processing complete: %d polygons, %d remaining sectors.",
+            len(polygons_extended),
+            len(circular_sector_remaining)
+        )
+
         return polygons_extended, circular_sector_remaining
 
     def __call__(self) -> Tuple[List[Polygon], List[CircularSector]]:
@@ -304,9 +437,13 @@ class SectorToPolygonHandler:
         """
         return self.execute()
 
-    @staticmethod
-    def find_duplicates_overlaps_contained(geometries):
+    def find_duplicates_overlaps_contained(self, geometries):
+        self.logger.debug(
+            "Checking %d geometries for duplicates/overlaps/containment.",
+            len(geometries))
+
         if len(geometries) == 1:
+            self.logger.debug("Only one geometry → no duplicates.")
             return [], [0]
 
         duplicates = set()
@@ -315,41 +452,36 @@ class SectorToPolygonHandler:
 
         for i, j in combinations(range(len(geometries)), 2):
             g1, g2 = geometries[i], geometries[j]
-            print('i:', i, 'j:', j)
+            self.logger.debug("Comparing geometry %d with %d...", i, j)
 
-            # 1. Exact same geometries
             if g1.equals(g2):
                 duplicates.add(i)
                 duplicates.add(j)
-                print('equal')
+                self.logger.debug("Geometries %d and %d are identical.", i, j)
 
-            # 2. Fully contained
             elif g1.contains(g2):
                 contained.add(j)
-                print(f'Geometry {j} is fully contained in geometry {i}')
+                self.logger.debug("Geometry %d contains geometry %d.", i, j)
+
             elif g2.contains(g1):
                 contained.add(i)
-                print(f'Geometry {i} is fully contained in geometry {j}')
+                self.logger.debug("Geometry %d contains geometry %d.", j, i)
 
-            # 3. Partial overlaps (intersection > 0, not full containment)
-            elif g1.intersects(g2):
-                intersection = g1.intersection(g2)
-                if intersection.area > 0:
-                    overlaps.add(i)
-                    overlaps.add(j)
-                    print(f'Geometries {i} and {j} partially overlap')
+            elif g1.intersects(g2) and g1.intersection(g2).area > 0:
+                overlaps.add(i)
+                overlaps.add(j)
+                self.logger.debug(
+                    "Geometries %d and %d partially overlap (area > 0).", i, j
+                )
 
-        # Optional: Do not count duplicates or contained geometries as overlaps
         overlaps -= duplicates
         overlaps -= contained
 
-        # todo: merge overlaps and duplicates into one list
-
-        print("Duplicate geometries:", duplicates)
-        print("Partial overlaps:", overlaps)
-        print("Contained geometries:", contained)
-
         combined = list(duplicates | overlaps)
-        print('Geometries treated as polygons with indices:', combined)
+
+        self.logger.debug("Duplicate indices: %s", list(duplicates))
+        self.logger.debug("Overlap indices:   %s", list(overlaps))
+        self.logger.debug("Contained indices: %s", list(contained))
+        self.logger.debug("Combined result:   %s", combined)
 
         return combined, contained

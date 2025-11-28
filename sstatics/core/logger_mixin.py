@@ -92,51 +92,38 @@ class LoggerMixin:
         """
         return self._logger
 
-    # ---------------------------------------------------------
     # Automatic subclass hook
-    # ---------------------------------------------------------
-    def __init_subclass__(cls, **kwargs: Any):
-        """
-        Automatically called when a subclass of LoggerMixin is defined.
-
-        If the subclass defines a `debug` attribute (e.g., as a dataclass
-        field), this method automatically injects a `__post_init__` wrapper
-        to ensure that the mixin logger is initialized with the correct
-        debug value.
-
-        Parameters
-        ----------
-        **kwargs : Any
-            Keyword arguments passed by Python during subclass creation.
-        """
+    def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        # Check if subclass defines a 'debug' field or annotation.
         has_debug = "debug" in getattr(cls, "__annotations__", {})
 
-        if not has_debug:
-            # If no debug field exists, no modification is needed.
-            return
-
-        # Save the original __post_init__ method (if defined)
+        # ---------- Case 1: Dataclass → wrap __post_init__ ----------
         orig_post = getattr(cls, "__post_init__", None)
+        if orig_post is not None and has_debug:
+            def wrapped_post(self, *a, **k):
+                LoggerMixin.__init__(self, debug=getattr(self, "debug", False))
+                return orig_post(self, *a, **k)
 
-        def wrapped_post(self, *a, **k):
-            """
-            Wrapper function automatically injected into subclasses.
+            cls.__post_init__ = wrapped_post
+            return  # already handled; no need to touch __init__
 
-            Initializes the LoggerMixin using the subclass's 'debug' field,
-            and then calls the original `__post_init__` method (if present).
-            """
-            # 1 Initialize LoggerMixin with the subclass's 'debug' value
-            LoggerMixin.__init__(self, debug=getattr(self, "debug", False))
+        # ---------- Case 2: Normal class with its own __init__ ----------
+        orig_init = getattr(cls, "__init__", None)
 
-            # 2 Execute subclass-specific post-initialization logic
-            if orig_post is not None:
-                orig_post(self, *a, **k)
+        # Avoid wrapping LoggerMixin.__init__ itself
+        if orig_init is not LoggerMixin.__init__:
 
-        # Replace or wrap the subclass's __post_init__ method
-        cls.__post_init__ = wrapped_post
+            def wrapped_init(self, *a, **k):
+                # call mixin init BEFORE user init
+                debug_value = k.get("debug", False)
+                LoggerMixin.__init__(self, debug=debug_value)
+
+                # then call the original __init__
+                if orig_init is not None:
+                    return orig_init(self, *a, **k)
+
+            cls.__init__ = wrapped_init
 
 
 def table_bar(list_of_vec_lists, mapping, header_lists, decimals: int = 6):
