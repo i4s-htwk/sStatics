@@ -56,6 +56,9 @@ class InfluenceLine(LoggerMixin):
     _rigid_motions: List[RigidBodyDisplacement] | None = (
         field(init=False, default=None))
 
+    def __post_init__(self):
+        self.logger.debug("InfluenceLine object successfully instantiated.")
+
     def force(
             self,
             kind: Literal['fx', 'fz', 'fm'],
@@ -127,31 +130,48 @@ class InfluenceLine(LoggerMixin):
         :py:class:`BarResult` :
             Class for bar results.
         """
+        self.logger.debug(
+            f"Computing force influence line: kind={kind}, obj={obj}, "
+            f"position={position}, n_disc={n_disc}")
         self._reset_results()
 
         if kind not in ('fx', 'fz', 'fm'):
+            self.logger.error(f"Invalid force kind: {kind}")
             raise ValueError(f"Invalid kind type: {kind}")
 
         self._modified_system = self._modify_system(kind, obj, position)
-        self._solution = FirstOrder(system=self._modified_system)
+        self.logger.debug("Modified system created for force calculation.")
+        self._solution = FirstOrder(system=self._modified_system,
+                                    debug=self.debug)
+        self.logger.debug("FirstOrder solver initialized.")
 
         if self.solution.solvable:
+            self.logger.debug(
+                "System is solvable. Computing normalization force.")
             self._norm_force = self._compute_norm_force(kind, obj)
             if self._norm_force != 0:
+                self.logger.debug(
+                    f"Normalization force computed: {self._norm_force}")
                 self._modified_system = self._modify_system(
                     kind, obj, position, virt_force=self.norm_force
                 )
-                self._solution = FirstOrder(system=self._modified_system)
+                self._solution = FirstOrder(system=self._modified_system,
+                                            debug=self.debug)
             self._create_deflection_objects(n_disc=n_disc)
-
+            self.logger.debug("Deflection objects created.")
         else:
+            self.logger.debug("System is a mechanism. Using pole plan.")
             self._poleplan = Poleplan(system=self.modified_system,
                                       debug=self.debug)
             chain_idx, angle = self._compute_chain_angle(kind, obj, position)
             self.poleplan.set_angle(chain_idx=chain_idx, angle=angle)
             self._rigid_motions = self.poleplan.rigid_motion(n_disc=n_disc)
+            self.logger.debug(
+                f"Rigid-body motions computed: "
+                f"{len(self._rigid_motions)} items")
 
         self.plot()
+        self.logger.debug("Force influence line plotted.")
 
     def deform(
             self,
@@ -203,17 +223,26 @@ class InfluenceLine(LoggerMixin):
         :py:class:`BarResult` :
             Class for bar results.
         """
+        self.logger.debug(
+            f"Computing displacement influence line: kind={kind}, obj={obj}, "
+            f"position={position}, n_disc={n_disc}")
         self._reset_results()
 
         if kind not in ['u', 'w', 'phi']:
+            self.logger.error(f"Invalid displacement kind: {kind}")
             raise ValueError(f"Invalid kind type: {kind}")
 
         self._modified_system = self._modify_system(kind, obj, position)
-        self._solution = FirstOrder(system=self._modified_system)
+        self.logger.debug(
+            "Modified system created for displacement calculation.")
 
+        self._solution = FirstOrder(system=self._modified_system,
+                                    debug=self.debug)
         self._create_deflection_objects(n_disc=n_disc)
+        self.logger.debug("Deflection objects created for displacement.")
 
         self.plot()
+        self.logger.debug("Displacement influence line plotted.")
 
     @property
     def modified_system(self) -> System:
@@ -431,6 +460,8 @@ class InfluenceLine(LoggerMixin):
         --------
         :py:meth:`force` : Method that uses this normalization factor.
         """
+        self.logger.debug(
+            f"Computing normalization force for force={force}, obj={obj}")
         delta = 0.0
         if isinstance(obj, Bar):
             deform = self.solution.bar_deform_list
@@ -452,11 +483,18 @@ class InfluenceLine(LoggerMixin):
                     delta = nd[mapping[force]][0]
                     break
         else:
+            self.logger.error("obj must be an instance of Bar or Node")
             raise TypeError("obj must be an instance of Bar or Node")
+
         if delta == 0:
+            self.logger.error(
+                "Delta is zero – cannot compute normalization force")
             raise ZeroDivisionError(
                 "Delta is zero – cannot compute norm force.")
-        return -float(np.abs(1 / delta))
+
+        norm_force = -float(np.abs(1 / delta))
+        self.logger.debug(f"Normalization force computed: {norm_force}")
+        return norm_force
 
     def _compute_chain_angle(self, force: Literal['fx', 'fz', 'fm'],
                              obj: Bar | Node,
@@ -491,6 +529,9 @@ class InfluenceLine(LoggerMixin):
         --------
         :py:meth:`force` : Method that uses this angle calculation.
         """
+        self.logger.debug(
+            f"Computing chain angle for force={force}, obj={obj},"
+            f" position={position}")
 
         def get_angle(point, center, displacement: float = 1):
             """
@@ -506,11 +547,7 @@ class InfluenceLine(LoggerMixin):
                 float: angle between the point and the center.
             """
             r = point - center
-
-            # Length of the vector
             length = np.linalg.norm(r)
-
-            # Determine the sign
             if np.all(center == 0):
                 sign = np.sign(r[0, 0])
             else:
@@ -529,6 +566,7 @@ class InfluenceLine(LoggerMixin):
             chain = self.poleplan.get_chain_for(target=bar)
 
             if chain is None:
+                self.logger.error("No valid chain found for the given bar")
                 raise AttributeError("No valid chain found for the given bar.")
 
             if force == 'fz':
@@ -575,6 +613,7 @@ class InfluenceLine(LoggerMixin):
             chain = self.poleplan.get_chain_for(target=obj)
 
             if chain is None:
+                self.logger.error("No valid chain found for the given node")
                 raise AttributeError(
                     "No valid chain found for the given node."
                 )
@@ -587,7 +626,10 @@ class InfluenceLine(LoggerMixin):
             elif force == 'fm':
                 angle = -1
 
-        return self.poleplan.chains.index(chain), angle
+        chain_idx = self.poleplan.chains.index(chain)
+        self.logger.debug(
+            f"Chain angle computed: chain_idx={chain_idx}, angle={angle}")
+        return chain_idx, angle
 
     def _create_deflection_objects(self, n_disc: int = 10):
         """
@@ -621,6 +663,7 @@ class InfluenceLine(LoggerMixin):
         -------
         None
         """
+        self.logger.debug("Resetting previous computation results.")
         self._modified_system = None
         self._solution = None
         self._norm_force = None
@@ -647,13 +690,15 @@ class InfluenceLine(LoggerMixin):
         AttributeError
             If no influence line data is available.
         """
+        self.logger.debug(f"Plotting influence line (mode={mode})")
         if self._differential_equation is not None:
             self.solution.plot(kind='bending_line')
+            self.logger.debug("Plotted based on deflection objects.")
         elif self._rigid_motions is not None:
             self.poleplan.plot()
+            self.logger.debug("Plotted based on rigid-body motions.")
         else:
-            print(mode)
+            self.logger.error("No influence line data available for plotting.")
             raise AttributeError(
-                "No influence line data found. "
-                "Call `force()` or `deform()` before using `plot()`."
-            )
+                "No influence line data found. Call `force()` or `deform()` "
+                "before using `plot()`.")

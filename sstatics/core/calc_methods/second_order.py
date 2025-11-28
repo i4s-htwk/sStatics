@@ -1,3 +1,4 @@
+
 from dataclasses import dataclass, replace, field, fields
 from functools import cached_property
 import numpy as np
@@ -93,6 +94,9 @@ class SecondOrder(LoggerMixin):
     _iteration_mode: Literal['cumulative', 'incremental'] | None = field(
         init=False, default=None)
 
+    def __post_init__(self):
+        self.logger.info("SecondOrder successfully created.")
+
     def matrix_approach(
             self, approach: Literal['analytic', 'p_delta', 'taylor']):
         r"""Configure and initialize the matrix-based second-order analysis.
@@ -174,7 +178,7 @@ class SecondOrder(LoggerMixin):
             self.logger.error(msg)
             raise AttributeError(msg)
         if self._solution_matrix is None:
-            solver = Solver(self._modified_system_matrix)
+            solver = Solver(self._modified_system_matrix, debug=self.debug)
             self.logger.info("Creating new solver for modified matrix system.")
 
             object.__setattr__(solver, 'internal_forces',
@@ -327,7 +331,9 @@ class SecondOrder(LoggerMixin):
                 exc_info=True
             )
             raise
-        return Solver(entry["system"])
+        self.logger.debug(
+            "Solver created for requested iteration.")
+        return Solver(entry["system"], debug=self.debug)
 
     def results_iterative_growth(
             self, iteration: int = -1, difference: Literal[
@@ -410,10 +416,7 @@ class SecondOrder(LoggerMixin):
             raise
         self.logger.debug(
             "Solver created for requested iteration.")
-        if self._iteration_mode == 'cumulative':
-            return Solver(entry["system"])
-        else:
-            return entry[difference + '_diff']
+        return entry[difference + '_diff']
 
     @property
     def max_shift(self):
@@ -533,7 +536,7 @@ class SecondOrder(LoggerMixin):
         """
         self.logger.info(
             "Computing averaged longitudinal forces for all bars.")
-        solution = Solver(self.system)
+        solution = Solver(self.system, debug=self.debug)
         self.logger.debug(
             "Created solver for original system to obtain bar "
             "forces and deformations.")
@@ -759,8 +762,8 @@ class SecondOrder(LoggerMixin):
 
         for i in range(iterations):
             self.logger.info(f"--- Iteration {i} ---")
-            solver_prev = Solver(system_prev)
-            solver_curr = Solver(system_curr)
+            solver_prev = Solver(system_prev, debug=self.debug)
+            solver_curr = Solver(system_curr, debug=self.debug)
             self.logger.debug("Generated solver instances for "
                               "previous and current systems.")
 
