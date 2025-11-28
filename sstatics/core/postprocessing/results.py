@@ -1032,6 +1032,8 @@ class DifferentialEquationSecond(DifferentialEquation):
             0 & 0 & 0 & 0 & -\dfrac{dp_z \cdot \ell}{6 \cdot B_s \cdot \mu^2}
             \end{bmatrix}
         """
+        if np.isclose(self.f_axial, 0):
+            return super().z_coef
         l, mu = self.bar.length, self.bar.characteristic_number
         Bs, GAs = self.bar.B_s, self.bar.GA_s
         EI = self.bar.EI
