@@ -90,6 +90,9 @@ class LoggerMixin:
         logging.Logger
             The configured logger.
         """
+        if not hasattr(self, "_logger"):
+            # fallback in case init was not called
+            LoggerMixin.__init__(self)
         return self._logger
 
     # Automatic subclass hook
