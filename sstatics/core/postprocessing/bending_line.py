@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 
+from sstatics.core import DifferentialEquationSecond
 from sstatics.core.postprocessing import DifferentialEquation
 
 
@@ -26,7 +27,7 @@ class BendingLine:
         List of DifferentialEquation objects, one per beam.
     """
 
-    dgl_list: List[DifferentialEquation]
+    dgl_list: List[DifferentialEquation] | List[DifferentialEquationSecond]
 
     def __post_init__(self):
         """
@@ -75,7 +76,9 @@ class BendingLine:
 
         for dgl in self.dgl_list:
             deform = dgl.deform.flatten()
-            values.extend([abs(deform[0]), abs(deform[1]), abs(deform[2])])
+            print(deform)
+            values.extend([abs(deform[0]), abs(deform[1]), abs(deform[2]),
+                           abs(deform[3]), abs(deform[4]), abs(deform[5])])
         return max(values) if values else 1.0
 
     def _compute(self):

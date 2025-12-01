@@ -1045,7 +1045,8 @@ class SecondOrder(LoggerMixin):
             self, approach: Literal['matrix', 'iterative'],
             iteration_index: Optional[int] = None,
             kind: Literal[
-                'normal', 'shear', 'moment', 'u', 'w', 'phi'] = 'normal',
+                'normal', 'shear', 'moment', 'u', 'w', 'phi',
+                'bending_line'] = 'normal',
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
             result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
             decimals: Optional[int] = None, n_disc: int = 10
