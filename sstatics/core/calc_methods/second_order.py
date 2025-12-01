@@ -37,9 +37,9 @@ class SecondOrder(LoggerMixin):
     second-order bar element (:class:`BarSecond`). Depending on the selected
     approach, the geometric stiffness contributions are incorporated via:
 
-    - ``"analytic"`` — closed-form analytical second-order stiffness matrix
-    - ``"taylor"`` — Taylor series expansion of the exact formulation
-    - ``"p_delta"`` — classical P–Δ geometric stiffness formulation
+    - ``"analytic"``: analytical second-order stiffness matrix
+    - ``"taylor"``: Taylor series expansion
+    - ``"p_delta"``: P–Δ geometric stiffness formulation
 
     After selecting the formulation through :meth:`matrix_approach`, an
     internally modified :class:`System` instance is created. This modified
@@ -112,12 +112,12 @@ class SecondOrder(LoggerMixin):
             Selects the second-order formulation for the modified stiffness:
 
             - ``'analytic'``
-              Closed-form exact geometric stiffness including axial force
+              Closed-form exact geometric stiffness
               effects.
             - ``'p_delta'``
-              Classical P–Δ geometric stiffness formulation.
+              P–Δ geometric stiffness formulation.
             - ``'taylor'``
-              Taylor-series expansion of the analytical stiffness.
+              Taylor-series expansion
 
         Notes
         -----
@@ -177,6 +177,7 @@ class SecondOrder(LoggerMixin):
                    "`solver_matrix_approach`.")
             self.logger.error(msg)
             raise AttributeError(msg)
+
         if self._solution_matrix is None:
             solver = Solver(self._modified_system_matrix, debug=self.debug)
             self.logger.info("Creating new solver for modified matrix system.")
@@ -189,6 +190,7 @@ class SecondOrder(LoggerMixin):
 
             self._solution_matrix = solver
         self.logger.debug("Returning cached matrix-based solver instance.")
+
         return self._solution_matrix
 
     @property
@@ -210,12 +212,14 @@ class SecondOrder(LoggerMixin):
             If no matrix-based system has been computed yet.
         """
         self.logger.info("Accessing modified system of matrix-based analysis.")
+
         if self._modified_system_matrix is None:
             msg = ("The modified system has not been created yet. "
                    "Call `matrix_approach()` before accessing "
                    "`system_matrix_approach`.")
             self.logger.error(msg)
             raise AttributeError(msg)
+
         return self._modified_system_matrix
 
     def iterative_approach(
@@ -223,10 +227,10 @@ class SecondOrder(LoggerMixin):
             result_type: Literal['cumulative', 'incremental'] = 'cumulative'):
         r"""Execute an iterative geometric–nonlinear second-order analysis.
 
-        This method performs repeated updates of the system geometry, internal
-        forces and stiffness based on newly computed nodal displacements. The
-        process continues until convergence is reached or the maximum number of
-        iterations is exhausted.
+        This method performs repeated updates of the system geometry based on
+        newly computed nodal displacements. The process continues until
+        convergence is reached or the maximum number of iterations is
+        exhausted.
 
         Parameters
         ----------
@@ -244,8 +248,9 @@ class SecondOrder(LoggerMixin):
         Notes
         -----
         The results of each iteration are stored in ``_iteration_results`` and
-        can be accessed via :meth:`solver_iterative_approach`,
-        :meth:`system_iterative`, or :meth:`iteration_matrix`.
+        can be accessed via :meth:`solver_iteration_cumulative()` for the
+        'cumulative' result type or via :meth:`iterative_growth()` for the
+        'incremental' result type.
 
         Raises
         ------
@@ -384,7 +389,8 @@ class SecondOrder(LoggerMixin):
         """
         self.logger.info(
             "Calling the iterative growth for the incremental iterative "
-            f"approach of iteration: {iteration}")
+            f"approach of iteration: {iteration} and the chosen iterative "
+            f"growth of: {difference}")
 
         if not self._iteration_results:
             msg = ("No iterations have been performed yet. "
@@ -415,11 +421,34 @@ class SecondOrder(LoggerMixin):
             )
             raise
         self.logger.debug(
-            "Solver created for requested iteration.")
+            f"The iterative growth of {difference} is:\n "
+            f"{entry[difference + '_diff']}.")
+
         return entry[difference + '_diff']
 
     @property
     def max_shift(self):
+        """Return the maximum nodal shift magnitude for each iteration.
+
+        Retrieves the maximum nodal shift values computed during each step
+        of the iterative procedure. These values indicate how much the nodal
+        geometry changed from one iteration to the next and are typically used
+        to assess convergence behavior.
+
+        Returns
+        -------
+        list of `float`
+            List containing the maximum nodal shift magnitude for each
+            iteration. The index of each entry corresponds to the respective
+            iteration step.
+
+        Raises
+        ------
+        AttributeError
+            If no iteration results are available. This occurs when the
+            iterative procedure has not been executed yet.
+        """
+        self.logger.info("Calling the max shift.")
         if not self._iteration_results:
             msg = ("No iterations have been performed yet. "
                    "Run iterative_approach() first.")
@@ -429,6 +458,8 @@ class SecondOrder(LoggerMixin):
         max_shift = []
         for i in range(self.iteration_count):
             max_shift.append(self._iteration_results[i]['max_shift'])
+            self.logger.info(
+                f"[Iteration {i}] max shift: {max_shift[i]}.")
         return max_shift
 
     def system_iterative(self, iteration: int = -1):
@@ -477,7 +508,7 @@ class SecondOrder(LoggerMixin):
 
         Returns
         -------
-        int
+        `int`
             Number of computed iterations.
 
         Raises
@@ -490,6 +521,7 @@ class SecondOrder(LoggerMixin):
                    "Run get_iteration_results() first.")
             self.logger.error(msg)
             raise RuntimeError(msg)
+
         self.logger.debug(f"Total iterations available: "
                           f"{len(self._iteration_results)}")
         return len(self._iteration_results)
@@ -608,7 +640,7 @@ class SecondOrder(LoggerMixin):
 
         Returns
         -------
-        list[np.ndarray]
+        list of `np.ndarray`
             List of (6×1) force vectors per bar in local bar coordinates.
         """
         self.logger.info(
@@ -727,8 +759,8 @@ class SecondOrder(LoggerMixin):
         return replace(system, bars=bars_new), max_deform
 
     def _run_iteration(
-            self, iterations: int = 10, tolerance: float = 1e-3,
-            result_type: Literal['incremental', 'cumulative'] = 'cumulative'
+            self, iterations: int, tolerance: float,
+            result_type: Literal['incremental', 'cumulative']
     ):
         """Perform iterative geometry updates to capture nonlinear effects.
 
@@ -753,6 +785,23 @@ class SecondOrder(LoggerMixin):
             f"Starting nonlinear iteration process: iterations={iterations}, "
             f"tolerance={tolerance}, mode='{result_type}'."
         )
+        if not isinstance(iterations, int):
+            msg_1 = (f'The number of iterations must be of type int. '
+                     f'The current type is "{type(iterations)}".')
+            self.logger.error(msg_1)
+            raise ValueError(msg_1)
+
+        if iterations <= 0:
+            msg_2 = 'The number of iterations has to be greater than zero.'
+            self.logger.error(msg_2)
+            raise ValueError(msg_2)
+
+        if result_type not in ('cumulative', 'incremental'):
+            msg_3 = (f'Iteration mode has to be either "cumulative" or '
+                     f'"incremental". Got "{result_type}" instead.')
+            self.logger.error(msg_3)
+            raise ValueError(msg_3)
+
         results: List[dict] = []
         self.logger.debug(
             "Preparing initial systems: system_prev (loads removed) "
@@ -852,11 +901,36 @@ class SecondOrder(LoggerMixin):
                                                prev.system_support_forces),
             "bar_deform_list_diff": diff(curr.bar_deform_list,
                                          prev.bar_deform_list),
-            "node_deform_diff": diff(curr.node_deform,
-                                     prev.node_deform),
+            "node_deform_diff": diff(curr.node_deform, prev.node_deform),
         }
 
     def _validation_approach_index(self, approach, iteration_index):
+        """Validate the calculation approach and the corresponding iteration
+        index.
+
+        This method ensures that the specified solution approach and the
+        provided iteration index are consistent. It verifies that the approach
+        is one of the supported types and checks that an iteration index is
+        supplied only when required. Invalid combinations or unsupported values
+         trigger detailed error messages and exceptions.
+
+        Parameters
+        ----------
+        approach : str
+            The calculation approach to be used. Must be either
+            ``"matrix"`` or ``"iterative"``.
+        iteration_index : int or None
+            The iteration index associated with the iterative approach.
+            Must be ``None`` when using the matrix approach. Must be an ``int``
+            and not ``None`` when the iterative approach is selected.
+
+        Raises
+        ------
+        ValueError
+            If an unsupported approach is provided, if an iteration index is
+            given for the matrix approach, or if no valid integer iteration
+            index is provided for the iterative approach.
+        """
         self.logger.debug(f"[Validation] Checking approach={approach}, "
                           f"iteration_index={iteration_index}")
         if approach not in ['matrix', 'iterative']:
@@ -925,7 +999,7 @@ class SecondOrder(LoggerMixin):
             the solver of the chosen iteration.
         - In incremental mode, differential quantities from the stored
           iteration history are used.
-            """
+        """
         self._validation_approach_index(approach, iteration_index)
 
         if approach == 'matrix':
@@ -978,51 +1052,51 @@ class SecondOrder(LoggerMixin):
     ):
         r"""Plot second-order internal forces or deformation results.
 
-            This method constructs a :class:`SystemResult` object based on
-            either:
+        This method constructs a :class:`SystemResult` object based on
+        either:
 
-            - matrix-based second-order theory, or
-            - (cumulative / incremental) iterative results,
+        - matrix-based second-order theory, or
+        - (cumulative / incremental) iterative results,
 
-            and visualizes the selected quantity using
-            :class:`ResultGraphic`.
+        and visualizes the selected quantity using
+        :class:`ResultGraphic`.
 
-            Parameters
-            ----------
-            approach : {'matrix', 'iterative'}
-                Defines whether the matrix-based or iterative results should
-                be plotted.
-            iteration_index : int, optional
-                Required for the iterative approach. Specifies the iteration
-                step.
-                Supports negative indices.
-            kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi'},
-                    default='normal'
-                Selects the result quantity to display.
-            bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
-                Mesh used for the graphic bar geometry.
-            result_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='mesh'
-                Mesh used for plotting the result distribution.
-            decimals : int, optional
-                Number of decimals for label annotation.
-            n_disc : int, default=10
-                Number of subdivisions for result interpolation.
+        Parameters
+        ----------
+        approach : {'matrix', 'iterative'}
+            Defines whether the matrix-based or iterative results should
+            be plotted.
+        iteration_index : int, optional
+            Required for the iterative approach. Specifies the iteration
+            step.
+            Supports negative indices.
+        kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi'},
+                default='normal'
+            Selects the result quantity to display.
+        bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
+            Mesh used for the graphic bar geometry.
+        result_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='mesh'
+            Mesh used for plotting the result distribution.
+        decimals : int, optional
+            Number of decimals for label annotation.
+        n_disc : int, default=10
+            Number of subdivisions for result interpolation.
 
-            Raises
-            ------
-            ValueError
-                If the approach or iteration index is invalid.
-            AttributeError
-                If the matrix-based approach was not initialized.
-            RuntimeError
-                If iterative results were requested but none exist.
+        Raises
+        ------
+        ValueError
+            If the approach or iteration index is invalid.
+        AttributeError
+            If the matrix-based approach was not initialized.
+        RuntimeError
+            If iterative results were requested but none exist.
 
-            Notes
-            -----
-                Incremental mode plots incremental quantities (differences
-                between consecutive iterations), whereas cumulative mode
-                displays the absolute state of the structure at that iteration.
-            """
+        Notes
+        -----
+            Incremental mode plots incremental quantities (differences
+            between consecutive iterations), whereas cumulative mode
+            displays the absolute state of the structure at that iteration.
+        """
         self._validation_approach_index(approach, iteration_index)
         from sstatics.graphic_objects import ResultGraphic
         from sstatics.core.postprocessing import SystemResult
