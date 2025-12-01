@@ -381,7 +381,7 @@ class SecondOrder(LoggerMixin):
 
         IndexError
             If the requested iteration index does not exist.
-    """
+        """
         self.logger.info(
             "Calling the iterative growth for the incremental iterative "
             f"approach of iteration: {iteration}")
@@ -1019,9 +1019,9 @@ class SecondOrder(LoggerMixin):
 
             Notes
             -----
-            Incremental mode plots incremental quantities (differences between
-            consecutive iterations), whereas cumulative mode displays the
-            absolute state of the structure at that iteration.
+                Incremental mode plots incremental quantities (differences
+                between consecutive iterations), whereas cumulative mode
+                displays the absolute state of the structure at that iteration.
             """
         self._validation_approach_index(approach, iteration_index)
         from sstatics.graphic_objects import ResultGraphic

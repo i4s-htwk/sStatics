@@ -19,7 +19,7 @@ class Pole:
     relative or absolute motion of connected elements.
 
     Types of Poles
-    ---------------
+    --------------
     - Absolute Pole (Hauptpol):
         A fixed point in the plane that does not translate. The associated
         body rotates around this point. Examples include fixed supports or
@@ -505,7 +505,7 @@ class Poleplan(LoggerMixin):
     absolute motions of the rigid subsystems.
 
     Construction Procedure
-    ---------------------
+    ----------------------
     The creation of a Poleplan is performed in several steps [1]_:
 
     1. Identification and naming of all chains (Scheiben) in the system.
