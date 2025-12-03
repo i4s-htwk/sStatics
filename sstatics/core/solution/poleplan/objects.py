@@ -18,8 +18,7 @@ class Pole:
     can rotate. Depending on its type and position, it defines the
     relative or absolute motion of connected elements.
 
-    Types of Poles
-    --------------
+    **Types of Poles**
     - Absolute Pole (Hauptpol):
         A fixed point in the plane that does not translate. The associated
         body rotates around this point. Examples include fixed supports or
@@ -33,7 +32,7 @@ class Pole:
         direction. For non-adjacent bodies, the relative pole may lie
         somewhere in the plane.
 
-    Attributes
+    Parameters
     ----------
     node : Node
         The node associated with the Pole, providing coordinates in the
@@ -48,7 +47,7 @@ class Pole:
         Indicates whether the Pole is at infinity, corresponding to a
         translational motion.
 
-    Properties
+    Attributes
     ----------
     x : float or None
         X-coordinate of the Pole if `same_location=True`, else None.
@@ -161,7 +160,7 @@ class Chain:
     motions. Chains can be used to determine Pollinien and relative motion
     vectors in a Poleplan.
 
-    Attributes
+    Parameters
     ----------
     bars : set of Bar
         Set of bars that belong to this chain. Must contain at least one
@@ -182,7 +181,7 @@ class Chain:
     _angle : float, default=0
         Current rotation angle of the chain.
 
-    Properties
+    Attributes
     ----------
     solved : bool
         True if the chain is fully solved (all poles known or chain stiff).
@@ -504,8 +503,7 @@ class Poleplan(LoggerMixin):
     constructs all necessary poles and polelines to describe relative and
     absolute motions of the rigid subsystems.
 
-    Construction Procedure
-    ----------------------
+    **Construction Procedure:**
     The creation of a Poleplan is performed in several steps [1]_:
 
     1. Identification and naming of all chains (Scheiben) in the system.
@@ -523,7 +521,7 @@ class Poleplan(LoggerMixin):
        or parts of it are kinematically rigid. If no contradictions exist, the
        system can be considered movable.
 
-    Attributes
+    Parameters
     ----------
     system : System
         The structural system being analyzed.
@@ -539,7 +537,7 @@ class Poleplan(LoggerMixin):
     _node_to_multiple_chains : dict, optional
         Cached mapping of nodes that belong to more than one chain.
 
-    Properties
+    Attributes
     ----------
     node_to_chains : dict
         Mapping of nodes to chains containing them. Setter validates input
