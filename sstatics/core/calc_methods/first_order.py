@@ -4,7 +4,7 @@ from typing import Literal
 
 from sstatics.core.preprocessing.system import Bar
 from sstatics.core.solution.solver import Solver
-from sstatics.core.postprocessing import BarStressDistribution
+from sstatics.core.postprocessing.stress import BarStressDistribution
 from sstatics.core.utils import get_differential_equation
 
 
