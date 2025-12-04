@@ -1,6 +1,6 @@
 
 from sstatics.core.calc_methods.static_methods import (
-    RED, KGV, PVK, DMG
+    ReductionTheorem, ForceMethod, PVF, DMG
 )
 from sstatics.core.calc_methods.first_order import FirstOrder
 from sstatics.core.calc_methods.influence_line import InfluenceLine
@@ -10,8 +10,8 @@ __all__ = [
     'DMG',
     'FirstOrder',
     'InfluenceLine',
-    'KGV',
-    'PVK',
-    'RED',
+    'ForceMethod',
+    'PVF',
+    'ReductionTheorem',
     'SecondOrder'
 ]
