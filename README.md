@@ -15,10 +15,11 @@ analysis and influence lines for advanced structural assessment.
 
 ## Getting Started
 
-This section explains how to install sStatics as a Python package so you can 
+This section explains how to install `sStatics` as a Python package so you can 
 use it in your own projects.
+
 Instructions for installing the project for development purposes are 
-provided in the full documentation (link will follow).
+provided in the full documentation [sStatics Documentation](https://sStatics.readthedocs.io/).
 
 ### Prerequisites
 
