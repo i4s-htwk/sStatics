@@ -1,6 +1,6 @@
 
 <div align="center">
-  <img src="doc/source/images/sStatics_Logo.png" alt="logo" width="200">
+  <img src="doc/source/images/sStatics_Logo.png" alt="logo" width="300">
 </div>
 
 `sStatics` is a Python package for the analysis of planar truss structures 
@@ -10,7 +10,7 @@ structural behavior under applied loads. The package supports second-order
 analysis and influence lines for advanced structural assessment.
 
 <div align="center">
-  <img src="doc/source/images/tutorial1.png" alt="logo" width="400">
+  <img src="doc/source/images/tutorial1.png" alt="logo" width="600">
 </div>
 
 ## Getting Started
