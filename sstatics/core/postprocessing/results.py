@@ -1293,9 +1293,11 @@ class RigidBodyDisplacement:
         -------
         :any:`numpy.ndarray`
         A (n, 2) array, where:
+
                 - n is the number of discretization points + 1 (`n_disc` + 1),
                 - Column 0 contains the axial displacement `u(x)`,
                 - Column 1 contains the transverse displacement `w(x)`.
+
             u(x) = deform_disc[:, 0]
             w(x) = deform_disc[:, 1]
         """

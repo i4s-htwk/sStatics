@@ -365,6 +365,7 @@ class SecondOrder(LoggerMixin):
         difference : {'internal_forces', 'bar_deform_list', 'node_deform',
                       'node_support_forces', 'system_support_forces'},
                       default='internal_forces'
+
             Specifies which incremental data field to return when using the
             incremental iteration mode.
 
@@ -380,9 +381,8 @@ class SecondOrder(LoggerMixin):
             If no iterations have been performed yet.
 
         ValueError
-            - If the function is called while the iteration mode is
-            ``cumulative``.
-            - If the requested `difference` type is invalid.
+            If the function is called while the iteration mode is
+            ``cumulative``. If the requested `difference` type is invalid.
 
         IndexError
             If the requested iteration index does not exist.
@@ -1057,7 +1057,7 @@ class SecondOrder(LoggerMixin):
         either:
 
         - matrix-based second-order theory, or
-        - (cumulative / incremental) iterative results,
+        - (cumulative; incremental) iterative results,
 
         and visualizes the selected quantity using
         :class:`ResultGraphic`.
@@ -1069,10 +1069,10 @@ class SecondOrder(LoggerMixin):
             be plotted.
         iteration_index : int, optional
             Required for the iterative approach. Specifies the iteration
-            step.
-            Supports negative indices.
-        kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi'},
-                default='normal'
+            step. Supports negative indices.
+        kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi', \
+                'bending_line'}, default='normal'
+
             Selects the result quantity to display.
         bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
             Mesh used for the graphic bar geometry.
@@ -1094,9 +1094,9 @@ class SecondOrder(LoggerMixin):
 
         Notes
         -----
-            Incremental mode plots incremental quantities (differences
-            between consecutive iterations), whereas cumulative mode
-            displays the absolute state of the structure at that iteration.
+        Incremental mode plots incremental quantities (differences
+        between consecutive iterations), whereas cumulative mode
+        displays the absolute state of the structure at that iteration.
         """
         self._validation_approach_index(approach, iteration_index)
         from sstatics.graphic_objects import ResultGraphic

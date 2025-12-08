@@ -19,6 +19,7 @@ class Pole:
     relative or absolute motion of connected elements.
 
     **Types of Poles**
+
     - Absolute Pole (Hauptpol):
         A fixed point in the plane that does not translate. The associated
         body rotates around this point. Examples include fixed supports or

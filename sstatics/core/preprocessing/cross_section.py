@@ -30,15 +30,15 @@ class CrossSection(LoggerMixin):
 
         Parameters
         ----------
-        mom_of_int : Optional[float], optional
+        mom_of_int : Optional[:any:`float`], optional
             Moment of inertia.
-        area : Optional[float], optional
+        area : Optional[:any:`float`], optional
             Cross-sectional area.
-        height : Optional[float], optional
+        height : Optional[:any:`float`], optional
             Cross-sectional height.
-        width : Optional[float], optional
+        width : Optional[:any:`float`], optional
             Cross-sectional width.
-        shear_cor : Optional[float], optional
+        shear_cor : Optional[:any:`float`], optional
             Shear correction factor (default 1.0).
         geometry : Optional[List[Union[Polygon, CircularSector]]], optional
             List of geometric shapes defining the cross-section.
@@ -241,19 +241,20 @@ class CrossSection(LoggerMixin):
 
     @property
     def mom_of_int(self) -> float:
-        """
-        Returns the moment of inertia of the cross-section.
+        """Returns the moment of inertia of the cross-section.
 
         Returns
         -------
-        float
-            Moment of inertia (Iyy), either from input or calculated.
+        :any:`float`
+            Moment of inertia (:math:`I_{yy}`), either from input or
+            calculated.
 
         Examples
         --------
-        >>> cs = CrossSection(geometry=[Polygon(points=[(0, 0), (2, 0), (2,
-        1), (0, 1), (0, 0)])])
-        >>> I = cs.mom_of_int
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> geo = [Polygon(points=[(0, 0), (2, 0), (2, 1), (0, 1), (0, 0)])]
+        >>> cs = CrossSection(geometry=geo)
+        >>> cs.mom_of_int
         0.16666666666666663
         """
         if self._mom_of_int is not None:
@@ -262,19 +263,19 @@ class CrossSection(LoggerMixin):
 
     @property
     def area(self) -> float:
-        """
-        Returns the cross-sectional area.
+        """Returns the cross-sectional area.
 
         Returns
         -------
-        float
+        :any:`float`
             Cross-sectional area.
 
         Examples
         --------
-        >>> cs = CrossSection(geometry=[Polygon(points=[(0, 0), (2, 0), (2,
-        1),  (0, 1), (0, 0)])])
-        >>> A = cs.area
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> geo = [Polygon(points=[(0, 0), (2, 0), (2, 1),  (0, 1), (0, 0)])]
+        >>> cs = CrossSection(geometry=geo)
+        >>> cs.area
         2.0
         """
         if self._area is not None:
@@ -288,7 +289,7 @@ class CrossSection(LoggerMixin):
 
         Returns
         -------
-        float
+        :any:`float`
             Cross-section height.
 
         Notes
@@ -297,9 +298,10 @@ class CrossSection(LoggerMixin):
 
         Examples
         --------
-        >>> cs = CrossSection(geometry=[Polygon(points=[(0, 0), (2, 0), (2,
-        1),  (0, 1), (0, 0)])])
-        >>> h = cs.height
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> geo = [Polygon(points=[(0, 0), (2, 0), (2, 1),  (0, 1), (0, 0)])]
+        >>> cs = CrossSection(geometry=geo)
+        >>> cs.height
         1.0
         """
         if self._height is not None:
@@ -308,12 +310,11 @@ class CrossSection(LoggerMixin):
 
     @property
     def width(self) -> float:
-        """
-        Returns the width of the cross-section.
+        """Returns the width of the cross-section.
 
         Returns
         -------
-        float
+        :any:`float`
             Cross-section width.
 
         Notes
@@ -322,9 +323,10 @@ class CrossSection(LoggerMixin):
 
         Examples
         --------
-        >>> cs = CrossSection(geometry=[Polygon(points=[(0, 0), (2, 0), (2,
-        1),  (0, 1), (0, 0)])])
-        >>> w = cs.width
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> geo = [Polygon(points=[(0, 0), (2, 0), (2, 1),  (0, 1), (0, 0)])]
+        >>> cs = CrossSection(geometry=geo)
+        >>> cs.width
         2.0
         """
         if self._width is not None:
@@ -333,12 +335,11 @@ class CrossSection(LoggerMixin):
 
     @property
     def shear_cor(self) -> float:
-        """
-        Returns the shear correction factor.
+        """Returns the shear correction factor.
 
         Returns
         -------
-        float
+        :any:`float`
             Shear correction factor (default 1.0).
 
         Notes
@@ -347,9 +348,13 @@ class CrossSection(LoggerMixin):
 
         Examples
         --------
-        >>> cs = CrossSection(mom_of_int=..., area=..., height=...,
-        width=..., shear_cor=0.85)
-        >>> sc = cs.shear_cor
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> I = 0.000405
+        >>> A = 0.054
+        >>> h = 0.3
+        >>> w = 0.18
+        >>> cs = CrossSection(I, A, h, w, shear_cor=0.85)
+        >>> cs.shear_cor
         float(0.85)
         """
         # TODO:...
@@ -357,14 +362,13 @@ class CrossSection(LoggerMixin):
 
     @property
     def static_moment(self) -> tuple:
-        """
-        Returns the static moments (first moments of area) about y and z axes
-        if a geometry is defined.
+        """Returns the static moments (first moments of area) about y and z
+        axes if a geometry is defined.
 
         Returns
         -------
-        tuple of floats
-            (S_y, S_z) static moments.
+        tuple of :any:`floats`
+            (:math:`S_y`, :math:`S_z`) static moments.
 
         Notes
         -----
@@ -372,8 +376,9 @@ class CrossSection(LoggerMixin):
 
         Examples
         --------
-        >>> cs = CrossSection(geometry=[Polygon(points=[(0, 0), (2, 0), (2,
-        1),  (0, 1), (0, 0)])])
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> geo = [Polygon(points=[(0, 0), (2, 0), (2, 1),  (0, 1), (0, 0)])]
+        >>> cs = CrossSection(geometry=geo)
         >>> sz, sy = cs.static_moment
         (np.float64(1.0), np.float64(2.0))
         """
@@ -394,49 +399,48 @@ class CrossSection(LoggerMixin):
 
     @property
     def center_of_mass_y(self) -> float:
-        """
-        Returns the y-coordinate of the centroid of the cross-section.
+        """Returns the y-coordinate of the centroid of the cross-section.
 
         Returns
         -------
-        float
-            Centroid y-coordinate.
+        :any:`float`
+            Centroid y-coordinate (:math:`c_y`).
 
         Examples
         --------
-        >>> cs = CrossSection(geometry=[Polygon(points=[(0, 0), (2, 0), (2,
-        1),  (0, 1), (0, 0)])])
-        >>> cy = cs.center_of_mass_y
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> geo = [Polygon(points=[(0, 0), (2, 0), (2, 1),  (0, 1), (0, 0)])]
+        >>> cs = CrossSection(geometry=geo)
+        >>> cs.center_of_mass_y
         1
         """
         return self.static_moment[1] / self.area
 
     @property
     def center_of_mass_z(self) -> float:
-        """
-        Returns the z-coordinate of the centroid of the cross-section.
+        """Returns the z-coordinate of the centroid of the cross-section.
 
         Returns
         -------
-        float
-            Centroid z-coordinate.
+        :any:`float`
+            Centroid z-coordinate (:math:`c_z`).
 
         Examples
         --------
-        >>> cs = CrossSection(geometry=[Polygon(points=[(0, 0), (2, 0), (2,
-        1),  (0, 1), (0, 0)])])
-        >>> cz = cs.center_of_mass_z
+        >>> from sstatics.core.preprocessing.cross_section import CrossSection
+        >>> geo = [Polygon(points=[(0, 0), (2, 0), (2, 1),  (0, 1), (0, 0)])]
+        >>> cs = CrossSection(geometry=geo)
+        >>> cs.center_of_mass_z
         0.5
         """
         return self.static_moment[0] / self.area
 
     def _calc_area(self) -> float:
-        """
-        Calculates the total cross-sectional area from geometry.
+        """Calculates the total cross-sectional area from geometry.
 
         Returns
         -------
-        float
+        :any:`float`
             Cross-sectional area.
         """
         area = 0.0
@@ -449,13 +453,12 @@ class CrossSection(LoggerMixin):
         return area
 
     def _mom_of_int_polygon(self) -> float:
-        """
-        Calculates moment of inertia of polygonal parts including centroid
+        """Calculates moment of inertia of polygonal parts including centroid
         offset correction.
 
         Returns
         -------
-        float
+        :any:`float`
             Polygon moment of inertia.
         """
         if self.polygon:
@@ -466,13 +469,12 @@ class CrossSection(LoggerMixin):
         return 0.0
 
     def _mom_of_int_circular_sectors(self) -> float:
-        """
-        Calculates moment of inertia of circular sectors including centroid
+        """Calculates moment of inertia of circular sectors including centroid
         offset correction.
 
         Returns
         -------
-        float
+        :any:`float`
             Circular sectors moment of inertia.
         """
         if self.circular_sector:
@@ -488,24 +490,22 @@ class CrossSection(LoggerMixin):
         return 0
 
     def _calc_mom_of_int(self) -> float:
-        """
-        Calculates total moment of inertia from all geometry components.
+        """Calculates total moment of inertia from all geometry components.
 
         Returns
         -------
-        float
+        :any:`float`
             Total moment of inertia.
         """
         return self._mom_of_int_polygon() + self._mom_of_int_circular_sectors()
 
     def boundary(self):
-        """
-        Determines the overall geometric boundaries of the cross-section in
+        """Determines the overall geometric boundaries of the cross-section in
         both the y- and z-directions.
 
         Returns
         -------
-        tuple of list of float
+        tuple of list of :any:`float`
             ([y_min, y_max], [z_min, z_max]) representing the horizontal and
             vertical extents of the cross-section.
 
@@ -543,24 +543,22 @@ class CrossSection(LoggerMixin):
                 [min(z_vals), max(z_vals)])
 
     def _calc_width(self) -> float:
-        """
-        Calculates the total width of the cross-section in the y-direction.
+        """Calculates the total width of the cross-section in the y-direction.
 
         Returns
         -------
-        float
+        :any:`float`
             The horizontal extent (width) of the entire cross-section.
         """
         yb, _ = self.boundary()
         return yb[1] - yb[0]
 
     def _calc_height(self) -> float:
-        """
-        Calculates the total height of the cross-section in the z-direction.
+        """Calculates the total height of the cross-section in the z-direction.
 
         Returns
         -------
-        float
+        :any:`float`
             The vertical extent (height) of the entire cross-section.
         """
         _, zb = self.boundary()

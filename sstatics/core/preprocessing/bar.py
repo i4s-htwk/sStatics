@@ -60,16 +60,11 @@ class Bar:
         There has to be at least one deformation component.
     ValueError
         Valid deformation keywords are "moment", "normal" and "shear".
-    More discription...
     """
-    """ TODO """
-
     node_i: Node
     node_j: Node
     cross_section: CrossSection
     material: Material
-    # TODO: what if all hinges are set to True? Problem for calculations or
-    # TODO: representation?
     hinge_u_i: bool = False
     hinge_w_i: bool = False
     hinge_phi_i: bool = False
@@ -87,13 +82,11 @@ class Bar:
         tuple[BarPointLoad, ...] | list[BarPointLoad] | BarPointLoad
     ) = ()
 
-    # TODO: other validations? validate hinges
     def __post_init__(self):
         if self.node_i.same_location(self.node_j):
             raise ValueError(
                 'node_i and node_j need to have different locations.'
             )
-        # TODO: find a solution for this edge case
         if len(self.deformations) == 0:
             raise ValueError('There has to be at least one deformation.')
         if isinstance(self.line_loads, BarLineLoad):
@@ -191,9 +184,7 @@ class Bar:
             np.hstack((np.zeros((3, 3)), transformation_matrix(alpha_j))),
         ))
 
-    # is this correct?
     def same_location(self, other):
-        """ TODO """
         a = (
             self.node_i.same_location(other.node_i) and
             self.node_j.same_location(other.node_j)
@@ -1024,6 +1015,64 @@ class Bar:
 
 @dataclass(eq=False)
 class BarSecond(Bar):
+    """Create a bar for a statical system for the second order matrix approach.
+
+         Parameters
+        ----------
+        node_i : :any:`Node`
+            Node at the start of the bar.
+        node_j : :any:`Node`
+            Node at the end of the bar.
+        cross_section : :any:`CrossSection`
+            Cross-sectional properties of the bar.
+        material : :any:`Material`
+            Material properties of the bar.
+        hinge_u_i : :any:`bool`, default=False
+            Normal hinge at the start of the bar.
+        hinge_w_i : :any:`bool`, default=False
+            Shear hinge at the start of the bar.
+        hinge_phi_i : :any:`bool`, default=False
+            Moment hinge at the start of the bar.
+        hinge_u_j : :any:`bool`, default=False
+            Normal hinge at the end of the bar.
+        hinge_w_j : :any:`bool`, default=False
+            Shear hinge at the end of the bar.
+        hinge_phi_j : :any:`bool`, default=False
+            Moment hinge at the end of the bar.
+        deformations : :any:`tuple` | :any:`list`, default=('moment', 'normal')
+            Deformation components considered in the calculation.
+            Valid options: "moment", "normal", "shear".
+        line_loads : :any:`tuple` | :any:`list`, default=()
+            Distributed loads acting on the bar.
+        temp : :any:`BarTemp`, default=(BarTemp(0, 0))
+            Temperature loads acting on the bar.
+        point_loads : :any:`tuple` | :any:`list`, default=()
+            Point loads acting on the bar.
+        approach : {'analytic', 'taylor', 'p_delta'}, default='analytic'
+            Selects the second-order formulation for the modified stiffness:
+
+            - ``'analytic'``
+              Closed-form exact geometric stiffness
+              effects.
+            - ``'p_delta'``
+              P–Δ geometric stiffness formulation.
+            - ``'taylor'``
+              Taylor-series expansion
+
+        f_axial : :any`float`, default=0
+            The axial force (:math:`L`) applied to the beam element, which is
+            obtained from the internal force results of the first-order theory.
+
+        Raises
+        ------
+        ValueError
+            :py:attr:`node_i` and :py:attr:`node_j` need to have different
+            locations.
+        ValueError
+            There has to be at least one deformation component.
+        ValueError
+            Valid deformation keywords are "moment", "normal" and "shear".
+        """
 
     approach: Literal['analytic', 'taylor', 'p_delta'] = 'analytic'
     f_axial: float = 0
@@ -1044,7 +1093,7 @@ class BarSecond(Bar):
 
         Notes
         -----
-            The modified flexural stiffness is calculated a:
+            The modified flexural stiffness is calculated [1] :
 
             .. math::
                 B_s = EI \cdot ( 1 + \dfrac{L}{GA_s})
@@ -1077,7 +1126,7 @@ class BarSecond(Bar):
 
         See Also
         --------
-        :py:attr:`stiffness_second_order_analytic`
+        :py:attr:`stiffness_matrix_analytic`
         :py:attr:`f0_line_analytic`
 
         Notes
@@ -1095,6 +1144,26 @@ class BarSecond(Bar):
 
     @property
     def f0_line(self):
+        """Calculates the internal forces due to external line loads related to
+        the local bar coordinate system.
+
+
+        This method computes the load vector associated with external line
+        loads and adjusts it according to the selected second-order analysis
+        approach.
+        If a second-order method is selected but the axial force ``f_axial`` is
+        zero, the modified stiffness terms cannot be evaluated and the load
+        vector from first-order theory is returned instead.
+
+        If the selected analysis approach requires ``f_axial`` but it is
+        undefined or set to zero, the method falls back to the first-order load
+        vector, since second-order effects cannot be computed in that case.
+
+         Returns
+        -------
+        :any:`numpy.array`
+            6x1 vector of the internal forces due to external loads
+        """
         if self.approach == 'analytic' and not np.isclose(self.f_axial, 0):
             return self.f0_line_analytic
         elif self.approach == 'taylor' and not np.isclose(self.f_axial, 0):
@@ -1116,10 +1185,6 @@ class BarSecond(Bar):
         :any:`numpy.array`
             6x1 vector of the internal forces due to external loads for the
             analytical solution of the second-order theory.
-
-        See Also
-        --------
-        :py:attr:`averaged_longitudinal_force`
 
         Notes
         -----
@@ -1366,10 +1431,6 @@ class BarSecond(Bar):
             6x1 vector of the internal forces due to external loads for the
             Taylor series expansion of the second-order theory.
 
-        See Also
-        --------
-        :py:attr:`averaged_longitudinal_force`
-
         Notes
         -----
             The application of continuous element loads can generate full
@@ -1494,10 +1555,6 @@ class BarSecond(Bar):
             matrix according to second-order theory for a shear-flexible and
             bending-flexible beam under constant negative or positive axial
             force.
-
-        See Also
-        --------
-        :py:attr:`averaged_longitudinal_force`
 
         Notes
         -----
@@ -1655,10 +1712,6 @@ class BarSecond(Bar):
             bending-flexible beam under constant negative or positive axial
             force.
 
-        See Also
-        --------
-        :py:attr:`averaged_longitudinal_force`
-
         Notes
         -----
             The correction function are calculated by the following equations:
@@ -1795,6 +1848,70 @@ class BarSecond(Bar):
             self,
             hinge_modification: bool = True, to_node_coord: bool = True,
     ):
+        r"""Return the modified element stiffness matrix :math:`k'` of the beam
+        element.
+
+        This method constructs the element stiffness matrix that relates nodal
+        displacements and rotations to the corresponding internal forces at the
+        element ends. Depending on the chosen analysis approach, the matrix may
+        include shear flexibility effects, second-order (P–Δ) modifications
+        and hinge adjustments.
+
+        Parameters
+        ----------
+        hinge_modification : bool, default=True
+            If ``True``, the stiffness matrix is adjusted to account for hinges
+            at one or both ends of the element.
+        to_node_coord : bool, default=True
+            If ``True``, the stiffness matrix is transformed from the local bar
+            coordinate system into the global nodal coordinate system.
+
+        Returns
+        -------
+        numpy.ndarray
+            The ``6×6`` modified element stiffness matrix.
+
+        See Also
+        --------
+        :py:attr:`stiffness_shear_force`
+        :py:attr:`stiffness_matrix_analytic`
+        :py:attr:`stiffness_matrix_taylor`
+        :py:attr:`stiffness_matrix_p_delta`
+
+        Notes
+        -----
+        The element stiffness matrix is symmetric and depends on the order of
+        calculation and the applied approach. If the beam is shear-flexible,
+        the shear component is included in the matrix.
+
+        The general form of the element stiffness matrix :math:`k^{'}` for a
+        shear-rigid beam is:
+
+        .. math::
+            k^{'} =
+            \left[\begin{array}{rrr|rrr}
+            \dfrac{EA}{\ell} & 0 & 0 & -\dfrac{EA}{\ell} & 0 & 0 \\
+            0 & \dfrac{12EI}{\ell^3} & -\dfrac{6EI}{\ell^2} & 0
+            & -\dfrac{12EI}{\ell^3} & -\dfrac{6EI}{\ell^2} \\
+            0 & -\dfrac{6EI}{\ell^2} & \dfrac{4EI}{\ell} & 0
+            & \dfrac{6EI}{\ell^2} & \dfrac{2EI}{\ell} \\  \hline
+            -\dfrac{EA}{\ell} & 0 & 0 & \dfrac{EA}{\ell} & 0 & 0 \\
+            0 & -\dfrac{12EI}{\ell^3} & \dfrac{6EI}{\ell^2} & 0
+            & \dfrac{12EI}{\ell^3} & \dfrac{6EI}{\ell^2} \\
+            0 & -\dfrac{6EI}{\ell^2} & \dfrac{2EI}{\ell} & 0
+            & \dfrac{6EI}{\ell^2} & \dfrac{4EI}{\ell} \\
+            \end{array}\right]
+
+        For second-order theory, the modified stiffness contributions are
+        applied element-wise to this general form.
+
+        If hinges are present in the beam, it is necessary to modify the
+        stiffness matrix to account for discontinuities in deformations at
+        hinge locations.
+
+        Finally, the stiffness matrix may be transformed into the nodal
+        coordinate system if required.
+        """
         if np.isclose(self.f_axial, 0):
             return super().stiffness_matrix(
                 hinge_modification=hinge_modification,

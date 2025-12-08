@@ -206,8 +206,8 @@ class Polygon:
     @property
     def static_moment(self) -> Tuple[np.float64, np.float64]:
         r"""
-        Computes the static moments \( S_z \) and \( S_y \) with respect to the
-        coordinate axes.
+        Computes the static moments :math:`S_z` and :math:`S_y` with respect to
+        the coordinate axes.
 
         Returns
         -------
@@ -219,20 +219,19 @@ class Polygon:
             The static moments (also called first moments of area) are used
             to compute the centroid of the polygon.
 
-        .. math::
+            .. math::
+                S_z = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)
+                (z_i + z_{i-1})
 
-            S_z = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)(z_i + z_{i-1})
+            .. math::
+                S_y = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)
+                (y_i + y_{i-1})
 
-        .. math::
+            These are discrete approximations of the first moments:
 
-            S_y = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)(y_i + y_{i-1})
-
-        These are discrete approximations of the first moments:
-
-        .. math::
-
-            S_z = \int_A z \, \mathrm{d}A, \quad
-            S_y = \int_A y \, \mathrm{d}A
+            .. math::
+                S_z = \int_A z \, \mathrm{d}A, \quad
+                S_y = \int_A y \, \mathrm{d}A
 
         Examples
         --------
@@ -1050,17 +1049,17 @@ class CircularSector:
         return z_boundary[1] - z_boundary[0]
 
     def boundary(self):
-        r"""
-        Computes the minimum and maximum boundaries of the circular
+        r"""Computes the minimum and maximum boundaries of the circular
         sector in both the y- and z-directions.
 
         Returns
         -------
         tuple of list of float or np.float64
             A tuple containing two lists:
-            - The first list is [y_min, y_max], representing the
+
+            - The first list is ``[y_min, y_max]``, representing the
               horizontal extent.
-            - The second list is [z_min, z_max], representing the
+            - The second list is ``[z_min, z_max]``, representing the
               vertical extent.
 
         Notes
@@ -1075,7 +1074,7 @@ class CircularSector:
           end points of the circle sector).
 
         The method checks whether those extreme values within the angular range
-        of the circular sector using `_angle_in_sector`, and includes them if
+        of the circular sector using ``_angle_in_sector``, and includes them if
         applicable. This ensures the correct bounding box even for partial
         sectors that span multiple quadrants.
 
@@ -1084,8 +1083,7 @@ class CircularSector:
 
         Examples
         --------
-        >>> from sstatics.core.preprocessing.geometry.objects import
-        >>>     (CircularSector)
+        >>> from sstatics.core.preprocessing.geometry import CircularSector
         >>> import numpy as np
         >>> c = CircularSector(center = (0,0), radius = 1, angle = np.pi/2,
         >>>                    start_angle = np.pi/4, positive = True
