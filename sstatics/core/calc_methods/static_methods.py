@@ -55,6 +55,7 @@ class PVF(LoggerMixin):
     debug: bool = False
 
     __virt_system: System = field(init=False, default=None)
+    _equation_of_work: EquationOfWork = field(init=False, default=None)
 
     def __post_init__(self):
         """Initializes helper objects required for PVF operations.
@@ -302,6 +303,69 @@ class PVF(LoggerMixin):
                           "the system with real loads.")
         return solution
 
+    def _create_equation_of_work(self):
+        """
+        Create the ``EquationOfWork`` instance safely.
+
+        This method instantiates ``EquationOfWork`` once and provides full
+        error handling. It logs the creation attempt and reports detailed
+        error messages if invalid input, runtime issues, or unexpected
+        exceptions occur.
+
+        Returns
+        -------
+        EquationOfWork
+            The created ``EquationOfWork`` instance.
+
+        Raises
+        ------
+        ValueError
+            If the provided solution data is invalid.
+        RuntimeError
+            If a runtime or unexpected error occurs during creation.
+        """
+        try:
+            self.logger.info("Creating EquationOfWork...")
+            eq = EquationOfWork(
+                solution_i=self.solution_real_system,
+                solution_j=self.solution_virtual_system,
+                debug=self.debug
+            )
+            self.logger.info("EquationOfWork successfully created.")
+            return eq
+
+        except ValueError as e:
+            msg = f"Invalid data while creating EquationOfWork: {e}"
+            self.logger.error(msg)
+            raise ValueError(msg) from e
+
+        except RuntimeError as e:
+            msg = f"Runtime error during EquationOfWork creation: {e}"
+            self.logger.error(msg)
+            raise RuntimeError(msg) from e
+
+        except Exception as e:
+            msg = f"Unexpected error in EquationOfWork: {e}"
+            self.logger.error(msg)
+            raise RuntimeError(msg) from e
+
+    @property
+    def equation_of_work(self):
+        """
+        EquationOfWork
+
+        Returns the cached ``EquationOfWork`` instance. If it has not been
+        created yet, it is instantiated on first access.
+
+        Returns
+        -------
+        EquationOfWork
+            The lazily created and cached ``EquationOfWork`` instance.
+        """
+        if self._equation_of_work is None:
+            self._equation_of_work = self._create_equation_of_work()
+        return self._equation_of_work
+
     def deformation(self):
         """Performs the calculation using the Principle of Virtual Forces.
 
@@ -318,12 +382,163 @@ class PVF(LoggerMixin):
             "Passing the system with real loads and the system with virtual "
             "loads to the EquationOfWork class."
         )
-        deformation = EquationOfWork(
-            self.solution_real_system,
-            self.solution_virtual_system).delta_ij
+
+        deformation = self.equation_of_work.delta_ij
 
         self.logger.debug(f"Computed deformation value: {deformation}")
         return deformation
+
+    @property
+    def work_matrix_nodes(self):
+        """
+        ndarray
+
+        Returns the work matrix for all nodes. The matrix is obtained from
+        the lazily created ``EquationOfWork`` instance. Each row contains
+        the work contributions associated with a specific node.
+
+        Returns
+        -------
+        ndarray
+            Matrix of nodal work values.
+        """
+        return self.equation_of_work.work_matrix_nodes
+
+    @property
+    def work_matrix_bars(self):
+        """
+        ndarray
+
+        Returns the work matrix for all bars. The matrix is provided by the
+        ``EquationOfWork`` instance and contains work contributions for each
+        bar or mesh segment.
+
+        Returns
+        -------
+        ndarray
+            Matrix of bar work values.
+        """
+        return self.equation_of_work.work_matrix_bars
+
+    def work_of_bar(self, bar, sum: bool = True):
+        """
+        Return the work row(s) associated with a bar.
+
+        If the bar corresponds directly to a single mesh segment, its work
+        row is returned. If the bar consists of multiple mesh segments, the
+        corresponding rows are stacked. When ``sum`` is True, the stacked
+        rows are summed to produce a single work vector.
+
+        Parameters
+        ----------
+        bar : Bar
+            The bar for which the work values are requested.
+        sum : bool, optional
+            If True, the segment rows are summed into a single vector.
+            If False, all rows are returned. Default is True.
+
+        Returns
+        -------
+        ndarray
+            Either a single work row or a matrix of stacked rows.
+
+        Raises
+        ------
+        ValueError
+            If the bar has no associated mesh segments or a segment is
+            missing in ``system.mesh``.
+        """
+
+        mesh = self.system.mesh
+        wm = self.work_matrix_bars
+
+        # --- Case 1: single mesh segment ------------------------------------
+        try:
+            idx = mesh.index(bar)
+            self.logger.debug(
+                f"Bar {bar} is a single mesh segment (index {idx}).")
+            return wm[idx]
+        except ValueError:
+            self.logger.debug(
+                f"[work_of_bar] Bar {bar} is not a single mesh segment "
+                "→ checking composed segments.")
+
+        # --- Case 2: composed of multiple mesh segments ---------------------
+        segments = self.system.mesh_segments_of(bar)
+
+        if not segments:
+            msg = f"Bar {bar} has no mesh segments associated."
+            self.logger.error(msg)
+            raise ValueError(msg)
+
+        self.logger.debug(
+            f"Bar {bar} consists of {len(segments)} "
+            f"mesh segments: {segments}"
+        )
+
+        # Collect rows (first 5 entries each)
+        rows = []
+        for seg in segments:
+            try:
+                idx = mesh.index(seg)
+            except ValueError:
+                self.logger.error(
+                    f"Segment {seg} not found in system.mesh.")
+                raise
+
+            rows.append(wm[idx][:5])
+            self.logger.debug(
+                f"Segment {seg} → row index {idx}")
+
+        rows = np.vstack(rows)
+
+        if sum:
+            self.logger.debug(
+                f"Summing {len(segments)} rows for "
+                f"bar {bar}: result = {rows.sum(axis=0)}"
+            )
+            return rows.sum(axis=0)
+
+        self.logger.debug(
+            "Returning full row matrix for the given bar "
+            f"with shape {rows.shape}"
+        )
+        return rows
+
+    def work_of_node(self, node):
+        """
+        Return the work row for a node.
+
+        The method retrieves the row from the nodal work matrix associated
+        with the given node. A descriptive error is raised if the node is
+        not part of the system.
+
+        Parameters
+        ----------
+        node : Node
+            The node whose work row is requested.
+
+        Returns
+        -------
+        ndarray
+            The work row belonging to the given node.
+
+        Raises
+        ------
+        ValueError
+            If the node is not contained in the system.
+        """
+        nodes = self.system.nodes()
+
+        try:
+            idx = nodes.index(node)
+        except ValueError:
+            msg = f"Node {node} not found in system."
+            self.logger.error(msg)
+            raise ValueError(msg)
+
+        self.logger.debug(f"Node {node} → index {idx}")
+        return self.work_matrix_nodes[idx]
 
     def plot(
             self, mode: Literal['real', 'virt'] = 'real',
