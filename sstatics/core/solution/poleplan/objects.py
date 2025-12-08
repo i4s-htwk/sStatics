@@ -18,8 +18,7 @@ class Pole:
     can rotate. Depending on its type and position, it defines the
     relative or absolute motion of connected elements.
 
-    Types of Poles
-    ---------------
+    **Types of Poles**
     - Absolute Pole (Hauptpol):
         A fixed point in the plane that does not translate. The associated
         body rotates around this point. Examples include fixed supports or
@@ -33,7 +32,7 @@ class Pole:
         direction. For non-adjacent bodies, the relative pole may lie
         somewhere in the plane.
 
-    Attributes
+    Parameters
     ----------
     node : Node
         The node associated with the Pole, providing coordinates in the
@@ -48,7 +47,7 @@ class Pole:
         Indicates whether the Pole is at infinity, corresponding to a
         translational motion.
 
-    Properties
+    Attributes
     ----------
     x : float or None
         X-coordinate of the Pole if `same_location=True`, else None.
@@ -161,7 +160,7 @@ class Chain:
     motions. Chains can be used to determine Pollinien and relative motion
     vectors in a Poleplan.
 
-    Attributes
+    Parameters
     ----------
     bars : set of Bar
         Set of bars that belong to this chain. Must contain at least one
@@ -182,7 +181,7 @@ class Chain:
     _angle : float, default=0
         Current rotation angle of the chain.
 
-    Properties
+    Attributes
     ----------
     solved : bool
         True if the chain is fully solved (all poles known or chain stiff).
@@ -504,8 +503,7 @@ class Poleplan(LoggerMixin):
     constructs all necessary poles and polelines to describe relative and
     absolute motions of the rigid subsystems.
 
-    Construction Procedure
-    ---------------------
+    **Construction Procedure:**
     The creation of a Poleplan is performed in several steps [1]_:
 
     1. Identification and naming of all chains (Scheiben) in the system.
@@ -523,7 +521,7 @@ class Poleplan(LoggerMixin):
        or parts of it are kinematically rigid. If no contradictions exist, the
        system can be considered movable.
 
-    Attributes
+    Parameters
     ----------
     system : System
         The structural system being analyzed.
@@ -539,7 +537,7 @@ class Poleplan(LoggerMixin):
     _node_to_multiple_chains : dict, optional
         Cached mapping of nodes that belong to more than one chain.
 
-    Properties
+    Attributes
     ----------
     node_to_chains : dict
         Mapping of nodes to chains containing them. Setter validates input
@@ -692,14 +690,21 @@ class Poleplan(LoggerMixin):
         filtered = {k: v for k, v in conn.items() if len(v) > 1}
         return filtered
 
-    def set_angle(self, target_chain=None, target_angle: float = 1) -> None:
+    def set_angle(self, chain_idx: int = 0, angle: float = 1) -> None:
         """
         Adjust the angle of ``target_chain`` to ``target_angle``.
         """
-        if target_chain is None:
-            target_chain = self.chains[0]
         self.logger.info(
-            f"Setting angle for chain \n {target_chain} to {target_angle}"
+            f"Starting to set target chain at index {chain_idx} "
+            f"to angle {angle}")
+        if chain_idx >= len(self.chains) or chain_idx < 0:
+            self.logger.error(
+                f"Chain index {chain_idx} is out of range. "
+                f"Valid indices: 0 to {len(self.chains) - 1}")
+            raise IndexError(f"Chain index {chain_idx} is not in self.chains")
+        target_chain = self.chains[chain_idx]
+        self.logger.info(
+            f"Setting angle for chain index: {chain_idx} to {angle}"
         )
         from sstatics.core.solution.poleplan.operation import \
             AngleCalculator
@@ -708,7 +713,7 @@ class Poleplan(LoggerMixin):
             angle_calculator = AngleCalculator(
                 self.chains, self.node_to_multiple_chains, self.debug
             )
-            angle_calculator.calculate_angles(target_chain, target_angle)
+            angle_calculator.calculate_angles(target_chain, angle)
             self.logger.debug("Angle calculation completed")
             self._set_angle = True
         except Exception as exc:
@@ -747,6 +752,42 @@ class Poleplan(LoggerMixin):
 
             self.logger.debug("Displacement figure created")
             return rbd_objects
+        except Exception as exc:
+            self.logger.error(
+                f"Displacement calculation failed: {exc}",
+                exc_info=True,
+            )
+            raise
+
+    def fig(self, n_disc: int = 2):
+        """
+        Return a list of Rigid Body Displacement Objects. They can use for
+        plotting.
+        """
+        self.logger.info("Generating displacement vector for each bar")
+        from sstatics.core.solution.poleplan.operation import (
+            DisplacementCalculator,
+        )
+        from sstatics.core.postprocessing.results import RigidBodyDisplacement
+        try:
+            fig = DisplacementCalculator(
+                self.chains, self.system.bars, self.node_to_multiple_chains,
+                debug=self.debug
+            )()
+            self.logger.info("Generating for each bar a "
+                             "rigid-body-displacement-object for plotting.")
+            # creating rigid-body-displacement-object for plotting
+            rbd_objects = []
+            for i, bar in enumerate(self.system.bars):
+                rdb = RigidBodyDisplacement(
+                    bar=bar,
+                    deform=fig[i],
+                    n_disc=n_disc
+                )
+                rbd_objects.append(rdb)
+
+            self.logger.debug("Displacement figure created")
+            return fig
         except Exception as exc:
             self.logger.error(
                 f"Displacement calculation failed: {exc}",

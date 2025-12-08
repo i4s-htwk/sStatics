@@ -17,8 +17,8 @@ class ResultGraphic(SingleGraphicObject):
     def __init__(
             self, system_result: SystemResult,
             kind: (
-                Literal['normal', 'shear', 'moment', 'u', 'w', 'phi']
-            ) = 'normal',
+                Literal['normal', 'shear', 'moment', 'u', 'w', 'phi',
+                        'bending_line']) = 'normal',
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
             result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
             decimals: int | None = None, sig_digits: int | None = None,
@@ -82,10 +82,11 @@ class SystemResultGraphic(SingleGraphicObject):
             raise TypeError(
                 '"system_result" has to be an instance of SystemResult'
             )
-        if kind not in ('normal', 'shear', 'moment', 'u', 'w', 'phi'):
+        if kind not in ('normal', 'shear', 'moment', 'u', 'w', 'phi',
+                        'bending_line'):
             raise ValueError(
                 '"kind" must be one of: '
-                '"normal", "shear", "moment", "u", "w", "phi"'
+                '"normal", "shear", "moment", "u", "w", "phi", "bending_line"'
             )
         if mesh_type not in {'bars', 'user_mesh', 'mesh'}:
             raise ValueError(
@@ -99,14 +100,36 @@ class SystemResultGraphic(SingleGraphicObject):
         self.system_result = system_result
         self.kind = kind
         self.base_scale = base_scale
-        self._bar_result_graphic = [
-            BarResultGraphic(
-                bar_result, self.select_result[i], decimals, sig_digits,
-                self._base_scale, self.max_value, rotation=self.rotation,
-                scale=self.scale, scatter_options=self.scatter_kwargs,
-                annotation_options=self.annotation_kwargs
-            ) for i, bar_result in enumerate(self.system_result.bars)
-        ]
+        if kind == 'bending_line':
+            self._bar_result_graphic = []
+
+            from sstatics.core.postprocessing.bending_line import (
+                BendingLine)
+            dgl_list = self.system_result.bars
+            gb = BendingLine(dgl_list)
+
+            for x, z in gb.deformed_lines():
+
+                points = [(float(xi), float(zi)) for xi, zi in zip(x, z)]
+
+                self._bar_result_graphic.append(
+                    LineGraphic.from_points(
+                        points,
+                        scatter_options=self.scatter_kwargs | {
+                            'line': dict(width=4),
+                            'line_color': 'red'
+                        }
+                    )
+                )
+        else:
+            self._bar_result_graphic = [
+                BarResultGraphic(
+                    bar_result, self.select_result[i], decimals, sig_digits,
+                    self._base_scale, self.max_value, rotation=self.rotation,
+                    scale=self.scale, scatter_options=self.scatter_kwargs,
+                    annotation_options=self.annotation_kwargs
+                ) for i, bar_result in enumerate(self.system_result.bars)
+            ]
 
     @cached_property
     def _base_scale(self):

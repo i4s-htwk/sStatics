@@ -13,11 +13,10 @@ from sstatics.core.preprocessing.loads import (
 )
 from sstatics.core.preprocessing.temperature import BarTemp
 from sstatics.core.utils import transformation_matrix
-from sstatics.core.logger_mixin import LoggerMixin
 
 
 @dataclass(eq=False)
-class Bar(LoggerMixin):
+class Bar:
     """Create a bar for a statical system.
 
      Parameters
@@ -87,7 +86,6 @@ class Bar(LoggerMixin):
     point_loads: (
         tuple[BarPointLoad, ...] | list[BarPointLoad] | BarPointLoad
     ) = ()
-    debug: bool = False
 
     # TODO: other validations? validate hinges
     def __post_init__(self):
@@ -1097,9 +1095,9 @@ class BarSecond(Bar):
 
     @property
     def f0_line(self):
-        if self.approach == 'analytic':
+        if self.approach == 'analytic' and not np.isclose(self.f_axial, 0):
             return self.f0_line_analytic
-        elif self.approach == 'taylor':
+        elif self.approach == 'taylor' and not np.isclose(self.f_axial, 0):
             return self.f0_line_taylor
         return super().f0_line
 
@@ -1797,6 +1795,12 @@ class BarSecond(Bar):
             self,
             hinge_modification: bool = True, to_node_coord: bool = True,
     ):
+        if np.isclose(self.f_axial, 0):
+            return super().stiffness_matrix(
+                hinge_modification=hinge_modification,
+                to_node_coord=to_node_coord
+            )
+
         EI_l = self.EI / self.length
         EI_l2 = EI_l / self.length
         k = np.array([

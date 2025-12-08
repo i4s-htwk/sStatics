@@ -1,12 +1,12 @@
 
+from dataclasses import dataclass
+from functools import cached_property
+from typing import Literal
+
 import numpy as np
 
-from sstatics.core.preprocessing import CrossSection
-from sstatics.core.preprocessing.geometry import Polygon
-
-from sstatics.core.postprocessing import BarResult
-
-from typing import Literal
+from sstatics.core.preprocessing import CrossSection, Bar, Polygon
+from sstatics.core.postprocessing import DifferentialEquation
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon as MplPolygon
@@ -30,24 +30,6 @@ def plot_cross_section_with_shear_stress(cs, z_values, tau_values, title,
         patch = MplPolygon(points, closed=True, facecolor='lightgray',
                            edgecolor='black', alpha=0.8)
         ax_geo.add_patch(patch)
-
-        # --- Pfeil und V_z Text ---
-
-    # yb, zb = cs.boundary()
-    # w = (yb[0] - yb[1]) / 2
-    #
-    # ax_geo.arrow(-w, zb[0] - 10, 0, 9, head_width=0.7,
-    #              head_length=0.5,
-    #              fc='blue', ec='blue')
-    #
-    # ax_geo.text(
-    #     -w + 0.5,
-    #     zb[0] - 6,
-    #     f"V_z = {v_z:.2f}",  # Text mit 2 Nachkommastellen
-    #     color='blue',
-    #     fontsize=12,
-    #     weight='bold'
-    # )
 
     ax_geo.set_aspect('equal', 'box')
     ax_geo.set_xlabel("y")
@@ -90,29 +72,6 @@ def plot_cross_section_with_shear_stress(cs, z_values, tau_values, title,
     ax_tau.text(tau_values[-1] * 1.1, z_values[-1], f"{tau_values[-1]:.4f}",
                 color='red', fontsize=10, va='bottom')
 
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_line(x_values, z_values, title="Stress Distribution",
-              xlabel="Bar Length", ylabel="Stress", color="blue"):
-    """
-    Plot a line given x and z values using matplotlib.
-
-    Parameters:
-        x_values (list or array): x-coordinates (e.g., position along the bar)
-        z_values (list or array): z-coordinates (e.g., stress values)
-        title (str): Plot title
-        xlabel (str): Label for x-axis
-        ylabel (str): Label for y-axis
-        color (str): Line color
-    """
-    plt.figure(figsize=(8, 5))
-    plt.plot(x_values, z_values, marker='o', linestyle='-', color=color)
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.grid(True)
     plt.tight_layout()
     plt.show()
 
@@ -626,186 +585,212 @@ class CrossSectionStress:
         )
 
 
+@dataclass
 class BarStressDistribution:
-    """
-    Compute stress distribution along a beam using solutions to its
-    differential equations.
+    r"""
+    Assemble and evaluate the beam differential equation and compute stresses.
 
-    This class calculates normal, shear, and bending stress distributions
-    along a beam by combining the results from the differential equation
-    solution for beam bending with local cross-section stress calculations.
+    This class constructs the differential equation of the deflection curve
+    (bending line) for a given bar using the bar geometry, deformations and
+    internal force vector. The differential equation is discretized into
+    `n_disc` segments and evaluated at the corresponding `n_disc + 1`
+    positions along the bar. The discretized internal force result
+    (`force_disc`) returned by the differential equation solution is then
+    used to compute section stresses at each evaluation point using
+    `CrossSectionStress`.
 
     Parameters
     ----------
-    bar : Bar
-        Bar object with cross-section properties and geometry
-    deform : Deformation
-        Deformation parameters for the beam analysis
-    force : Force
-        Applied force parameters for the beam analysis
-    disc : array-like
-        Discretization parameters (array indices) defining the analysis points
+    bar : :any:`Bar`
+        The bar for which the differential equation and stress distribution
+        are computed.
+    deform : :any:`numpy.ndarray`
+        Deformation vector of the bar (shape (6, 1)). These are the nodal
+        deformation values from the structural solution used to assemble the
+        differential equation.
+    force : :any:`numpy.ndarray`
+        Internal force vector of the bar (shape (6, 1)). These are the
+        nodal/internal forces from the structural solution.
+    n_disc : int, default=10
+        Number of discretization segments along the bar (number of evaluation
+        points = n_disc + 1). The differential equation is evaluated at these
+        points.
 
-    Attributes
-    ----------
-    bar : Bar
-        Bar object containing cross-section properties
-    deform : Deformation
-        Deformation parameters used in the analysis
-    force : Force
-        Force parameters applied to the beam
-    disc : array-like
-        Discretization points along the beam
-    internal_forces : ndarray
-        Array of internal forces at discretization points computed from
-        solving the differential equations of beam bending
-    cross_section_stress : CrossSectionStress
-        Calculator for cross-section stresses based on internal forces
-    _stress_map : dict
-        Mapping of stress types to their corresponding calculation parameters
+    Raises
+    ------
+    ValueError
+        If `deform` or `force` does not have shape (6, 1), or if `n_disc < 1`.
 
     Examples
     --------
-    >>> from sstatics.core.preprocessing import (Bar, System, Material, Node,
-    ... CrossSection, BarLineLoad)
-    >>> from sstatics.core.solution import FirstOrder
-    >>> from sstatics.core.postprocessing import BarStressDistribution
-    >>> # First, set up and solve the structural system
-    >>> n1 = Node(0, 0, u='fixed', w='fixed')
-    >>> n2 = Node(4, 0, w='fixed')
-    >>> mat = Material(210_000_000, 0.1, 81_000_000, 0.1)
-    >>> geometry = [
-    ...     Polygon([(0, 0), (30, 0), (30, 3), (0, 3), (0, 0)]),
-    ...     Polygon([(14, 3), (16, 3), (16, 43), (14, 43), (14, 3)])
-    ... ]
-    >>> cs = CrossSection(geometry=geometry)
-    >>> line_load = BarLineLoad(1, 1)
-    >>> b1 = Bar(n1, n2, cs, mat, line_loads=line_load)
-    >>> system = System([b1])
-    >>> solution = FirstOrder(system)
-    >>>
-    >>> # Then create stress distribution calculator
-    >>> stressbar = BarStressDistribution(
-    ...     bar=b1,
-    ...     deform=solution.bar_deform_list[0],
-    ...     force=solution.internal_forces[0],
-    ...     disc=10
-    ... )
-    >>>
-    >>> # Calculate stress at discretization points
-    >>> normal_stresses = stressbar.compute('normal')
-    >>> shear_stresses = stressbar.compute('shear', z=0.5)
-    >>> bending_stresses = stressbar.compute('bending')
-
+    >>> from sstatics.core.preprocessing import
+    ...     (Bar, Node, CrossSection, Material)
+    >>> # assume system solved and `bar`, `deform`, `force` are available
+    >>> stress_dist = BarStressDistribution(bar, deform, force, n_disc=10)
+    >>> stress_dist.x.shape
+    (11, 1)
+    >>> stress_disc = stress_dist.stress_disc
+    >>> stress_disc.shape
+    (11, 4)
+    >>> stress_at_mid = stress_dist.stress_at_z(0.05)
+    >>> stress_at_mid.shape
+    (11, 3)
     """
+    bar: Bar
+    deform: np.ndarray
+    force: np.ndarray
+    n_disc: int = 10
 
-    def __init__(self, bar, deform, force, disc):
+    def __post_init__(self):
+        if self.deform.shape != (6, 1):
+            raise ValueError('"deform" must have shape (6, 1).')
+        if self.force.shape != (6, 1):
+            raise ValueError('"force" must have shape (6, 1).')
+        if self.n_disc < 1:
+            raise ValueError('"n_disc" has to be greater than 0')
+
+        self._dgl = DifferentialEquation(
+            bar=self.bar,
+            deform=self.deform,
+            forces=self.force,
+            n_disc=self.n_disc
+        )
+        self._cs_stress = CrossSectionStress(self.bar.cross_section)
+
+    @cached_property
+    def x(self):
         """
-        Initialize the stress distribution calculator for a beam.
-
-        Parameters
-        ----------
-        bar : Bar
-            Bar object with cross-section properties
-        deform : Deformation
-            Deformation parameters for the beam analysis
-        force : Force
-            Applied force parameters for the beam analysis
-        disc : array-like
-            Discretization parameters (array indices) defining the analysis
-            points
-
-        Notes
-        -----
-        The 'internal_forces' attribute contains the results from solving the
-        differential equations of beam bending, which provide the internal
-        forces (normal force, shear force, bending moment) at each
-        discretization point along the beam. This attribute replaces the
-        previous objects that contained only this essential data.
-        """
-        self.bar = bar
-        self.deform = deform
-        self.force = force
-        self.disc = disc
-
-        # Compute internal forces at discretization points using beam theory
-        # This solves the differential equation for beam bending
-        self._beam_solver = BarResult(bar, deform, force, disc)
-        self.internal_forces = self._beam_solver.forces_disc
-
-        # Initialize cross-section stress calculator
-        self.cross_section_stress = CrossSectionStress(bar.cross_section)
-
-        # Mapping of stress types to their calculation parameters
-        # Each entry contains:
-        # - column index in the internal_forces array
-        # - corresponding stress calculation function
-        # - argument name for the force value in the stress function
-        self._stress_map = {
-            "normal":  (0, self.cross_section_stress.normal_stress, "n"),
-            "shear":   (1, self.cross_section_stress.shear_stress, "v_z"),
-            "bending": (2, self.cross_section_stress.bending_stress, "m_yy"),
-        }
-
-    def compute(self,
-                stress_type: Literal['normal', 'shear', 'bending'],
-                **kwargs
-                ):
-        """
-        Compute stress of the specified type along the beam.
-
-        This method calculates the stress distribution along the beam by
-        applying the appropriate cross-section stress calculation at each
-        discretization point based on the internal forces from beam theory.
-
-        Parameters
-        ----------
-        stress_type : {'normal', 'shear', 'bending'}
-            Type of stress to compute:
-            - 'normal': Axial normal stress from normal force
-            - 'shear': Transverse shear stress from shear force
-            - 'bending': Bending stress from bending moment
-        **kwargs : dict
-            Additional parameters to pass to the stress calculation function.
-            Common parameters include:
-            - z : float, optional
-                Vertical coordinate for shear stress calculation
-                (defaults to center of mass if not specified)
+        Discretized positions along the bar length.
 
         Returns
         -------
-        list of float
-            Stress values at each discretization point along the beam.
-            The list has the same length as the number of discretization
-            points.
+        :any:`numpy.ndarray`
+            Array of shape (n_disc + 1,) containing positions along the bar
+            from 0 to bar length.
 
-        Raises
-        ------
-        ValueError
-            If an invalid stress type is provided.
+        Examples
+        --------
+        >>> from sstatics.core.preprocessing import
+        ...     (Bar, Node, CrossSection, Material)
+        >>> bar = Bar(...)
+        >>> deform = np.zeros((6, 1))
+        >>> force = np.zeros((6, 1))
+        >>> stress_dist = BarStressDistribution(bar, deform, force, n_disc=10)
+        >>> stress_dist.x
+        array([0.0, 0.1, 0.2, ..., bar.length])
         """
-        # Validate the requested stress type
-        if stress_type not in self._stress_map:
-            raise ValueError(
-                f"Unknown stress type: {stress_type}. "
-                f"Available: {list(self._stress_map.keys())}")
+        return self._dgl.x
 
-        # Get the mapping parameters for the specified stress type
-        component_index, stress_func, arg_name = self._stress_map[stress_type]
+    @cached_property
+    def force_disc(self):
+        """
+        Discretized internal forces along the bar.
 
-        # Extract the internal force component at each discretization point
-        forces = self.internal_forces[:, component_index]
+        Returns
+        -------
+        :any:`numpy.ndarray`
+            Array of shape (n_disc + 1, 3) where columns correspond to:
+            0 → axial force N
+            1 → shear force V
+            2 → bending moment M
 
-        # Compute stresses at all discretization points
-        results = []
-        for i in range(len(forces)):
-            # Prepare parameters for the stress calculation function
-            params = {arg_name: forces[i], **kwargs}
-            # Calculate stress at this discretization point
-            results.append(stress_func(**params))
+        Examples
+        --------
+        >>> from sstatics.core.preprocessing import
+        ...     (Bar, Node, CrossSection, Material)
+        >>> bar = Bar(...)
+        >>> deform = np.zeros((6, 1))
+        >>> force = np.zeros((6, 1))
+        >>> stress_dist = BarStressDistribution(bar, deform, force, n_disc=10)
+        >>> forces = stress_dist.internal_forces
+        >>> forces[:, 0]  # axial forces
+        """
+        return self._dgl.forces_disc
 
-        return results
+    @cached_property
+    def stress_disc(self):
+        """
+        Stress distribution at the extreme fibers (top and bottom) along the
+        bar.
 
-    def plot(self, kind, **kwargs):
-        plot_line(self._beam_solver.x,
-                  self.compute(stress_type=kind, **kwargs))
+        Returns
+        -------
+        :any:`numpy.ndarray`
+            Array of shape (n_disc + 1, 4) where columns correspond to:
+            0 → normal stress σ_normal
+            1 → shear stress τ_shear
+            2 → bending stress σ_bending at bottom fiber
+            3 → bending stress σ_bending at top fiber
+
+        Notes
+        -----
+        Uses the cross-section boundary coordinates to compute bending stresses
+        at top and bottom fibers.
+
+        Examples
+        --------
+        >>> from sstatics.core.preprocessing import
+        ...     (Bar, Node, CrossSection, Material)
+        >>> bar = Bar(...)
+        >>> deform = np.zeros((6, 1))
+        >>> force = np.zeros((6, 1))
+        >>> stress_dist = BarStressDistribution(bar, deform, force, n_disc=10)
+        >>> sigma = stress_dist.stress_disc
+        >>> sigma.shape
+        (11, 4)
+        >>> sigma[:, 2]  # bending stress at bottom fiber
+        """
+        f_x, f_z, f_m = self.force_disc.T
+        n_points = len(f_x)
+        sigma_matrix = np.zeros((n_points, 4))
+        _, zb = self.bar.cross_section.boundary()
+
+        for i in range(n_points):
+            sigma_matrix[i] = [
+                self._cs_stress.normal_stress(n=f_x[i]),
+                self._cs_stress.shear_stress(v_z=f_z[i]),
+                self._cs_stress.bending_stress(m_yy=f_m[i], z=zb[0]),
+                self._cs_stress.bending_stress(m_yy=f_m[i], z=zb[1])
+            ]
+        return sigma_matrix
+
+    def stress_at_z(self, z: float):
+        """
+        Stress distribution at a specified height `z` along the cross-section.
+
+        Parameters
+        ----------
+        z : float
+            Height in the local z-direction where stresses are evaluated.
+
+        Returns
+        -------
+        :any:`numpy.ndarray`
+            Array of shape (n_disc + 1, 3) where columns correspond to:
+            0 → normal stress σ_normal
+            1 → shear stress τ_shear
+            2 → bending stress σ_bending
+
+        Examples
+        --------
+        >>> from sstatics.core.preprocessing import
+        ...     (Bar, Node, CrossSection, Material)
+        >>> bar = Bar(...)
+        >>> deform = np.zeros((6, 1))
+        >>> force = np.zeros((6, 1))
+        >>> stress_dist = BarStressDistribution(bar, deform, force, n_disc=10)
+        >>> sigma_mid = stress_dist.stress_at_z(0.05)
+        >>> sigma_mid.shape
+        (11, 3)
+        >>> sigma_mid[:, 0]  # normal stress at z = 0.05
+        """
+        f_x, f_z, f_m = self.force_disc.T
+        n_points = len(f_x)
+        sigma_matrix = np.zeros((n_points, 3))
+        for i in range(n_points):
+            sigma_matrix[i] = [
+                self._cs_stress.normal_stress(n=f_x[i]),
+                self._cs_stress.shear_stress(v_z=f_z[i], z=z),
+                self._cs_stress.bending_stress(m_yy=f_m[i], z=z)
+            ]
+        return sigma_matrix

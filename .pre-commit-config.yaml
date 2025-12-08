@@ -1,0 +1,29 @@
+repos:
+  # Unit Tests
+  - repo: local
+    hooks:
+      - id: unittest
+        name: Run python -m sstatics test
+        language: system
+        entry: python -m sstatics test
+        pass_filenames: false
+
+  # Pylint
+  - repo: local
+    hooks:
+      - id: pylint
+        name: pylint
+        language: python
+        entry: pylint
+        args: [sstatics]
+        pass_filenames: false
+
+  # Flake8
+  - repo: local
+    hooks:
+      - id: flake8
+        name: flake8
+        language: python
+        entry: flake8
+        args: [sstatics]
+        pass_filenames: false

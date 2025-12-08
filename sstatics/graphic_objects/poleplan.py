@@ -12,7 +12,7 @@ from sstatics.graphic_objects.bar import BarGraphic
 from sstatics.graphic_objects.geometry import (LineGraphic, PointGraphic,
                                                EllipseGraphic)
 
-from sstatics.graphic_objects import BarResultGraphic
+# from sstatics.graphic_objects import BarResultGraphic
 
 
 class PoleplanGraphic(SingleGraphicObject):
@@ -35,10 +35,17 @@ class PoleplanGraphic(SingleGraphicObject):
         self.nodes = poleplan.system.nodes()
 
         self.chains = poleplan.chains
+        # num_chains = len(self.chains)
+        # colors = px.colors.sample_colorscale(
+        #     'Viridis', [i / (num_chains - 1) for i in range(num_chains)]
+        # )
         num_chains = len(self.chains)
-        colors = px.colors.sample_colorscale(
-            'Viridis', [i / (num_chains - 1) for i in range(num_chains)]
-        )
+        if num_chains == 1:
+            fractions = [0.5]  # mittlere Farbe
+        else:
+            fractions = [i / (num_chains - 1) for i in range(num_chains)]
+
+        colors = px.colors.sample_colorscale('Viridis', fractions)
 
         self._apole_lines = []
         self._chains = []
@@ -99,38 +106,40 @@ class PoleplanGraphic(SingleGraphicObject):
         # TODO: displacement_figure in eigene Klasse DisplacementGraphic
         #  auslagern
         # deform = poleplan.get_displacement_figure()
+        import numpy as np
+        deform = poleplan.fig()
 
-        self._displacement_figure = [
-            BarResultGraphic(
-                bar_result, bar_result.deform_disc[:, 1],
-                self._base_scale, rotation=self.rotation,
-                scale=self.scale, scatter_options=self.scatter_kwargs,
-                annotation_options=self.annotation_kwargs
-            ) for i, bar_result in enumerate(poleplan.rigid_motion())
-        ]
+        # self._displacement_figure = [
+        #     BarResultGraphic(
+        #         bar_result, bar_result.deform_disc[:, 1],
+        #         self._base_scale, rotation=self.rotation,
+        #         scale=self.scale, scatter_options=self.scatter_kwargs,
+        #         annotation_options=self.annotation_kwargs
+        #     ) for i, bar_result in enumerate(poleplan.rigid_motion())
+        # ]
 
-        # self._displacement_figure = []
-        #
-        # for idx, bar in enumerate(self.bars):
-        #     deform_vals = np.dot(
-        #         bar.transformation_matrix(to_node_coord=False), deform[idx])
-        #
-        #     points = [
-        #         [bar.node_i.x + float(deform_vals[0]),
-        #          bar.node_i.z + float(deform_vals[1])],
-        #         [bar.node_j.x + float(deform_vals[3]),
-        #          bar.node_j.z + float(deform_vals[4])]
-        #     ]
-        #
-        #     self._displacement_figure.append(
-        #         LineGraphic.from_points(
-        #             points,
-        #             scatter_options=self.scatter_kwargs | {
-        #                 'line': dict(width=4),
-        #                 'line_color': 'red'
-        #             }
-        #         )
-        #     )
+        self._displacement_figure = []
+
+        for idx, bar in enumerate(self.bars):
+            deform_vals = np.dot(
+                bar.transformation_matrix(to_node_coord=False), deform[idx])
+
+            points = [
+                [bar.node_i.x + float(deform_vals[0]),
+                 bar.node_i.z + float(deform_vals[1])],
+                [bar.node_j.x + float(deform_vals[3]),
+                 bar.node_j.z + float(deform_vals[4])]
+            ]
+
+            self._displacement_figure.append(
+                LineGraphic.from_points(
+                    points,
+                    scatter_options=self.scatter_kwargs | {
+                        'line': dict(width=4),
+                        'line_color': 'red'
+                    }
+                )
+            )
 
     @cached_property
     def _base_scale(self):

@@ -49,7 +49,6 @@ DEFAULT_CIRCLE_TEXT = dict(
         size=27,
         line=dict(color='black', width=2)
     ),
-    # prevered_pos='1,1',
     **DEFAULT
 )
 

@@ -571,6 +571,9 @@ class PoleIdentifier(LoggerMixin):
     node_to_chains: Dict[Node, List[Chain]]
     debug: bool = False
 
+    def __post_init__(self):
+        self.logger.debug("PoleIdentifier object successfully instantiated.")
+
     def run(self):
         """
         Iterate over all chains and resolve absolute poles.
@@ -823,6 +826,9 @@ class Validator(LoggerMixin):
     debug: bool = False
 
     _solved: Optional[bool] = field(init=False, default=False)
+
+    def __post_init__(self):
+        self.logger.debug("Validator object successfully instantiated.")
 
     @property
     def solved(self) -> bool:
@@ -1126,6 +1132,9 @@ class AngleCalculator(LoggerMixin):
     node_to_chains: Dict[Node, List[Chain]]
     debug: bool = False
 
+    def __post_init__(self):
+        self.logger.debug("AngleCalculator object successfully instantiated.")
+
     def calculate_angles(self, target_chain: Chain,
                          target_angle: float) -> None:
         """
@@ -1359,6 +1368,10 @@ class DisplacementCalculator(LoggerMixin):
     bars: List[Bar]
     node_to_chains: Dict[Node, List[Chain]]
     debug: bool = False
+
+    def __post_init__(self):
+        self.logger.debug("DisplacementCalculator object successfully "
+                          "instantiated.")
 
     def run(self) -> List[np.ndarray]:
         """

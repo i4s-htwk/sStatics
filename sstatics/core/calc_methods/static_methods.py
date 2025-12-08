@@ -15,6 +15,7 @@ from sstatics.core.preprocessing.modifier import SystemModifier
 from sstatics.core.preprocessing.node import Node
 from sstatics.core.preprocessing.system import System
 from sstatics.core.solution import Solver
+from sstatics.core.utils import get_differential_equation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -99,7 +100,8 @@ class PVK:
         self.modifier.modify_bar_force_vir(obj, force, position=position,
                                            virt_force=virt_force)
 
-    def _get_result(self, system: System):
+    @staticmethod
+    def _get_result(system: System):
         """Computes the results for a given structural system.
 
         Parameters
@@ -159,6 +161,29 @@ class PVK:
         s1 = self._get_result(self.system)
         s2 = self._get_result(self.modifier.system)
         return EquationOfWork(s1, s2).log_work_contributions(decimals=decimals)
+
+    def differential_equation(
+            self, mode: Literal['real', 'virt'] = 'real',
+            bar_index: int | None = None, n_disc: int = 10
+    ):
+        if mode not in ['real', 'virt']:
+            raise ValueError(
+                f'Mode has to be either "real" or "virt".'
+                f'Got {mode} instead.'
+            )
+        self.modifier.system.create_mesh(
+            self.modifier.division_positions_mesh())
+        self.system.create_mesh(self.modifier.memory_bar_point_load)
+        if mode == 'real':
+            solver_real = Solver(self.system)
+            return get_differential_equation(
+                self.system, solver_real.bar_deform_list,
+                solver_real.internal_forces, bar_index, n_disc)
+        else:
+            solver_virt = Solver(self.modifier.system)
+            return get_differential_equation(
+                self.modifier.system, solver_virt.bar_deform_list,
+                solver_virt.internal_forces, bar_index, n_disc)
 
 
 class RED(PVK):
@@ -335,6 +360,35 @@ class RED(PVK):
         s1 = self._get_result(self.system)
         s2 = self._get_result(self.modifier.system)
         return EquationOfWork(s1, s2).log_work_contributions(decimals=decimals)
+
+    def differential_equation(
+            self, mode: Literal['real', 'virt', 'released'] = 'real',
+            bar_index: int | None = None, n_disc: int = 10
+    ):
+        if mode not in ['real', 'virt', 'released']:
+            raise ValueError(
+                f'Mode has to be either "real", "virt" or "released".'
+                f'Got {mode} instead.'
+            )
+        self._validate_system_ready()
+        self.modifier.system.create_mesh(
+            self.modifier.division_positions_mesh())
+        self.system.create_mesh(self.modifier.memory_bar_point_load)
+        if mode == 'real':
+            solver_real = Solver(self.system)
+            return get_differential_equation(
+                self.system, solver_real.bar_deform_list,
+                solver_real.internal_forces, bar_index, n_disc)
+        elif mode == 'released':
+            solver_released = Solver(self.released_modifier)
+            return get_differential_equation(
+                self.released_modifier, solver_released.bar_deform_list,
+                solver_released.internal_forces, bar_index, n_disc)
+        else:
+            solver_virt = Solver(self.modifier.system)
+            return get_differential_equation(
+                self.modifier.system, solver_virt.bar_deform_list,
+                solver_virt.internal_forces, bar_index, n_disc)
 
 
 class KGV(RED):
@@ -586,6 +640,47 @@ class KGV(RED):
         )
 
         logger.info("Linear system of equations (A x = b):\n%s", table)
+
+    def differential_equation(
+            self, mode: Literal['real', 'uls', 'rls'] = 'real',
+            uls_index: int | None = None,
+            bar_index: int | None = None, n_disc: int = 10
+    ):
+        if mode not in ['real', 'uls', 'rls']:
+            raise ValueError(
+                f'Mode has to be either "real", "uls" or "rls".'
+                f'Got {mode} instead.'
+            )
+        if mode in ['real', 'rls'] and uls_index is not None:
+            raise ValueError(
+                f'If the mode is set to "real" or "rls", the '
+                f'uls_index has to be set to None. Got mode: {mode} and'
+                f'uls_index: {uls_index} instead.'
+            )
+        if mode == 'uls' and uls_index is None:
+            raise ValueError(
+                f'If the mode is set to "uls", the index can not be None.'
+                f'Got mode: {mode} and index: {uls_index} instead.'
+            )
+        self._validate_system_ready()
+        self.modifier.system.create_mesh(
+            self.modifier.division_positions_mesh())
+        self.system.create_mesh(self.modifier.memory_bar_point_load)
+        if mode == 'real':
+            solver_real = Solver(self.system)
+            return get_differential_equation(
+                self.system, solver_real.bar_deform_list,
+                solver_real.internal_forces, bar_index, n_disc)
+        elif mode == 'rls':
+            solver_rls = Solver(self._get_rls_system())
+            return get_differential_equation(
+                self._get_rls_system(), solver_rls.bar_deform_list,
+                solver_rls.internal_forces, bar_index, n_disc)
+        else:
+            solver_uls = Solver(self._get_uls_systems()[uls_index])
+            return get_differential_equation(
+                self._get_uls_systems()[uls_index], solver_uls.bar_deform_list,
+                solver_uls.internal_forces, bar_index, n_disc)
 
 
 class DMG(KGV):

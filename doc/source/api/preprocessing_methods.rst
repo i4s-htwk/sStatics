@@ -12,7 +12,5 @@ PREPROCESSING METHODS
 .. automodule:: sstatics.core.preprocessing.node
 .. automodule:: sstatics.core.preprocessing.system
 .. automodule:: sstatics.core.preprocessing.temperature
-.. automodule:: sstatics.core.preprocessing.poleplan.objects
-.. automodule:: sstatics.core.preprocessing.poleplan.operation
 .. automodule:: sstatics.core.preprocessing.geometry.objects
 .. automodule:: sstatics.core.preprocessing.geometry.operation

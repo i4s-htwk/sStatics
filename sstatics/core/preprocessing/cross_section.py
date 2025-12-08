@@ -8,11 +8,13 @@ from sstatics.core.preprocessing.geometry.objects import (
 from sstatics.core.preprocessing.geometry.operation import (
     PolygonMerge, SectorToPolygonHandler
 )
+from sstatics.core.logger_mixin import LoggerMixin
 
 
 @dataclass(eq=False)
-class CrossSection:
+class CrossSection(LoggerMixin):
 
+    # noinspection PyMissingConstructor
     def __init__(
         self,
         mom_of_int: Optional[float] = None,
@@ -20,7 +22,8 @@ class CrossSection:
         height: Optional[float] = None,
         width: Optional[float] = None,
         shear_cor: Optional[float] = None,
-        geometry: Optional[List[Union[Polygon, CircularSector]]] = None
+        geometry: Optional[List[Union[Polygon, CircularSector]]] = None,
+        debug: bool = False
     ):
         r"""Initializes a CrossSection either by geometry or mechanical
         properties.
@@ -57,43 +60,86 @@ class CrossSection:
         >>> cs = CrossSection(mom_of_int=1.5, area=2.0, height=0.3,
         >>>                     width=0.1,  shear_cor=0.9)
         """
+        self.debug = debug
+        self.logger.debug("Starting CrossSection initialization.")
         mechanics_given = all(x is not None for x in
                               (mom_of_int, area, height, width, shear_cor))
         geometry_given = bool(geometry)
 
-        if geometry_given and mechanics_given:
-            raise ValueError(
-                "Either define geometry OR mechanical properties, not both.")
-        if not geometry_given and not mechanics_given:
-            raise ValueError(
-                "Either geometry or mechanical properties must be given.")
+        self.logger.debug(
+            f"Mechanics provided: {mechanics_given}, "
+            f"Geometry provided: {geometry_given}"
+        )
 
+        # ---- Validation -----------------------------------------------------
+        if geometry_given and mechanics_given:
+            self.logger.error(
+                "Both geometry and mechanical properties provided."
+            )
+            raise ValueError(
+                "Either define geometry OR mechanical properties, not both."
+            )
+
+        if not geometry_given and not mechanics_given:
+            self.logger.error(
+                "Neither geometry nor mechanical properties provided."
+            )
+            raise ValueError(
+                "Either geometry or mechanical properties must be given."
+            )
+
+        # ---- Mechanical properties path -------------------------------------
         self._mom_of_int = mom_of_int
         self._area = area
         self._height = height
         self._width = width
-        # TODO: is this default value correct?
         self._shear_cor = shear_cor if shear_cor is not None else 1.0
 
         if mechanics_given:
+            self.logger.debug(
+                f"Validating mechanical properties: "
+                f"I={self._mom_of_int}, A={self._area}, "
+                f"h={self._height}, w={self._width}, k={self._shear_cor}"
+            )
+
             if self._mom_of_int <= 0:
+                self.logger.error("Invalid moment of inertia.")
                 raise ValueError("mom_of_int must be > 0.")
             if self._area <= 0:
+                self.logger.error("Invalid area.")
                 raise ValueError("area must be > 0.")
             if self._height <= 0:
+                self.logger.error("Invalid height.")
                 raise ValueError("height must be > 0.")
             if self._width <= 0:
+                self.logger.error("Invalid width.")
                 raise ValueError("width must be > 0.")
             if self._shear_cor <= 0:
+                self.logger.error("Invalid shear correction factor.")
                 raise ValueError("shear_cor must be > 0.")
             if self._area > self._height * self._width:
-                raise ValueError(f"area must be ≤ height × width = "
-                                 f"{self._height * self._width}")
+                self.logger.error(
+                    f"Area larger than height × width "
+                    f"({self._height * self._width})."
+                )
+                raise ValueError(
+                    f"area must be ≤ height × width = "
+                    f"{self._height * self._width}"
+                )
+
+            self.logger.info(
+                "CrossSection initialized using mechanical properties."
+            )
+
             self.polygon = None
             self.circular_sector = None
         else:
+            # ---- Geometry path ----------------------------------------------
             self.geometry = geometry
+            self.logger.debug("Initializing CrossSection from geometry...")
             self._process_geometry()
+            self.logger.info(
+                "CrossSection successfully created from geometry.")
 
     def _process_geometry(self):
         """
@@ -113,36 +159,85 @@ class CrossSection:
         Circular sectors that overlap with polygons are converted
         internally to polygons for computation purposes.
         """
+        self.logger.debug(
+            "Processing geometry: separating polygons and circular sectors..."
+        )
         poly = [e for e in self.geometry if isinstance(e, Polygon)]
         circ = [e for e in self.geometry if isinstance(e, CircularSector)]
 
+        self.logger.debug(
+            f"Found {len(poly)} polygons and {len(circ)} circular sectors."
+        )
+
+        # Convert circular sectors that overlap with polygons
         if circ:
-            poly, circ = SectorToPolygonHandler(poly, circ)()
+            self.logger.debug("Checking circular sector overlaps...")
+            poly, circ = SectorToPolygonHandler(
+                poly, circ, debug=self.debug
+            )()
+            self.logger.debug(
+                f"After SectorToPolygonHandler: {len(poly)} polygons, "
+                f"{len(circ)} remaining circular sectors."
+            )
 
         self.circular_sector = circ
         self.polygon = poly
 
+        # ---- Validation -----------------------------------------------------
         if not self.polygon:
-            c_positive = 0
-            for c in circ:
-                c_positive += 1 if c.positive else 0
+            c_positive = sum(1 for c in circ if c.positive)
+
+            self.logger.debug(
+                f"No polygon present. Positive circular sectors count: "
+                f"{c_positive}"
+            )
+
             if c_positive == 0:
+                self.logger.error(
+                    "No positive circular sector in geometry."
+                )
                 raise ValueError(
-                    "At least one positive circular sector is required.")
+                    "At least one positive circular sector is required."
+                )
+
+            # Single polygon only
         elif len(poly) == 1 and not self.circular_sector:
+            self.logger.debug("Single polygon geometry.")
             if not poly[0].positive:
+                self.logger.error("Single polygon is negative.")
                 raise ValueError(
                     "A single negative polygon cannot be used as a "
-                    "cross-section.")
+                    "cross-section."
+                )
+
+            self.logger.debug("Single positive polygon accepted.")
             self.polygon = poly[0]
+
+            # Polygon merge case
         elif self.polygon:
+            self.logger.debug(
+                f"Merging polygons: {len(poly)} polygons found."
+            )
             positive = [p for p in poly if p.positive]
             negative = [p for p in poly if not p.positive]
-            self.polygon = PolygonMerge(positive, negative)()
+            self.logger.debug(
+                f"{len(positive)} positive polygons, "
+                f"{len(negative)} negative polygons."
+            )
+
+            self.polygon = PolygonMerge(
+                positive, negative, debug=self.debug
+            )()
+            self.logger.debug("Polygon merge completed.")
+
         else:
-            raise ValueError("This definition of geometry consisting of"
-                             "polygons and circular sectors was not taken"
-                             "into account.")
+            self.logger.error(
+                "Unsupported combination of polygons and circular sectors."
+            )
+            raise ValueError(
+                "This definition of geometry consisting of polygons and "
+                "circular sectors was not taken into account."
+            )
 
     @property
     def mom_of_int(self) -> float:
