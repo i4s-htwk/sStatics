@@ -6,7 +6,9 @@ from .base_renderer import AbstractRenderer
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     PLOTLY, DEFAULT_LAYOUT_X, DEFAULT_LAYOUT_Y,
 )
-from .convert import convert_mpl_to_plotly_layout
+from .convert import (
+    convert_mpl_to_plotly_layout, convert_text_style_for_annotation
+)
 
 
 class PlotlyRenderer(AbstractRenderer):
@@ -52,8 +54,16 @@ class PlotlyRenderer(AbstractRenderer):
     def add_graphic(self, x, z, **style):
         self.figure.add_trace(go.Scatter(x=x, y=z, **style))
 
-    def add_text(self, x, z, text, **style):
-        self.figure.add_trace(go.Scatter(x=[x], y=[z], text=text, **style))
+    def add_text(self, x, z, text, rotation=0, **style):
+        if rotation == 0:
+            self.figure.add_trace(go.Scatter(x=[x], y=[z], text=text, **style))
+        else:
+            ann_style = convert_text_style_for_annotation(style)
+            self.figure.add_annotation(
+                x=x, y=z,
+                text=text if isinstance(text, str) else " ".join(text),
+                textangle=-rotation, **ann_style
+            )
 
     def show(self, *args, **kwargs):
         self.figure.show(renderer='browser', *args, **kwargs)

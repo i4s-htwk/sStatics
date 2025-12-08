@@ -63,9 +63,29 @@ class MplRenderer(AbstractRenderer):
         else:
             self._ax.plot(x, y, **style)
 
-    def add_text(self, x, y, text, **style):
+    def add_text(self, x, y, text, rotation=0, **style):
         style = self._fix_z_order(style)
-        self._ax.text(x, y, *text, **style)
+        if 'marker' in style:
+            self._ax.plot(
+                x, y,
+                marker=style.get('marker', 'o'),
+                markersize=style.get('markersize', 6),
+                markerfacecolor=style.get('markerfacecolor', 'blue'),
+                markeredgecolor=style.get('markeredgecolor', 'black'),
+                markeredgewidth=style.get('markeredgewidth', 1),
+                alpha=style.get('alpha', 1),
+                linestyle=''
+            )
+
+        self._ax.text(
+            x, y, *text,
+            fontsize=style.get('fontsize', 12),
+            fontfamily=style.get('fontfamily', 'Arial'),
+            color=style.get('color', 'black'),
+            ha='center', va='center',
+            rotation=rotation, rotation_mode='anchor',
+            alpha=style.get('alpha', 1)
+        )
 
     def show(self, *args, **kwargs):
         plt.show(*args, **kwargs)

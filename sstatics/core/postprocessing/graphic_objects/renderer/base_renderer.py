@@ -5,7 +5,8 @@ import numpy as np
 
 from .convert import convert_style
 from ..geo.object_geo import ObjectGeo
-from ..utils.defaults import PLOTLY, MPL
+from ..utils.defaults import PLOTLY, MPL, DEFAULT_NUMBER_OF_TEXT_RINGS, \
+    DEFAULT_NUMBER_OF_TEXT_POSITIONS
 
 
 class AbstractRenderer(ABC):
@@ -17,6 +18,7 @@ class AbstractRenderer(ABC):
         self._validate(mode)
         self._mode = mode
         self._all_graphic_elements = []
+        self._placed_text_bboxes = []
         self._scene_boundaries = None  # später automatisch berechnet
         self._scene_scale = None
 
@@ -35,20 +37,29 @@ class AbstractRenderer(ABC):
         self._update_scene_metrics()
 
         for o in obj:
-            for x, z, text, style in self._iter_text_elements(o):
-                x, z = self._find_optimal_text_position(x, z, *text)
+            for (
+                    x, z, text, style, preferred, rotation
+            ) in self._iter_text_elements(o):
+                x, z = self._find_optimal_text_position(
+                    x, z, text, preferred, rotation
+                )
                 style = convert_style(style, self._mode)
-                if self._mode == 'mpl':
-                    self.add_text(x, z, text, **style, ha='center')
-                else:
-                    self.add_text(x, z, text, **style)
+
+                rotation = rotation if rotation else 0
+                self.add_text(x, z, text, np.rad2deg(rotation), **style)
+
+                tw, th = self._estimate_text_bbox(text)
+                self._placed_text_bboxes.append((
+                    x - tw / 2, x + tw / 2,  # xmin, xmax
+                    z - th / 2, z + th / 2  # zmin, zmax
+                ))
 
     @abstractmethod
     def add_graphic(self, x, z, **style):
         pass
 
     @abstractmethod
-    def add_text(self, x, z, text, **style):
+    def add_text(self, x, z, text, rotation, **style):
         pass
 
     @abstractmethod
@@ -79,7 +90,7 @@ class AbstractRenderer(ABC):
         x_min, x_max = min(x_all), max(x_all)
         z_min, z_max = min(z_all), max(z_all)
         self._scene_boundaries = (x_min, x_max, z_min, z_max)
-        self._scene_scale = 0.04 * max(x_max - x_min, 2*(z_max - z_min)) + 0.01
+        self._scene_scale = 0.021 * max(x_max - x_min, 2*(z_max - z_min))
 
     @property
     def scene_boundaries(self):
@@ -108,38 +119,83 @@ class AbstractRenderer(ABC):
 
     def _iter_text_elements(self, obj):
         for element in getattr(obj, 'text_elements', []):
-            if not isinstance(element, tuple) or len(element) != 4:
+            if not (4 <= len(element) <= 6):
                 raise ValueError(
-                    'Each element in text_elements must be a tuple of length '
-                    '4.'
+                    'Each element in text_elements must be a tuple of '
+                    'length 4, 5 or 6.'
                 )
-            x, z, text, style = element
+
+            # unpack gracefully
+            if len(element) == 4:
+                x, z, text, style = element
+                preferred_pos = None
+                rotation = None
+            elif len(element) == 5:
+                x, z, text, style, preferred_pos = element
+                rotation = None
+            else:  # len == 6
+                x, z, text, style, preferred_pos, rotation = element
 
             if text != ['']:
                 x, z = obj.transform(x, z)
-                yield x, z, text, style
+                yield x, z, text, style, preferred_pos, rotation
 
+        # Rekursion bleibt gleich:
         for sub in getattr(obj, 'graphic_elements', []):
-            if hasattr(sub, 'text_elements') or hasattr(
-                    sub, 'graphic_elements'
-            ):
-                for x, z, text, style in self._iter_text_elements(sub):
+            if (hasattr(sub, 'text_elements')
+                    or hasattr(sub, 'graphic_elements')):
+                for (
+                        x, z, text, style, preferred_pos, rotation
+                ) in self._iter_text_elements(sub):
                     x, z = obj.transform(x, z)
-                    yield x, z, text, style
+                    yield x, z, text, style, preferred_pos, rotation
 
-    def _find_optimal_text_position(self, x, z, text):
-        """Berechnet die optimale Textposition nach Transformation."""
-        offset = self.scene_scale
+    def _find_optimal_text_position(self, x, z, text, preferred_pos, rotation):
+        if preferred_pos is not None and preferred_pos.endswith('!'):
+            variable_mode = False
+            preferred_pos = preferred_pos.rstrip("!")
+            n, m = 4, 2
+        else:
+            variable_mode = True
+            n = DEFAULT_NUMBER_OF_TEXT_POSITIONS
+            m = DEFAULT_NUMBER_OF_TEXT_RINGS
+
+        offsets = np.array([(i + 1) * self.scene_scale for i in range(m)])
+        angles = np.linspace(np.pi / 2, -3 / 2 * np.pi, n, endpoint=False)
+        R, A = np.meshgrid(offsets, angles, indexing="ij")
+
+        A_rot = A + (rotation if rotation else 0)
+        x_try = x + R * np.cos(A_rot)
+        z_try = z - R * np.sin(A_rot)
+
+        ring_indices = np.arange(len(offsets))
+        pos_indices = np.arange(len(angles))
+        RI, PI = np.meshgrid(ring_indices, pos_indices, indexing="ij")
+
         positions = [
-            (x, z - offset),
-            (x + offset, z),
-            (x, z + offset),
-            (x - offset, z)
+            (f"{RI.flatten()[i]},{PI.flatten()[i]}",
+             (x_try.flatten()[i], z_try.flatten()[i]))
+            for i in range(n * m)
         ]
-        for x_try, z_try in positions:
+
+        if preferred_pos is not None:
+            try:
+                idx = next(
+                    i for i, p in enumerate(positions) if p[0] == preferred_pos
+                )
+            except StopIteration:
+                raise ValueError('Value for "preferred_pos" is invalid.')
+
+            if not variable_mode:
+                _, (x_force, z_force) = positions[idx]
+                return x_force, z_force
+            positions = positions[idx:] + positions[:idx]
+
+        for pos_code, (x_try, z_try) in positions:
             if not self._text_collision(x_try, z_try, text):
                 return x_try, z_try
-        return positions[0]
+
+        return positions[0][1]
 
     def _estimate_text_bbox(self, text):
         """Schätzt die Text-Bounding-Box basierend auf Textlänge und Szene."""
@@ -166,10 +222,22 @@ class AbstractRenderer(ABC):
                 continue
             for (x0, z0), (x1, z1) in zip(coords[:-1], coords[1:]):
                 # Wenn die Linie das Rechteck schneidet → Kollision
-                if self._line_intersects_rect(x0, z0, x1, z1,
-                                              x_min - margin, x_max + margin,
-                                              z_min - margin, z_max + margin):
+                if self._line_intersects_rect(
+                        x0, z0, x1, z1,
+                        x_min - margin, x_max + margin,
+                        z_min - margin, z_max + margin
+                ):
                     return True
+
+        for (
+                xmin_old, xmax_old, zmin_old, zmax_old
+        ) in self._placed_text_bboxes:
+            if not (
+                    x_max < xmin_old or x_min > xmax_old or
+                    z_max < zmin_old or z_min > zmax_old
+            ):
+                return True
+
         return False
 
     # TODO: Berechnung funktioniert nicht + Flächenberechnung einbauen
