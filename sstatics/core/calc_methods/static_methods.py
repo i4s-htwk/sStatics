@@ -37,6 +37,7 @@ class PVF(LoggerMixin):
     After applying the virtual load, the class constructs:
         - the *virtual system* (with only the virtual load),
         - the *real system* (with the physical loads),
+
     ensures both systems have consistent meshing,
     and computes the displacement using the internal work equation
     (see :any:`EquationOfWork`).
@@ -559,6 +560,7 @@ class PVF(LoggerMixin):
             system with virtual loads should be plotted.
         kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi', \
                 'bending_line'}, default='normal'
+
             Selects the result quantity to display.
         bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
             Mesh used for the graphic bar geometry.
@@ -676,7 +678,7 @@ class ReductionTheorem(PVF):
         Raises
         ------
         ValueError
-            Wenn der Lagertyp nicht erkannt wird.
+            If support type is invalid.
         """
         self.logger.info(
             f"Modify node support: Node={obj}, Support={support}."
@@ -722,7 +724,7 @@ class ReductionTheorem(PVF):
         Raises
         ------
         ValueError
-            Wenn der Gelenktyp nicht erkannt wird.
+            If hinge type is invalid.
         """
         self.logger.info(f"Insert hinge at: Bar={obj}, hinge_type={hinge}.")
 
@@ -972,87 +974,131 @@ class ForceMethod(ReductionTheorem):
 
     @property
     def eow_vector(self):
-        return [
-            EquationOfWork(self.solution_rls_system, uls)
-            for uls in self.solution_uls_systems
-        ]
+        r"""Returns the vector of Equation of Work objects for the real load
+        state.
+
+        For each unit load system (ULS), an :any:`EquationOfWork` instance is
+        created, representing the internal work between the released real load
+        system (RLS) and the respective ULS. This vector forms the basis for
+        computing the load coefficients used in the force method.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            nx1 vector containing one EquationOfWork instance per unit
+            load system. n = number of unit load states
+        """
+        self.logger.info(
+            "Creating EquationOfWork objects for the real load state "
+            "(EOW vector).")
+        vector = np.array(
+            [[EquationOfWork(self.solution_rls_system, uls, debug=self.debug)]
+             for uls in self.solution_uls_systems
+             ], dtype=object)
+        self.logger.debug(
+            f"EOW vector created with {len(vector)} EquationOfWork instances.")
+        return vector
 
     @cached_property
     def eow_matrix(self):
-        return np.array(
-            [[EquationOfWork(uls_i, uls_j)
+        r"""Returns the matrix of Equation of Work objects for all ULS
+        combinations.
+
+        Creates a square matrix where each entry represents the internal work
+        between a pair of unit load systems (ULS). This matrix forms the basis
+        for evaluating the influence coefficients used in the force method.
+
+        Returns
+        -------
+        :any:`numpy.array`
+            Two-dimensional object array containing EquationOfWork instances,
+            with one row and one column per redundant.
+        """
+        self.logger.info(
+            "Creating the EquationOfWork matrix for all ULS combinations.")
+        matrix = np.array(
+            [[EquationOfWork(uls_i, uls_j, debug=self.debug)
               for uls_j in self.solution_uls_systems]
              for uls_i in self.solution_uls_systems],
             dtype=object
         )
+        self.logger.debug(
+            f"EOW matrix created with shape {matrix.shape}.")
+        return matrix
 
     @cached_property
     def load_coef(self):
-        """
-        Calculate the load coefficients for the force method.
+        r"""Calculate the load coefficients for the force method.
 
-        Evaluates the Equation of Work between the released real load
-        system (RLS) and each unit load system (ULS). The resulting
-        coefficients form the right-hand side vector of the force method
-        equation system.
+        Evaluates the value :math:`\delta_{i}` from each EquationOfWork object
+        of the real load state with a unit load state. The resulting vector
+        forms the right-hand side of the linear system in the force method.
 
         Returns
         -------
         :any:`numpy.array`
-            One-dimensional array of preliminary coefficients, with one
-            entry per redundant.
+            Column vector (n×1) of floating-point load coefficients.
         """
-        return np.array(
-            [[eow.delta_ij] for eow in self.eow_vector],
+        self.logger.info("Calculating load coefficients (δᵢ vector).")
+        coef = np.array(
+            [[eow[0].delta_ij] for eow in self.eow_vector],
             dtype=float
         )
-
-    def load_coef_test(self):
-        return np.array(
-            [[eow.delta_ij] for eow in self.eow_vector],
-            dtype=float
-        )
+        self.logger.debug(
+            f"Load coefficient vector created with shape {coef.shape}.")
+        return coef
 
     @cached_property
     def influence_coef(self):
-        """Calculate the influence number matrix for the force method.
+        r"""Calculate the influence number matrix for the force method.
 
-        Evaluates the Equation of Work between all combinations of unit
-        load systems (ULS). The resulting square matrix contains the
-        coefficients that represent the coupling between redundants.
-        This matrix is used as the system matrix in the force method.
+        Converts the EquationOfWork matrix into its numerical form by
+        evaluating :math:`\delta_{ij}` for each entry. The resulting square
+        matrix represents the coupling between redundants and forms the
+        stiffness-like system matrix of the force method.
 
         Returns
         -------
         :any:`numpy.array`
-            Two-dimensional square matrix of influence numbers, with one
-            row and one column for each redundant.
+            Two-dimensional square matrix of floating-point influence numbers.
         """
-        self.logger.info("Accessing the calculation of the influence number "
-                         "matrix.")
+        self.logger.info("Calculating influence number matrix (δᵢⱼ matrix).")
         matrix = np.array(
             [[eow.delta_ij for eow in row]
              for row in self.eow_matrix],
-            dtype=float)
-        self.logger.debug("The ")
+            dtype=float
+        )
+        self.logger.debug(
+            f"Influence coefficient matrix created with shape {matrix.shape}.")
         return matrix
 
     @property
     def redundants(self):
-        """
-        Solve the linear system to compute the redundant forces.
+        r"""Solve the system of equations for the redundant forces.
 
-        Forms the system of equations A x = b, where A is the matrix of
-        influence numbers (from :meth:`load_coef`) and b is the vector of
-        preliminary coefficients (from :meth:`preliminary_coef`). Solving
-        this system yields the values of the redundant forces.
+        Solves the linear system
+
+        .. math::  A \, x = -b
+
+        where
+
+        * :math:`A` is the influence number matrix from
+          :meth:`influence_coef`,
+        * :math:`b` is the load coefficient vector from :meth:`load_coef`.
+
+        The resulting vector :math:`x` contains the magnitudes of all redundant
+        forces.
 
         Returns
         -------
         :any:`numpy.array`
             One-dimensional array containing the solved redundant forces.
         """
-        return np.linalg.solve(self.influence_coef, -self.load_coef)
+        self.logger.info("Solving linear system for redundant forces.")
+        result = np.linalg.solve(self.influence_coef, -self.load_coef)
+        self.logger.debug(
+            f"Redundant forces computed: {result.flatten().tolist()}")
+        return result
 
     def plot(
             self, mode: Literal['uls', 'rls'] = 'rls',
@@ -1070,13 +1116,15 @@ class ForceMethod(ReductionTheorem):
         Parameters
         ----------
         mode : {'uls', 'rls'}, default='rls'
+
             Defines whether the results of a unit load state or the real load
             state.
-        uls_index : :any:`int`| None
-            If the chosen mode is uls, then an index of the unit loads systems
-            is needed to plot the chosen system.
-        kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi', 'bending_line'},
-                default='normal'
+        uls_index : :any:`int` or None
+            If the chosen mode is uls, then an index of the unit loads \
+            system is needed to plot the chosen system.
+        kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi', \
+                'bending_line'}, default='normal'
+
             Selects the result quantity to display.
         bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
             Mesh used for the graphic bar geometry.
@@ -1116,60 +1164,129 @@ class ForceMethod(ReductionTheorem):
                 kind, bar_mesh_type, result_mesh_type, decimals, n_disc)
 
     def _validate_virtual_load(self, force):
-        raise ValueError("Virtual loads are not allowed for this method.")
+        r"""Disallows virtual loads for this method.
+
+        In the force method (KGV), virtual loads are not part of the
+        computational procedure. Any attempt to define virtual loads is
+        rejected.
+
+        Raises
+        ------
+        ValueError
+            Always raised, since virtual loads are incompatible with this
+            method.
+        """
+        msg = "Virtual loads are not allowed for this method."
+        self.logger.error(msg)
+        raise ValueError(msg)
 
     def _validate_virtual_system(self):
-        raise ValueError(
-            "There is not a virtual system being defined in this method.")
+        r"""Disallows virtual systems for this method.
+
+        The force method does not make use of virtual systems. Any attempt to
+        validate or access such a system is rejected.
+
+        Raises
+        ------
+        ValueError
+            Always raised for this method.
+        """
+        msg = "There is not a virtual system being defined in this method."
+        self.logger.error(msg)
+        raise ValueError(msg)
 
     def add_virtual_node_load(self, *args, **kwargs):
-        """Disallows virtual node loads for KGV.
+        r"""Disallows adding virtual node loads in the force method.
+
+        Virtual node loads are a concept of the displacement method and are not
+        used in the force method (KGV). Any attempt to add such loads is
+        rejected.
 
         Raises
         ------
         ValueError
             Always raised for this method.
         """
-        raise ValueError(
-            "Virtual node loads are not allowed for this method.")
+        msg = "Virtual node loads are not allowed for this method."
+        self.logger.error(msg)
+        raise ValueError(msg)
 
     def add_virtual_bar_load(self, *args, **kwargs):
-        """Disallows virtual bar loads for KGV.
+        r"""Disallows adding virtual bar loads in the force method.
+
+        Since the force method does not employ virtual systems or virtual
+        loads, defining bar loads in a virtual context is not permitted.
 
         Raises
         ------
         ValueError
             Always raised for this method.
         """
-        raise ValueError(
-            "Virtual bar loads are not allowed for this method.")
+        msg = "Virtual bar loads are not allowed for this method."
+        self.logger.error(msg)
+        raise ValueError(msg)
 
     def add_virtual_moment_couple(self, *args, **kwargs):
-        """Disallows virtual moment couple for KGV.
+        r"""Disallows adding virtual moment couples in the force method.
+
+        Virtual moment couples are incompatible with the solution strategy of
+        the force method and are therefore rejected.
 
         Raises
         ------
         ValueError
             Always raised for this method.
         """
-        raise ValueError(
-            "Virtual moment couple is not allowed for this method.")
+        msg = "Virtual moment couple is not allowed for this method."
+        self.logger.error(msg)
+        raise ValueError(msg)
 
     def virtual_system(self):
-        raise ValueError("There is not a virtual system in this method.")
+        r"""Disallows access to a virtual system.
 
-    def solution_virtual_system(self):
-        raise ValueError("There is not a virtual solution in this method.")
-
-    def deformation(self):
-        """Disallows computation of single deformations in KGV.
+        The force method does not define or use a virtual system. Accessing one
+        is not permitted.
 
         Raises
         ------
         ValueError
             Always raised for this method.
         """
-        raise ValueError("Deformation cannot be computed for this method.")
+        msg = "There is not a virtual system in this method."
+        self.logger.error(msg)
+        raise ValueError(msg)
+
+    def solution_virtual_system(self):
+        r"""Disallows access to a virtual solution.
+
+        Virtual solutions are not generated in the force method. Any attempt to
+        retrieve such a solution is rejected.
+
+        Raises
+        ------
+        ValueError
+            Always raised for this method.
+        """
+        msg = "There is not a virtual solution in this method."
+        self.logger.error(msg)
+        raise ValueError(msg)
+
+    def deformation(self):
+        r"""Disallows computation of single deformations.
+
+        In the force method (KGV), deformations are not computed directly by
+        querying individual values. Deformations are only implicitly evaluated
+        through the Equation of Work. Accessing single deformations is
+        therefore not supported.
+
+        Raises
+        ------
+        ValueError
+            Always raised for this method.
+        """
+        msg = "Deformation cannot be computed for this method."
+        self.logger.error(msg)
+        raise ValueError(msg)
 
 
 class DMG(ForceMethod):
