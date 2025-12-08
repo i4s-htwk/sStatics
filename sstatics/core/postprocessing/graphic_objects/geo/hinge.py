@@ -197,7 +197,7 @@ class CombiHingeGeo(ObjectGeo):
 
     def _x_off(self, i):
         if i == 0:
-            return 0.0
+            return self._width_factor(self._hinges[i], is_prev=False)
         prev, curr = self._hinges[i - 1], self._hinges[i]
         return (
             self._width_factor(prev, is_prev=True) +

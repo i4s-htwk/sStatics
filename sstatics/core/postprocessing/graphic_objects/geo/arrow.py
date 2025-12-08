@@ -188,7 +188,8 @@ class CurvedArrowGeo(ArrowGeo):
     @cached_property
     def graphic_elements(self):
         tail = EllipseGeo(
-            self._origin, width=2 * self._radius, angle_range=self._angle_span
+            self._origin, width=2 * self._radius, angle_range=self._angle_span,
+            line_style=self._line_style
         )
         return [self._head, tail]
 

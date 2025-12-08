@@ -40,6 +40,19 @@ DEFAULT_POINT = dict(
     **DEFAULT
 )
 
+DEFAULT_CIRCLE_TEXT = dict(
+    mode='markers+text',
+    textfont=dict(size=20, family='Times New Roman', color='black'),
+    marker=dict(
+        symbol='circle',
+        color='white',
+        size=27,
+        line=dict(color='black', width=2)
+    ),
+    # prevered_pos='1,1',
+    **DEFAULT
+)
+
 DEFAULT_POLYGON = dict(
     fill='toself',
     fillcolor='rgba(0, 0, 0, 0)'
@@ -191,6 +204,7 @@ DEFAULT_ARROW_HEAD = dict(
 
 DEFAULT_LOAD_DISTANCE = 1
 DEFAULT_ARROW_DISTANCE = 1
+DEFAULT_TENSILE_ZONE_DISTANCE = 0.1
 
 DEFAULT_DISPLACEMENT = dict(
     width_head=0.28,
@@ -212,6 +226,14 @@ DEFAULT_POINT_MOMENT = dict(
     angle_span=(np.pi / 6, -np.pi / 4)
 )
 
+DEFAULT_BAR = dict(
+    line=dict(width=4),
+)
+
+DEFAULT_TENSILE_ZONE = dict(
+    line=dict(dash='dash', width=1),
+)
+
 PLOTLY = 'plotly'
 MPL = 'mpl'
 VALID_MODES = (PLOTLY, MPL)
@@ -226,6 +248,9 @@ DEFAULT_LAYOUT_Y = dict(
     scaleanchor='x',
     scaleratio=1
 )
+
+DEFAULT_NUMBER_OF_TEXT_POSITIONS = 4
+DEFAULT_NUMBER_OF_TEXT_RINGS = 2
 
 DEFAULT_SAVE: dict[Any, Any] = dict(
     width=2400,

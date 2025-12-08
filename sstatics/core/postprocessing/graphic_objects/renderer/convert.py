@@ -62,58 +62,64 @@ def convert_style(style: dict, target: str) -> dict:
 
 
 def convert_plotly_to_mpl(style: dict) -> dict:
-
+    """
+    Convert a Plotly style dict to a Matplotlib-compatible style dict.
+    Supports 'markers', 'text', and 'markers+text'.
+    """
     mpl_style = {}
 
-    if style['mode'] == 'markers' and 'marker' in style:
-        mpl_style['marker'] = 'o'
+    mode = style.get('mode', '')
+
+    # --- MARKER ---
+    if 'markers' in mode and 'marker' in style:
         sm = style['marker']
+        mpl_style['marker'] = 'o'
         if 'size' in sm:
             mpl_style['markersize'] = sm['size'] ** 0.5 * 3
         if 'color' in sm:
             mpl_style['markerfacecolor'] = convert_color_to_mpl(sm['color'])
-        if 'line' in sm:
-            sml = sm['line']
-            if 'color' in sml:
-                mpl_style['markeredgecolor'] = convert_color_to_mpl(
-                    sml['color']
-                )
-            if 'width' in sml:
-                mpl_style['markeredgewidth'] = sml['width'] * 2 / 3
+        sml = sm.get('line', {})
+        if 'color' in sml:
+            mpl_style['markeredgecolor'] = convert_color_to_mpl(sml['color'])
+        if 'width' in sml:
+            mpl_style['markeredgewidth'] = sml['width'] * 2 / 3
         if 'opacity' in sm:
             mpl_style['alpha'] = sm['opacity']
 
-    # Text (vielleicht eher .get() verwenden?, dann keine if's)
-    if style['mode'] == 'text':
-        if 'textfont' in style:
-            st = style['textfont']
-            if 'size' in st:
-                mpl_style['fontsize'] = st['size']
-            if 'color' in st:
-                mpl_style['color'] = convert_color_to_mpl(st['color'])
-            if 'family' in st:
-                mpl_style['fontfamily'] = st['family']
+    # --- TEXT ---
+    if 'text' in mode:
+        st = style.get('textfont', {})
+        if 'size' in st:
+            mpl_style['fontsize'] = st['size']
+        if 'color' in st:
+            mpl_style['color'] = convert_color_to_mpl(st['color'])
+        if 'family' in st:
+            mpl_style['fontfamily'] = st['family']
         if 'opacity' in style:
             mpl_style['alpha'] = style['opacity']
 
-    if 'line_color' in style and 'fillcolor' not in style:
-        mpl_style['color'] = convert_color_to_mpl(style['line_color'])
-    elif 'line_color' in style:
-        mpl_style['edgecolor'] = convert_color_to_mpl(style['line_color'])
+    # --- LINES ---
+    line_color = style.get('line_color')
+    if line_color and not style.get('fillcolor'):
+        mpl_style['color'] = convert_color_to_mpl(line_color)
+    elif line_color:
+        mpl_style['edgecolor'] = convert_color_to_mpl(line_color)
 
-    if 'line' in style:
-        sl = style['line']
-        if 'width' in sl:
-            mpl_style['linewidth'] = sl['width']
-        if 'dash' in sl:
-            if sl['dash'] not in LINESTYLE_MAP:
-                raise ValueError('Unrecognized line dash style: {sl[dash]}')
-            mpl_style['linestyle'] = LINESTYLE_MAP[sl['dash']]
+    sl = style.get('line', {})
+    if 'width' in sl:
+        mpl_style['linewidth'] = sl['width']
+    if 'dash' in sl:
+        dash = sl['dash']
+        if dash not in LINESTYLE_MAP:
+            raise ValueError(f'Unrecognized line dash style: {dash}')
+        mpl_style['linestyle'] = LINESTYLE_MAP[dash]
 
+    # --- FILL ---
     if 'fillcolor' in style:
         mpl_style['fill'] = True
         mpl_style['facecolor'] = convert_color_to_mpl(style['fillcolor'])
 
+    # --- GLOBAL OPACITY ---
     if 'opacity' in style:
         mpl_style['alpha'] = style['opacity']
 
@@ -346,3 +352,25 @@ def convert_mpl_to_plotly_layout(x_opts: dict, y_opts: dict):
             plotly_y['scaleratio'] = y_opts['scaleratio']
 
     return plotly_x, plotly_y
+
+
+def convert_text_style_for_annotation(style: dict) -> dict:
+    """
+    Convert a Scatter text style dict to an Annotation-compatible dict.
+    """
+    ann_style = {}
+
+    # font dict
+    font = style.get("textfont", {})
+    ann_style["font"] = dict(
+        size=font.get("size", 12),
+        color=font.get("color", "black"),
+        family=font.get("family", "Arial")
+    )
+
+    # Anchoring defaults
+    ann_style.setdefault("xanchor", "center")
+    ann_style.setdefault("yanchor", "middle")
+    ann_style.setdefault("showarrow", False)
+
+    return ann_style

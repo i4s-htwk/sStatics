@@ -51,14 +51,16 @@ class OpenCurveGeo(ObjectGeo):
             x: list[float],
             z: list[float],
             origin: tuple[float, float] | None = None,
+            preferred_text_pos: str | None = None,
             **kwargs
     ):
-        self._validate_coords(x, z)
+        self._validate_open_curve(x, z, preferred_text_pos)
         if origin is None:
             origin = (x[0], z[0])
         super().__init__(origin=origin, **kwargs)
         self._x = x
         self._z = z
+        self._preferred_text_pos = preferred_text_pos
 
     @cached_property
     def graphic_elements(self):
@@ -72,11 +74,14 @@ class OpenCurveGeo(ObjectGeo):
         n = len(text)
         n_points = len(self._x)
         if n == 1:
+            pos = self._preferred_text_pos
             if n_points == 2:
                 (x0, x1) = self._x
                 (z0, z1) = self._z
-                return [((x0 + x1) / 2, (z0 + z1) / 2, text, self._text_style)]
-            return [(*self._origin, text, self._text_style)]
+                return [(
+                    (x0 + x1) / 2, (z0 + z1) / 2, text, self._text_style, pos
+                )]
+            return [(*self._origin, text, self._text_style, pos)]
         elif n == n_points:
             return [
                 (self._x[i], self._z[i], [t], self._text_style)
@@ -151,7 +156,7 @@ class OpenCurveGeo(ObjectGeo):
             raise ValueError('length must be positive.')
 
     @staticmethod
-    def _validate_coords(x, z):
+    def _validate_open_curve(x, z, preferred_text_pos):
         if not isinstance(x, list):
             raise TypeError(f'x must be a list, got {type(x).__name__}.')
 
@@ -170,11 +175,17 @@ class OpenCurveGeo(ObjectGeo):
         if len(x) < 2:
             raise ValueError('A line requires at least two points.')
 
+        if not isinstance(preferred_text_pos, (str, NoneType)):
+            raise TypeError(
+                f'"preferred_text_pos" must be String or None, '
+                f'got {type(preferred_text_pos).__name__!r}.'
+            )
+
     @staticmethod
     def _validate_slop_intercept(slope, intercept, boundaries):
         if slope is not None and not isinstance(slope, (int, float)):
             raise TypeError(
-                f'slope must be a number or None, got {type(slope).__name__}'
+                f'slope must be a number or None, got {type(slope).__name__!r}'
             )
 
         if not isinstance(intercept, (int, float)):
@@ -214,6 +225,10 @@ class OpenCurveGeo(ObjectGeo):
     def z(self):
         return self._z
 
+    @property
+    def preferred_text_pos(self):
+        return self._preferred_text_pos
+
     def __repr__(self):
         return (
             f'{self.__class__.__name__}('
@@ -221,6 +236,7 @@ class OpenCurveGeo(ObjectGeo):
             f'z={self._z}, '
             f'line_style={self._line_style}, '
             f'text={self._text if self._text else None}, '
+            f'preferred_text_pos={self._preferred_text_pos}, '
             f'text_style={self._text_style}, '
             f'Transform={self._transform})'
         )
