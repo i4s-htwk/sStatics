@@ -27,7 +27,8 @@ dev = [
     "sphinx-autobuild==2024.10.3",
     "sphinx-book-theme==1.1.4",
     "sphinx-copybutton==0.5.2",
-    "nbsphinx==0.9.7"
+    "nbsphinx==0.9.7",
+    "pre-commit>=4.5.0"
 ]
 
 [tool.setuptools.packages]
