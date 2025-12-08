@@ -44,11 +44,12 @@ class ObjectGeo(abc.ABC):
     TypeError
         If `line_style` or `text_style` is not a dictionary.
     """
-    DEFAULT_STYLES = {
+    _DEFAULT_STYLES = {
         'line': DEFAULT_LINE,
         'point': DEFAULT_POINT,
         'text': DEFAULT_TEXT
     }
+    _DEFAULT_ELEMENT_STYLES = {}
 
     def __init__(
             self,
@@ -80,17 +81,17 @@ class ObjectGeo(abc.ABC):
         self._text = text if isinstance(text, (list, tuple)) else [str(text)]
 
         self._line_style = self._merge_style(
-            self.DEFAULT_STYLES['line'],
+            self._DEFAULT_STYLES['line'],
             class_styles.get('line'),
             user_styles['line']
         )
         self._point_style = self._merge_style(
-            self.DEFAULT_STYLES['point'],
+            self._DEFAULT_STYLES['point'],
             class_styles.get('point'),
             user_styles['point']
         )
         self._text_style = self._merge_style(
-            self.DEFAULT_STYLES['text'],
+            self._DEFAULT_STYLES['text'],
             class_styles.get('text'),
             user_styles['text']
         )
@@ -137,6 +138,9 @@ class ObjectGeo(abc.ABC):
         """
         return []
 
+    def _raw_graphic_elements(self):
+        return self.graphic_elements
+
     @cached_property
     def _boundaries(self) -> tuple[float, float, float, float]:
         """Return the outer geometric boundaries of the object.
@@ -158,7 +162,7 @@ class ObjectGeo(abc.ABC):
         x_coords, z_coords = [], []
 
         # Rekursive Iteration über alle Grafik-Elemente
-        for x_list, z_list, _ in self._iter_graphic_elements(self):
+        for x_list, z_list, _ in self._iter_raw_graphic_elements(self):
             x_coords.extend(x for x in x_list if x is not None)
             z_coords.extend(z for z in z_list if z is not None)
 
@@ -167,16 +171,21 @@ class ObjectGeo(abc.ABC):
 
         return min(x_coords), max(x_coords), min(z_coords), max(z_coords)
 
-    def _iter_graphic_elements(self, obj=None):
-        for element in obj.graphic_elements:
-            if hasattr(element, 'graphic_elements'):
-                for x, z, style in self._iter_graphic_elements(element):
+    def _iter_raw_graphic_elements(self, obj=None):
+        for element in obj._raw_graphic_elements():
+            if self._is_geo_object(element):
+                # Rekursion in Kindobjekte
+                for x, z, style in self._iter_raw_graphic_elements(element):
                     x, z = obj.transform(x, z)
                     yield x, z, style
             else:
                 x, z, style = element
                 x, z = obj.transform(x, z)
                 yield x, z, style
+
+    def _is_geo_object(self, obj):
+        return hasattr(obj, "_raw_graphic_elements") and callable(
+            obj._raw_graphic_elements)
 
     @cached_property
     def _max_dimensions(self) -> tuple[float, float]:
@@ -197,7 +206,7 @@ class ObjectGeo(abc.ABC):
          This property is used internally by :py:meth:`_base_scale` to provide
          consistent scaling behavior for visual elements.
          """
-        x_max, x_min, z_max, z_min = self._boundaries
+        x_min, x_max, z_min, z_max = self._boundaries
         return x_max - x_min, z_max - z_min
 
     @cached_property
@@ -221,7 +230,7 @@ class ObjectGeo(abc.ABC):
         relative to the object size.
         """
         dx, dz = self._max_dimensions
-        return 0.08 * max(dx, dz) + 0.02
+        return 0.04 * max(dx, dz) + 0.01
 
     @staticmethod
     def _merge_style(
@@ -270,6 +279,22 @@ class ObjectGeo(abc.ABC):
             else:
                 result[k] = v
         return result
+
+    def _resolve_style(self, element, default_style, user_style):
+        if not user_style:
+            return default_style
+
+        if element in user_style:
+            return self._merge_style(default_style, user_style[element])
+
+        elem_type = type(element).__name__.lower()
+        if elem_type in user_style:
+            return self._merge_style(default_style, user_style[elem_type])
+
+        if "default" in user_style:
+            return self._merge_style(default_style, user_style["default"])
+
+        return default_style
 
     @staticmethod
     def _validate_base(text, line_style, text_style, point_style):

@@ -4,6 +4,10 @@ from functools import cached_property
 import numpy as np
 
 from sstatics.core.preprocessing.node import Node
+
+from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
+    DEFAULT_SUPPORT, DEFAULT_LINE, DEFAULT_TEXT
+)
 from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
     ObjectGeo
 from sstatics.core.postprocessing.graphic_objects.geo.constraint import (
@@ -66,7 +70,13 @@ class NodeGeo(ObjectGeo):
             rotation -= np.pi / 2
 
         return [support(
-            self._origin, text=self._text, line_style=self._line_style,
+            self._origin, text=self._text,
+            line_style=self._resolve_style(
+                self._node, DEFAULT_SUPPORT, self._line_style
+            ),
+            text_style=self._resolve_style(
+                self._node, DEFAULT_TEXT, self._text_style
+            ),
             rotation=rotation
         )]
 
@@ -79,26 +89,36 @@ class NodeGeo(ObjectGeo):
 
     @property
     def _select_spring(self):
-        node_rotation = self._node.rotation
         elements = []
         springs = [
-            (self._node.u, TranslationalSpringGeo, -np.pi / 2 + node_rotation),
-            (self._node.w, TranslationalSpringGeo, node_rotation),
-            (self._node.phi, TorsionalSpringGeo, node_rotation),
+            (self._node.u, TranslationalSpringGeo, -np.pi / 2),
+            (self._node.w, TranslationalSpringGeo, 0),
+            (self._node.phi, TorsionalSpringGeo, 0),
         ]
 
         for val, cls, rot in springs:
             if isinstance(val, (int, float)):
-                elements.append(cls(self._origin, rotation=rot))
+                elements.append(cls(
+                    self._origin,
+                    line_style=self._resolve_style(
+                        self._node, DEFAULT_SUPPORT, self._line_style
+                    ),
+                    rotation=rot+self._node.rotation
+                ))
         return elements
 
     @property
     def _load_elements(self):
         return [
             PointLoadGeo(
-                self._origin, load=load, show_text=self._show_load_text
-            )
-            for load in self._node.loads
+                self._origin, load=load, show_text=self._show_load_text,
+                line_style=self._resolve_style(
+                    load, DEFAULT_LINE, self._line_style
+                ),
+                text_style=self._resolve_style(
+                    load, DEFAULT_TEXT, self._text_style
+                ),
+            ) for load in self._node.loads
         ]
 
     @property
@@ -107,16 +127,20 @@ class NodeGeo(ObjectGeo):
             DisplacementGeo(
                 self._origin, displacement=displacement,
                 show_text=self._show_load_text,
-            )
-            for displacement in self._node.displacements
+                line_style=self._resolve_style(
+                    displacement, DEFAULT_LINE, self._line_style
+                ),
+                text_style=self._resolve_style(
+                    displacement, DEFAULT_TEXT, self._text_style
+                ),
+            ) for displacement in self._node.displacements
         ]
 
     @staticmethod
     def _validate_node(node, show_load_text):
         if not isinstance(node, Node):
             raise TypeError(
-                f'"node" must be a Node, got '
-                f'{type(node).__name__!r}'
+                f'"node" must be a Node, got {type(node).__name__!r}'
             )
 
         if not isinstance(show_load_text, bool):
@@ -132,3 +156,14 @@ class NodeGeo(ObjectGeo):
     @property
     def show_load_text(self):
         return self._show_load_text
+
+    def __repr__(self):
+        return (
+            f'{self.__class__.__name__}('
+            f'origin={self._origin}, '
+            f'node={self._node}, '
+            f'show_load_text={self._show_load_text}, '
+            f'line_style={self._line_style}, '
+            f'text_style={self._text_style}, '
+            f'Transform={self._transform})'
+        )
