@@ -64,7 +64,7 @@ print("Degree of static indeterminacy:",
 # plot released system
 # force_method.plot_released_system()
 
-# 9. Compute influence coefficients (delta_i_j = Vorzeichen)
+# 9. Compute influence coefficients (delta_i_j = Vorzahlen)
 #    and load coefficients (delta_i_0 = Belastungszahlen)
 delta_i_j = np.array(force_method.influence_coef)
 delta_i_0 = np.array(force_method.load_coef)

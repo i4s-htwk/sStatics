@@ -87,8 +87,8 @@ delta_dv_sstatics = red.deformation()
 print("Deformation (ReductionTheorem):", delta_dv_sstatics)
 
 # 11. Hand-calculated reference value using standard formulas
-# red.plot('real', kind='moment')
-# red.plot('virt', kind='moment')
+red.plot('real', kind='moment')
+red.plot('virt', kind='moment')
 delta_dv_seminar = (1/4 * 2.4 * (-288) * 10 / 207900 +
                     5/12 * 2.4 * 350 * 10 / 207900)
 
