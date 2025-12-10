@@ -23,10 +23,10 @@ class SystemResult:
     ----------
     system : :py:class:`System`
         The analyzed structural system.
-    bar_deform_list : list of :any:`numpy.ndarray`
+    bar_deform_total : list of :any:`numpy.ndarray`
         List of deformation vectors for each mesh bar in the system.
         Each deformation array corresponds to a mesh bar in
-        :py:attr:`FirstOrder.bar_deform_list`.
+        :py:attr:`FirstOrder.bar_deform_total`.
     bar_internal_forces : list of :any:`numpy.ndarray`
         List of force vectors for each mesh bar in the system.
         Each force array corresponds to a mesh bar in
@@ -88,7 +88,7 @@ class SystemResult:
     >>> solution = FirstOrder(system)
     >>> system_result = SystemResult(
     >>>                     system=system,
-    >>>                     bar_deform_list=solution.bar_deform_list,
+    >>>                     bar_deform_total=solution.bar_deform_total,
     >>>                     bar_internal_forces=solution.internal_forces,
     >>>                     node_deform=solution.node_deform,
     >>>                     node_support_forces=solution.node_support_forces,
@@ -104,7 +104,7 @@ class SystemResult:
     """
 
     system: System
-    bar_deform_list: list[np.ndarray]
+    bar_deform_total: list[np.ndarray]
     bar_internal_forces: list[np.ndarray]
     node_deform: np.ndarray
     node_support_forces: np.ndarray
@@ -126,7 +126,7 @@ class SystemResult:
         for i, mesh_bar in enumerate(self.system.mesh):
             args = [
                 mesh_bar,
-                self.bar_deform_list[i],
+                self.bar_deform_total[i],
                 self.bar_internal_forces[i],
                 self.n_disc,
             ]
@@ -168,10 +168,10 @@ class SystemResult:
 
         # Check list lengths
         n_bars = len(self.system.mesh)
-        if len(self.bar_deform_list) != n_bars:
+        if len(self.bar_deform_total) != n_bars:
             raise ValueError(
                 f'Expected {n_bars} bar deformations, got '
-                f'{len(self.bar_deform_list)}.'
+                f'{len(self.bar_deform_total)}.'
             )
         if len(self.bar_internal_forces) != n_bars:
             raise ValueError(
@@ -180,10 +180,10 @@ class SystemResult:
             )
 
         # Type and shape validation for lists
-        for i, arr in enumerate(self.bar_deform_list):
+        for i, arr in enumerate(self.bar_deform_total):
             if not isinstance(arr, np.ndarray):
                 raise TypeError(
-                    f'bar_deform_list[{i}] must be a numpy.ndarray.'
+                    f'bar_deform_total[{i}] must be a numpy.ndarray.'
                 )
         for i, arr in enumerate(self.bar_internal_forces):
             if not isinstance(arr, np.ndarray):
@@ -286,7 +286,7 @@ class DifferentialEquation:
     >>> bar = Bar(n1, n2, cross, mat, line_loads=load)
     >>> system = System([bar])
     >>> fo = FirstOrder(system)
-    >>> results = fo.bar_deform_list, fo.internal_forces
+    >>> results = fo.bar_deform_total, fo.internal_forces
     >>> de = DifferentialEquation(bar, results[0][0], results[1][0], n_disc=10)
     """
 

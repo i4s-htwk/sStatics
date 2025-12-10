@@ -47,7 +47,7 @@ system = System([bar_1])
 solution = FirstOrder(system)
 
 # 8. Extract bar deformations
-bar_deform = solution.bar_deform_list
+bar_deform = solution.bar_deform_total
 print("Bar deformations of all bars:\n", bar_deform)
 
 # Each entry is a 6×1 vector of bar deformations:

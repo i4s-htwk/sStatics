@@ -342,7 +342,7 @@ class SecondOrder(LoggerMixin):
 
     def results_iterative_growth(
             self, iteration: int = -1, difference: Literal[
-                'internal_forces', 'bar_deform_list', 'node_deform',
+                'internal_forces', 'bar_deform_total', 'node_deform',
                 'node_support_forces', 'system_support_forces']
             = 'internal_forces'
     ):
@@ -362,7 +362,7 @@ class SecondOrder(LoggerMixin):
             The iteration index to extract. Supports negative indexing to count
             from the end of the iteration history.
 
-        difference : {'internal_forces', 'bar_deform_list', 'node_deform',
+        difference : {'internal_forces', 'bar_deform_total', 'node_deform',
                       'node_support_forces', 'system_support_forces'},
                       default='internal_forces'
 
@@ -405,10 +405,10 @@ class SecondOrder(LoggerMixin):
             raise ValueError(msg)
 
         if difference not in [
-            'internal_forces', 'bar_deform_list', 'node_deform',
+            'internal_forces', 'bar_deform_total', 'node_deform',
                 'node_support_forces', 'system_support_forces']:
             msg = ("difference has to be either 'internal_forces', "
-                   "'bar_deform_list', 'node_deform', 'node_support_forces' "
+                   "'bar_deform_total', 'node_deform', 'node_support_forces' "
                    "or 'system_support_forces'")
             self.logger.error(msg)
             raise ValueError(msg)
@@ -574,7 +574,7 @@ class SecondOrder(LoggerMixin):
             "forces and deformations.")
         l_avg = []
         for i, (deform, force) in enumerate(
-                zip(solution.bar_deform_list,
+                zip(solution.bar_deform_total,
                     solution.internal_forces)):
             self.logger.info(
                 f"[Bar {i}] Calculating averaged longitudinal force.")
@@ -647,7 +647,7 @@ class SecondOrder(LoggerMixin):
             "Transforming internal forces based on current bar-end rotations.")
         forces_list = []
         for i, (deform, force) in (
-                enumerate(zip(solver.bar_deform_list,
+                enumerate(zip(solver.bar_deform_total,
                               solver.internal_forces))):
             self.logger.info(f"[Bar {i}] Transforming internal forces.")
             phi_i, phi_j = deform[2, 0], deform[5, 0]
@@ -899,8 +899,8 @@ class SecondOrder(LoggerMixin):
                                              prev.node_support_forces),
             "system_support_forces_diff": diff(curr.system_support_forces,
                                                prev.system_support_forces),
-            "bar_deform_list_diff": diff(curr.bar_deform_list,
-                                         prev.bar_deform_list),
+            "bar_deform_total_diff": diff(curr.bar_deform_total,
+                                          prev.bar_deform_total),
             "node_deform_diff": diff(curr.node_deform, prev.node_deform),
         }
 
@@ -1008,7 +1008,7 @@ class SecondOrder(LoggerMixin):
             if bar_index is not None:
                 return DifferentialEquationSecond(
                     bar=bars[bar_index],
-                    deform=solver.bar_deform_list[bar_index],
+                    deform=solver.bar_deform_total[bar_index],
                     forces=solver.internal_forces[bar_index],
                     n_disc=n_disc,
                     f_axial=self.averaged_longitudinal_force[bar_index]
@@ -1017,7 +1017,7 @@ class SecondOrder(LoggerMixin):
                 return [
                     DifferentialEquationSecond(
                         bar=bars[i],
-                        deform=solver.bar_deform_list[i],
+                        deform=solver.bar_deform_total[i],
                         forces=solver.internal_forces[i],
                         n_disc=n_disc,
                         f_axial=self.averaged_longitudinal_force[i]
@@ -1028,7 +1028,7 @@ class SecondOrder(LoggerMixin):
                 solver = self.solver_iteration_cumulative(iteration_index)
                 return get_differential_equation(
                     self.system,
-                    solver.bar_deform_list,
+                    solver.bar_deform_total,
                     solver.internal_forces,
                     bar_index, n_disc
                 )
@@ -1106,7 +1106,7 @@ class SecondOrder(LoggerMixin):
             solver = self.solver_matrix_approach
             result = SystemResult(
                 self._modified_system_matrix,
-                solver.bar_deform_list,
+                solver.bar_deform_total,
                 solver.internal_forces,
                 solver.node_deform,
                 solver.node_support_forces,
@@ -1118,7 +1118,7 @@ class SecondOrder(LoggerMixin):
                 solver = self.solver_iteration_cumulative(iteration_index)
                 result = SystemResult(
                     self.system,
-                    solver.bar_deform_list,
+                    solver.bar_deform_total,
                     solver.internal_forces,
                     solver.node_deform,
                     solver.node_support_forces,
@@ -1129,7 +1129,7 @@ class SecondOrder(LoggerMixin):
                 entry = self._iteration_results[iteration_index]
                 result = SystemResult(
                     self.system,
-                    entry['bar_deform_list_diff'],
+                    entry['bar_deform_total_diff'],
                     entry['internal_forces_diff'],
                     entry['node_deform_diff'],
                     entry['node_support_forces_diff'],

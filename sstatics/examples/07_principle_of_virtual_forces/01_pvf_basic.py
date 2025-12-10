@@ -57,7 +57,7 @@ print("w at node 2 (PVK) [m]:", w_node_2_pvf)
 solution = FirstOrder(system)
 
 # Extract deformation vector of the single bar (index 0)
-bar_deform = solution.bar_deform_list[0]
+bar_deform = solution.bar_deform_total[0]
 
 # Vertical displacement w at node_2 is located at index 4
 w_node_2 = bar_deform[4][0]
