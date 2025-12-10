@@ -76,7 +76,6 @@ class BendingLine:
 
         for dgl in self.dgl_list:
             deform = dgl.deform.flatten()
-            print(deform)
             values.extend([abs(deform[0]), abs(deform[1]), abs(deform[2]),
                            abs(deform[3]), abs(deform[4]), abs(deform[5])])
         return max(values) if values else 1.0
