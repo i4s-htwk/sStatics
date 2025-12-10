@@ -183,17 +183,7 @@ class ReductionTheorem(PVF):
         self.logger.info(
             "Calculating the degree of static indeterminacy of "
             "the modified system.")
-
-        support = sum((n.u != 'free') + (n.w != 'free') + (n.phi != 'free')
-                      for n in self._system_modifier.system.nodes())
-        self.logger.debug(f"Total number of support reactions: {support}")
-
-        hinge = sum(sum(h is True for h in b.hinge)
-                    for b in self._system_modifier.system.bars)
-        self.logger.debug(f"Total number of hinges: {hinge}")
-
-        n = support + 3 * len(self._system_modifier.system.bars) - (
-                3 * len(self._system_modifier.system.nodes('bars')) + hinge)
+        n = self._system_modifier.system.degree_of_static_indeterminacy
         self.logger.debug(f"Degree of static indeterminacy: {n}")
 
         return n

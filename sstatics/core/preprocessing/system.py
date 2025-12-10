@@ -45,37 +45,176 @@ class System:
     user_divisions: (Optional[Dict[Bar, List[float]]]
                      | Optional[Dict[BarSecond, List[float]]]) = None
 
-    # weitere Validierungen? sich schneidende Stäbe?
     def __post_init__(self):
         self.bars = tuple(self.bars)
+        self._validate_geometry()
+        self._validate_connectivity()
+        self._validate_crossings()
+        self.create_mesh(user_divisions=self.user_divisions)
+
+    def _validate_geometry(self) -> None:
+        """Verify the basic geometric consistency of the system.
+
+        Checks
+        ------
+        * **Non-empty bar list** – raises if ``self.bars`` contains no
+          element.
+        * **Duplicate bars** – raises when two distinct ``Bar`` objects
+          occupy the identical geometric location (both end nodes coincide).
+          The check uses ``Bar.same_location`` which must compare the
+          coordinates of the two end nodes.
+        * **Node aliasing** – raises if two *different* ``Node`` instances
+          share the same spatial coordinates while not being the same
+          object. This prevents the situation where the same point in space
+          is represented by multiple node objects, which would break the
+          connectivity logic.
+
+        Raises
+        ------
+        ValueError
+            If any of the above conditions are violated.
+        """
         if len(self.bars) == 0:
-            raise ValueError('There need to be at least one bar.')
+            raise ValueError("There need to be at least one bar.")
         for i, bar in enumerate(self.bars[0:-1]):
-            if any([
-                bar.same_location(other_bar) for other_bar in self.bars[i + 1:]
-            ]):
+            if any(
+                    bar.same_location(other_bar)
+                    for other_bar in self.bars[i + 1:]
+            ):
                 raise ValueError(
-                    'Cannot instantiate a system with bars that share the '
-                    'same location.'
+                    "Cannot instantiate a system with bars that share the "
+                    "same location."
                 )
-        nodes = self.nodes(mesh_type='bars')
+        nodes = self.nodes(mesh_type="bars")
         for i, node in enumerate(nodes[0:-1]):
             for other_node in nodes[i + 1:]:
                 if node.same_location(other_node) and node != other_node:
                     raise ValueError(
-                        'Inconsistent system. Nodes with the same location '
-                        'need to be the same instance.'
+                        "Inconsistent system. Nodes with the same location "
+                        "need to be the same instance."
                     )
+
+    def _validate_connectivity(self) -> None:
+        """Ensure that the bar network forms a single connected component.
+
+        The method performs a breadth-first search starting from the first
+        node returned by ``self.nodes(mesh_type='bars')``. All nodes
+        reachable via ``self.connected_nodes`` are collected in ``visited``.
+        After the search finishes, the set of visited nodes must equal the
+        set of all nodes; otherwise, the graph contains at least one
+        isolated component.
+
+        Raises
+        ------
+        ValueError
+            If the system graph is not fully connected.
+        """
+        nodes = self.nodes(mesh_type="bars")
         to_visit, visited = [nodes[0]], []
         while to_visit:
             curr_node = to_visit.pop(0)
             if curr_node not in visited:
                 visited.append(curr_node)
-                to_visit += self.connected_nodes(mesh_type='bars')[curr_node]
+                to_visit += self.connected_nodes(mesh_type="bars")[curr_node]
         if set(visited) != set(nodes):
             raise ValueError("The system's graph needs to be connected.")
 
-        self.create_mesh(user_divisions=self.user_divisions)
+    def _validate_crossings(self) -> None:
+        r"""Detect interior intersections between any pair of bars.
+
+        Two bars are allowed to meet at a common node (i.e. share an
+        endpoint). Any other intersection – including collinear overlap
+        that is not a shared endpoint – raises an error.
+
+        Implementation details
+        ----------------------
+        * **Axis-aligned bounding boxes (AABB)** are computed for each bar.
+          Pairs whose boxes do not overlap are discarded before the more
+          expensive orientation test.
+        * **Orientation test** (signed triangle area) determines on which
+          side of a directed segment a point lies. The classic “general
+          case” condition
+
+          .. math::
+
+              (o_1 \cdot o_2 < 0) \;\wedge\; (o_3 \cdot o_4 < 0)
+
+          holds exactly when the interiors of the two segments intersect.
+        * **Collinear special cases** are handled by ``on_segment`` to catch
+          overlapping but non-identical bars.
+
+        Raises
+        ------
+        ValueError
+            If any two bars intersect in their interiors. The error message
+            contains the two offending ``Bar`` objects.
+        """
+
+        def _aabb(bar):
+            xs = (bar.node_i.x, bar.node_j.x)
+            zs = (bar.node_i.z, bar.node_j.z)
+            return min(xs), max(xs), min(zs), max(zs)
+
+        def orient(a: Node, b: Node, r: Node) -> float:
+            """
+            Signed area of triangle (a,b,r). Positive → counter-clockwise.
+            """
+            return (b.x - a.x) * (r.z - a.z) - (b.z - a.z) * (r.x - a.x)
+
+        def on_segment(a: Node, b: Node, r: Node) -> bool:
+            """Return True if b lies on the closed segment pr (collinear)."""
+            return (
+                    min(a.x, r.x) <= b.x <= max(a.x, r.x)
+                    and min(a.z, r.z) <= b.z <= max(a.z, r.z)
+            )
+
+        def segments_intersect(b1: Bar, b2: Bar) -> bool:
+            i1, j1 = b1.node_i, b1.node_j
+            i2, j2 = b2.node_i, b2.node_j
+
+            # Ignore intersection at a shared node
+            if i1 in (i2, j2) or j1 in (i2, j2):
+                return False
+
+            o1 = orient(i1, j1, i2)
+            o2 = orient(i1, j1, j2)
+            o3 = orient(i2, j2, i1)
+            o4 = orient(i2, j2, j1)
+
+            # General case
+            if (o1 * o2 < 0) and (o3 * o4 < 0):
+                return True
+
+            # Collinear special cases
+            if o1 == 0 and on_segment(i1, i2, j1):
+                return True
+            if o2 == 0 and on_segment(i1, j2, j1):
+                return True
+            if o3 == 0 and on_segment(i2, i1, j2):
+                return True
+            if o4 == 0 and on_segment(i2, j1, j2):
+                return True
+
+            return False
+
+        # First perform a cheap AABB (axis-aligned bounding box) check to
+        # quickly reject bar pairs that cannot possibly intersect. Only if
+        # their bounding boxes overlap do we proceed to the more expensive
+        # segment intersection test.
+        boxes = [_aabb(b) for b in self.bars]
+        for i, b1 in enumerate(self.bars[:-1]):
+            minx1, maxx1, minz1, maxz1 = boxes[i]
+            for j, b2 in enumerate(self.bars[i + 1:], start=i + 1):
+                minx2, maxx2, minz2, maxz2 = boxes[j]
+                if (
+                        maxx1 < minx2
+                        or maxx2 < minx1
+                        or maxz1 < minz2
+                        or maxz2 < minz1
+                ):
+                    continue
+                if segments_intersect(b1, b2):
+                    raise ValueError(f"Bars {b1} and {b2} intersect.")
 
     def connected_nodes(
             self, mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh'
@@ -105,6 +244,38 @@ class System:
 
     def nodes(self, mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh'):
         return list(self.connected_nodes(mesh_type=mesh_type).keys())
+
+    @property
+    def degree_of_static_indeterminacy(self):
+        """Calculates the degree of static indeterminacy of the system.
+
+        This function checks the static determinacy of the currently modified
+        system. A system is statically determinate if n = 0.
+        It is statically indeterminate if n > 0 and statically unstable
+        if n < 0.
+
+        Returns
+        -------
+        :any:`int`
+            The number of redundant constraints in the system.
+        """
+        # self.logger.info(
+        #     "Calculating the degree of static indeterminacy of "
+        #     "the modified system.")
+
+        support = sum((n.u != 'free') + (n.w != 'free') + (n.phi != 'free')
+                      for n in self.nodes('bars'))
+        # self.logger.debug(f"Total number of support reactions: {support}")
+
+        hinge = sum(sum(h is True for h in b.hinge)
+                    for b in self.bars)
+        # self.logger.debug(f"Total number of hinges: {hinge}")
+
+        n = support + 3 * len(self.bars) - (
+                3 * len(self.nodes('bars')) + hinge)
+        # self.logger.debug(f"Degree of static indeterminacy: {n}")
+
+        return n
 
     @property
     def max_dimensions(self) -> Tuple[float, float]:
