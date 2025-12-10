@@ -12,22 +12,78 @@ Cross-Section
     :name: cross-section-gallery
     :maxdepth: 1
 
-    examples/cross_section/cross_section_ipe
-    examples/cross_section/cross_section_beam
+    examples/01_cross_section/cross_section_ipe
+    examples/01_cross_section/cross_section_beam
 
 
-Analysis
---------
+First Order
+-----------
+
+.. image:: images/structural_diagramms/firstorder_diagramm.svg
+    :width: 1000px
+    :align: center
 
 .. nbgallery::
-    :name: analysis-gallery
+    :name: first-order-gallery
     :maxdepth: 1
 
-    examples/analysis/node_deflection
-    examples/analysis/bending_moment
-    examples/analysis/identify_unstable_system
-    examples/analysis/poleplan
-    examples/analysis/advanced_poleplan
-    examples/analysis/second_order_cantilever
-    examples/analysis/second_order_bar_second
-    examples/analysis/second_order_iteration
+    examples/02_firstorder/node_deflection
+    examples/02_firstorder/bending_moment
+    examples/02_firstorder/identify_unstable_system
+
+Second Order
+------------
+
+.. image:: images/structural_diagramms/second_order_diagramm.svg
+    :width: 1000px
+    :align: center
+
+.. nbgallery::
+    :name: second-order-gallery
+    :maxdepth: 1
+
+    examples/03_second_order/second_order_cantilever
+    examples/03_second_order/second_order_bar_second
+    examples/03_second_order/second_order_iteration
+
+Pole Plan
+---------
+
+.. nbgallery::
+    :name: poleplan-gallery
+    :maxdepth: 1
+
+    examples/04_poleplan/poleplan
+    examples/04_poleplan/advanced_poleplan
+
+Stress
+------
+
+
+Influence Line
+--------------
+
+Principle of Virtual Forces
+---------------------------
+.. image:: images/structural_diagramms/structural_diagramm_static_methods.svg
+    :width: 1000px
+    :align: center
+
+
+.. image:: images/structural_diagramms/pvf_diagramm.svg
+    :width: 1000px
+    :align: center
+
+Reduction Theorem
+-----------------
+
+.. image:: images/structural_diagramms/reductiontheorem_diagramm.svg
+    :width: 1000px
+    :align: center
+
+Force Method
+------------
+
+.. image:: images/structural_diagramms/forcemethod_diagramm.svg
+    :width: 1000px
+    :align: center

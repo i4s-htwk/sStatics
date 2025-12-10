@@ -20,3 +20,22 @@ div.nboutput {
     padding: 10px;
     border-radius: 5px;
 }
+
+/* Standard: Sphinx-Themes fügen img einen hellgrauen Hintergrund hinzu.
+   Dieser Fix stellt sicher, dass SVGs *wirklich* transparent bleiben. */
+img[src$=".svg"] {
+    background-color: transparent !important;
+}
+
+/* Falls das Theme Schatten, Rahmen oder Box-Hintergründe auf SVG legt */
+img[src$=".svg"] {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0;
+}
+
+object[type="image/svg+xml"],
+embed[type="image/svg+xml"] {
+    background-color: transparent !important;
+}
