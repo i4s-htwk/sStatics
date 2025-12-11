@@ -1,4 +1,3 @@
-
 version: 2
 
 build:
@@ -11,4 +10,6 @@ sphinx:
 
 python:
   install:
-    - requirements: requirements.txt
+    - method: pip
+      path: .
+      extra_requirements: dev
