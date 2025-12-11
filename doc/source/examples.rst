@@ -20,7 +20,7 @@ First Order
 -----------
 
 .. image:: images/structural_diagramms/firstorder_diagramm.svg
-    :width: 1000px
+    :width: 600px
     :align: center
 
 .. nbgallery::
@@ -35,7 +35,7 @@ Second Order
 ------------
 
 .. image:: images/structural_diagramms/second_order_diagramm.svg
-    :width: 1000px
+    :width: 600px
     :align: center
 
 .. nbgallery::
@@ -66,24 +66,24 @@ Influence Line
 Principle of Virtual Forces
 ---------------------------
 .. image:: images/structural_diagramms/structural_diagramm_static_methods.svg
-    :width: 1000px
+    :width: 600px
     :align: center
 
 
 .. image:: images/structural_diagramms/pvf_diagramm.svg
-    :width: 1000px
+    :width: 600px
     :align: center
 
 Reduction Theorem
 -----------------
 
 .. image:: images/structural_diagramms/reductiontheorem_diagramm.svg
-    :width: 1000px
+    :width: 600px
     :align: center
 
 Force Method
 ------------
 
 .. image:: images/structural_diagramms/forcemethod_diagramm.svg
-    :width: 1000px
+    :width: 600px
     :align: center
