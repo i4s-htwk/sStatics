@@ -68,3 +68,5 @@ for i, bar_stress in enumerate(stress_list):
     print("  σ_normal(x): ", sigma_z[:, 0])
     print("  τ_shear(x):  ", sigma_z[:, 1])
     print("  σ_bending(x):", sigma_z[:, 2])
+
+solution.plot_stress('normal')

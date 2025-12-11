@@ -12,8 +12,9 @@ Cross-Section
     :name: cross-section-gallery
     :maxdepth: 1
 
-    examples/01_cross_section/cross_section_ipe
-    examples/01_cross_section/cross_section_beam
+    examples/01_cross_section/rectangle_cross_section
+    examples/01_cross_section/beam_slab_cross_section
+    examples/01_cross_section/ipe_cross_section
 
 
 First Order
@@ -53,12 +54,21 @@ Pole Plan
     :name: poleplan-gallery
     :maxdepth: 1
 
-    examples/04_poleplan/poleplan
-    examples/04_poleplan/advanced_poleplan
+    examples/04_poleplan/poleplan_basic
+    examples/04_poleplan/poleplan_advanced
 
 Stress
 ------
 
+.. nbgallery::
+    :name: stress-gallery
+    :maxdepth: 1
+
+    examples/05_stress/normal_stress
+    examples/05_stress/plot_normal_stress
+    examples/05_stress/shear_stress
+    examples/05_stress/plot_shear_stress
+    examples/05_stress/stress_disc
 
 Influence Line
 --------------
