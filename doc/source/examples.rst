@@ -73,6 +73,17 @@ Stress
 Influence Line
 --------------
 
+.. nbgallery::
+    :name: influence-line-gallery
+    :maxdepth: 1
+
+    examples/06_influence_line/influence_line_deform_bar_w
+    examples/06_influence_line/influence_line_deform_node_w
+    examples/06_influence_line/influence_line_fm_bar
+    examples/06_influence_line/influence_line_fz_node
+    examples/06_influence_line/influence_line_fm_bar_unstable
+    examples/06_influence_line/influence_line_fz_node_unstable
+
 Principle of Virtual Forces
 ---------------------------
 .. image:: images/structural_diagramms/structural_diagramm_static_methods.svg

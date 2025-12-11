@@ -32,11 +32,11 @@ bar_1 = Bar(node_1, node_2, cs, mat)
 bar_2 = Bar(node_2, node_3, cs, mat)
 system = System([bar_1, bar_2])
 
-# 4. Define Influence line module
+# 4. Define Influence line
 il = InfluenceLine(system)
 
 # 5. Influence line for vertical force fm in bar_1 at xi = 0.5
-il.deform('w', bar_1, 0.5)
+il.deform(kind='w', obj=bar_1, position=0.5)
 
 print("=== Influence Line Example ===")
 print("Computed influence line for vertical displacement w on bar_1 at"

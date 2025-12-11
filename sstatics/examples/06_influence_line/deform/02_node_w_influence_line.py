@@ -35,7 +35,7 @@ system = System([bar_1, bar_2])
 il = InfluenceLine(system)
 
 # 5. Influence line for vertical displacement w at node_3
-il.deform('w', node_3)
+il.deform(kind='w', obj=node_3)
 
 print("=== Influence Line Example ===")
 print("Computed influence line for vertical displacement w at node_3")
