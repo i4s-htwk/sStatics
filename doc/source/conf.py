@@ -7,9 +7,9 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'sStatics'
-copyright = '2024'
-author = 'Paul Brassel'
-release = '0.0.0'
+copyright = '2025'
+author = 'i4s'
+release = '0.1.0'
 html_logo = 'images/sStatics_Logo.png'
 
 # -- General configuration ---------------------------------------------------
