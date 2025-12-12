@@ -28,9 +28,10 @@ First Order
     :name: first-order-gallery
     :maxdepth: 1
 
-    examples/02_firstorder/node_deflection
-    examples/02_firstorder/bending_moment
-    examples/02_firstorder/identify_unstable_system
+    examples/02_firstorder/01_bending_moment
+    examples/02_firstorder/02_bar_deflection
+    examples/02_firstorder/03_bending_line
+    examples/02_firstorder/04_unstable_system
 
 Second Order
 ------------
@@ -43,7 +44,7 @@ Second Order
     :name: second-order-gallery
     :maxdepth: 1
 
-    examples/03_second_order/second_order_cantilever
+    examples/03_second_order/04_compare_results
     examples/03_second_order/second_order_bar_second
     examples/03_second_order/second_order_iteration
 
@@ -72,6 +73,9 @@ Stress
 
 Influence Line
 --------------
+.. image:: images/structural_diagramms/influence_line_diagramm.svg
+    :width: 600px
+    :align: center
 
 .. nbgallery::
     :name: influence-line-gallery
@@ -90,10 +94,18 @@ Principle of Virtual Forces
     :width: 600px
     :align: center
 
-
 .. image:: images/structural_diagramms/pvf_diagramm.svg
     :width: 600px
     :align: center
+
+.. nbgallery::
+    :name: principle-of-virt-forces-gallery
+    :maxdepth: 1
+
+    examples/07_principle_of_virtual_forces/01_pvf_basic
+    examples/07_principle_of_virtual_forces/02_pvf_relative_rotation
+    examples/07_principle_of_virtual_forces/03_pvf_spring_support
+    examples/07_principle_of_virtual_forces/04_pvf_temp_support_disp
 
 Reduction Theorem
 -----------------
@@ -102,9 +114,23 @@ Reduction Theorem
     :width: 600px
     :align: center
 
+.. nbgallery::
+    :name: reduction-theorem-gallery
+    :maxdepth: 1
+
+    examples/08_reduction_theorem/01_red_calc_deformation
+    examples/08_reduction_theorem/03_red_large_system_deformation
+
+
 Force Method
 ------------
 
 .. image:: images/structural_diagramms/forcemethod_diagramm.svg
     :width: 600px
     :align: center
+
+.. nbgallery::
+    :name: force-method-gallery
+    :maxdepth: 1
+
+    examples/09_force_method/01_force_method_basic

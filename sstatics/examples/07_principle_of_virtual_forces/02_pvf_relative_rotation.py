@@ -1,13 +1,13 @@
 """
 Example 02:
 Computing the relative rotation of two bars at a shared node using
-the Principle of Virtual Forces (PVK)
+the Principle of Virtual Forces (PVF)
 
 In this example, the relative rotation (phi) of bars 1 and 2 at the
 common node_3 is computed. Individual deformation contributions
 can be specified for each bar using the `deformations` attribute.
 
-The PVK method introduces a virtual moment couple on the two bars at
+The PVF method introduces a virtual moment couple on the two bars at
 the connecting node. Evaluating the work equation yields the desired
 relative rotation.
 """
@@ -82,5 +82,5 @@ print("Work matrix (nodes):\n", work_matrix_nodes)
 
 # If we want to query the specific contribution of a single model object
 # to the work equation, we can use the `work_of(...)` method.
-work_b4 = pvf.work_of(obj=b4)
-print("Work contribution of bar 4:\n", work_b4)
+work_b4 = pvf.work_of(obj=b1)
+print("Work contribution of bar 1:\n", work_b4)

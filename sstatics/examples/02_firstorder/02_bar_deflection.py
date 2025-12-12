@@ -10,9 +10,8 @@ beam is computed using first-order (linear) structural analysis.
 This example demonstrates:
 
 - Definition of a cross-section from polygon geometry
-- Visualization of the cross-section
 - Modeling a cantilever beam with a node load
-- Extracting nodal deformations from the calculation result
+- Extracting bar deformations from the calculation result
 - Reading the vertical displacement at the free end
 - Plotting the displacement distribution
 

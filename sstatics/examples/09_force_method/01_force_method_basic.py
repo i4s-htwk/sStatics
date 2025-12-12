@@ -15,7 +15,7 @@ The system includes:
 """
 
 # 1. Import required modules
-from sstatics.core.calc_methods import ForceMethod
+from sstatics.core.calc_methods import ForceMethod, FirstOrder
 from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System, BarLineLoad, BarPointLoad
 )
@@ -62,7 +62,7 @@ print("Degree of static indeterminacy:",
       force_method.degree_of_static_indeterminacy)
 
 # plot released system
-# force_method.plot_released_system()
+force_method.plot_released_system()
 
 # 9. Compute influence coefficients (delta_i_j = Vorzahlen)
 #    and load coefficients (delta_i_0 = Belastungszahlen)
@@ -76,12 +76,54 @@ for i in range(delta_i_j.shape[0]):
                      for j in range(delta_i_j.shape[1]))
     print(f"{row} = {delta_i_0[i,0]:.4e}")
 
-# 11. Solve for redundant forces (x = unbekannte Kräfte)
+# Solve for redundant forces (x = unbekannte Kräfte)
 x = np.array(force_method.redundants)
+x1 = x[0][0]
+x2 = x[1][0]
 
 print("Redundant forces (x):")
 for i in range(x.shape[0]):
     print(f"x{i+1} = {x[i, 0]:.6e}")
+
+# 11. Validate the force methods results with first order
+# With the redundant forces determined, the internal force distribution of the
+# statically indeterminate system can be reconstructed using the Force Method.
+
+# For demonstration, we compute the end bending moment of bar 1.
+# The moment is obtained by superposition:
+# m = m0 + x1 * m1 + x2 * m2
+
+# Base system (released system)
+solution_rls = force_method.solution_rls_system
+forces_rls = solution_rls.internal_forces
+
+# Unit load systems
+solution_uls_1 = force_method.solution_uls_systems[0]
+forces_uls_1 = solution_uls_1.internal_forces
+
+solution_uls_2 = force_method.solution_uls_systems[1]
+forces_uls_2 = solution_uls_2.internal_forces
+
+# Retrieve bending moments at end of bar 1
+# index [0] -> first bar in mesh
+# index [5] -> moment at bar end
+# index [0] -> scalar value
+m0_j_b1 = forces_rls[0][5][0]
+m1_j_b1 = forces_uls_1[0][5][0]
+m2_j_b1 = forces_uls_2[0][5][0]
+
+# Superposition to obtain final moment
+m_j_b1 = m0_j_b1 + x1 * m1_j_b1 + x2 * m2_j_b1
+print(f"Moment at end of bar 1 (Force Method): {m_j_b1}")
+
+# Compare with the First-Order reference solution
+solution_f0 = FirstOrder(system)
+forces_f0 = solution_f0.internal_forces
+m_j_b1_f0 = forces_f0[0][5][0]
+print(f"Moment at end of bar 1 (FirstOrder): {m_j_b1_f0}")
+
+# Verify agreement
+print("Results match:", np.allclose(m_j_b1, m_j_b1_f0, atol=1e-2))
 
 # 11. Optional visualizations
 force_method.plot(mode='rls', kind='moment')    # released system

@@ -8,7 +8,6 @@ resulting internal forces and support reactions are computed.
 The example demonstrates:
 
 - Definition of a cross-section from polygon geometry
-- Visualization of the cross-section
 - Modeling a beam with a fixed support and a free end load
 - Extracting internal forces from the calculation result
 - Reading the bending moment at the fixed support

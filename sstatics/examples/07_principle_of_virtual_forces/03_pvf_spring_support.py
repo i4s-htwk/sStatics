@@ -1,7 +1,7 @@
 """
 Example 03:
 Computing the horizontal displacement of a spring-supported node using
-the Principle of Virtual Forces (PVK)
+the Principle of Virtual Forces (PVF)
 
 In this example, node_5 is supported by a translational spring. The spring
 stiffness contributes to the work equation of the node, and the horizontal

@@ -132,10 +132,10 @@ class ReductionTheorem(PVF):
     def delete_bar(self, obj: Bar):
         """Deletes a bar from the structural system.
 
-        Um ein statisch bestimmtes System zu erhalten, ist es ebenfalls möglich
-        Stäbe des modellierten Systems zu löschen. Eine Überprüfung der
-        Verformungsanteile für eine mögliche Stablöschung wird intern nicht
-        durchgeführt.
+        To obtain a statically determinate system, it is also possible to
+        remove bars from the modeled structure.
+        However, the software does not perform an internal check of deformation
+         contributions to determine whether a bar can be removed safely.
 
         Parameters
         ----------
