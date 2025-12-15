@@ -454,7 +454,7 @@ class Solver(LoggerMixin):
 
         Returns
         -------
-        :any:`tuple` of `numpy.array`
+        :any:`tuple` of :any:`numpy.array`
             A tuple `(k, p)` where `k` is the modified global stiffness matrix,
             and `p` is the modified global load vector after applying boundary
             conditions.
@@ -946,7 +946,7 @@ class Solver(LoggerMixin):
                 A = k'{red_n}
                 b = -k'{red} \cdot \delta^{(n)'} - f^{(0)'}
 
-            The solution vector :math:x represents the total relative
+            The solution vector :math:`x` represents the total relative
             deformations caused by the hinges.
         """
         if not self.solvable:
@@ -1039,7 +1039,7 @@ class Solver(LoggerMixin):
         the total deformation at the bar ends in the local coordinate system.
 
         This method adds the deformations from three different sources:
-            * Deformation due to hinges (:py:attr:`hinge_modifier`)
+            * Deformation due to hinges (:py:attr:`bar_deform_hinge`)
             * Internal deformation from structural analysis \
             (:py:attr:`bar_deform`)
             * Displacement-induced deformation from nodal support movements \

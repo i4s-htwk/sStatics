@@ -19,8 +19,8 @@ class System:
 
     Parameters
     ----------
-    bars : tuple[Bar, ...] | list[Bar] | tuple[BarSecond, ...] \
-            | list[BarSecond]
+    bars : tuple[ :any:`Bar`, ...] | list[ :any:`Bar`] \
+            | tuple[ :any:`BarSecond`, ...] | list[:any:`BarSecond`]
         A list or tuple of bars that define the structure of the statical
         system. The bars must be provided in a consecutive order, as they
         represent a connected structure.
@@ -37,7 +37,7 @@ class System:
 
     Attributes
     ----------
-    mesh : tuple[Bar, ...]
+    mesh : tuple[:any:`Bar`, ...]
         The bars of the system after segmentation.
     """
 
@@ -321,7 +321,7 @@ class Mesh:
     ----------
     bars : List[Bar]
         A list of bars to be meshed.
-    user_divisions : Optional[Dict[Bar, List[float]]]
+    user_divisions : Optional[Dict[Bar, List[:any:`float`]]]
         Optional user-defined divisions for each bar.
 
     Notes
@@ -490,7 +490,7 @@ class Mesh:
 
         Parameters
         ----------
-        load_pos_i : Dict[float, List[NodePointLoad]]
+        load_pos_i : Dict[:any:`float`, List[NodePointLoad]]
             A dictionary of loads at specific positions.
         user_pos_i : List[float]
             A list of user-defined positions.

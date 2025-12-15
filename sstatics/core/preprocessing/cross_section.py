@@ -367,7 +367,7 @@ class CrossSection(LoggerMixin):
 
         Returns
         -------
-        tuple of :any:`floats`
+        tuple of :any:`float`
             (:math:`S_y`, :math:`S_z`) static moments.
 
         Notes

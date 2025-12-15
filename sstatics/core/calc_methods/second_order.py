@@ -22,6 +22,9 @@ class SecondOrder(LoggerMixin):
     displacements or axial forces. Two solution strategies are available:
     a matrix-based approach and an iterative approach.
 
+    The implementation of this class is based on the literature [1]_, [2]_,
+    [3]_, [4]_ and [5]_
+
     Parameters
     ----------
     system : :any:`System`
@@ -249,8 +252,8 @@ class SecondOrder(LoggerMixin):
         -----
         The results of each iteration are stored in ``_iteration_results`` and
         can be accessed via :meth:`solver_iteration_cumulative()` for the
-        'cumulative' result type or via :meth:`iterative_growth()` for the
-        'incremental' result type.
+        'cumulative' result type or via :meth:`results_iterative_growth()`
+        for the 'incremental' result type.
 
         Raises
         ------
@@ -362,7 +365,7 @@ class SecondOrder(LoggerMixin):
             The iteration index to extract. Supports negative indexing to count
             from the end of the iteration history.
 
-        difference : {'internal_forces', 'bar_deform_total', 'node_deform',
+        difference : {'internal_forces', 'bar_deform_total', 'node_deform', \
                       'node_support_forces', 'system_support_forces'},
                       default='internal_forces'
 

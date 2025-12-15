@@ -16,16 +16,16 @@ class Polygon:
 
     Parameters
     ----------
-    points : list of tuple of float
+    points : list of tuple of :any:`float`
         A list of 2D coordinates defining the exterior boundary of the polygon.
         The polygon must be closed; i.e., the first and last point must be
         identical. A minimum of three distinct points (excluding the closing
         point) is required.
-    holes : list of tuple of float, optional
+    holes : list of tuple of :any:`float`, optional
         A list of holes, where each hole is defined by a list of coordinate
         tuples similar to the outer boundary. Each hole must also be closed.
         Default is an empty list (no holes).
-    positive : bool, optional
+    positive : :any:`bool`, optional
         Specifies whether the polygon should be oriented positively
         (counterclockwise). This affects the internal construction of the
         Shapely polygon.
@@ -172,7 +172,7 @@ class Polygon:
 
         Returns
         -------
-        float
+        :any:`float`
             The signed area of the polygon. A positive value indicates
             counterclockwise orientation (positive geometry),
             while a negative value indicates clockwise orientation.
@@ -364,13 +364,13 @@ class Polygon:
 
         Parameters
         ----------
-        center : float
+        center :  :any:`float`
             The perpendicular distance from the centroid to the desired axis
             (in the same units as the polygon coordinates).
 
         Returns
         -------
-        float
+         :any:`float`
             The additional moment of inertia due to the axis shift, i.e.
             :math:`I_{\text{shift}} = A \cdot d^2`,
             where :math:`A` is the area and :math:`d` is the distance
@@ -510,7 +510,7 @@ class Polygon:
 
         Returns
         -------
-        float
+        :any:`float`
             Moment of inertia :math:`I_{yy}` about the y-axis,
             relative to the centroidal coordinate system,
             in units of length⁴.
@@ -529,7 +529,7 @@ class Polygon:
 
         Returns
         -------
-        float
+         :any:`float`
             Moment of inertia :math:`I_{zz}` about the z-axis,
             relative to the centroidal coordinate system,
             in units of length⁴.
@@ -547,7 +547,7 @@ class Polygon:
 
         Returns
         -------
-        float
+         :any:`float`
             Product moment of inertia :math:`I_{yz}` relative to the
             centroidal coordinate system, in units of length⁴.
 
@@ -568,17 +568,17 @@ class CircularSector:
 
     Parameters
     ----------
-    center : tuple of float
+    center : tuple of  :any:`float`
         The (y_0, z_0) coordinates of the center of the circular sector.
-    radius : float
+    radius :  :any:`float`
         The radius of the sector. Must be a positive value.
-    angle : float
+    angle :  :any:`float`
         The angular span of the sector in radians. Must be a
         non-zero number and lie within the range ± 2π.
-    start_angle : float
+    start_angle :  :any:`float`
         The angle (in radians) where the sector arc begins, measured
         clockwise from the positive y'-axis.
-    positive : bool, optional
+    positive : :any:`bool`, optional
         Specifies whether the sector is a partial or cutout area of the total
         cross-section. If “True,” the sector contributes positively to
         calculations (e.g., area and moment). If “False,” it is treated as a
@@ -1054,7 +1054,7 @@ class CircularSector:
 
         Returns
         -------
-        tuple of list of float or np.float64
+        tuple of list of :any:`float` or np.float64
             A tuple containing two lists:
 
             - The first list is ``[y_min, y_max]``, representing the
@@ -1125,13 +1125,13 @@ class CircularSector:
 
         Parameters
         ----------
-        angle : float
+        angle :  :any:`float`
             The angle (in radians) to test. It will be normalized to the
             interval :math:`[0, 2\pi)`.
 
         Returns
         -------
-        bool
+        :any:`bool`
             True if the angle lies within the circular sector's angular range,
             False otherwise.
 

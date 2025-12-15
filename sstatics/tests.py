@@ -102,7 +102,6 @@ class TestNode(TestCase):
             'Nodes with equal coordinates share the same location.'
         )
 
-    # TODO: test base case
     def test_load(self):
         loads = (
             NodePointLoad(1, 1, 1), NodePointLoad(-3.5, 8, -0.2),
@@ -275,9 +274,6 @@ class TestBar(TestCase):
                              0.866025403784439, 0.0],
                             [0.0, 0.0, 0.0, 0.0, 0.0, 1.000000000000000]
                         ]))
-
-    def test_same_location(self):
-        """TODO"""
 
     def test_inclination(self):
         n1, n2 = Node(0, 0), Node(5, 0)

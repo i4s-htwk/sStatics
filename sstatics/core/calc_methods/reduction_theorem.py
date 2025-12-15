@@ -135,7 +135,7 @@ class ReductionTheorem(PVF):
         To obtain a statically determinate system, it is also possible to
         remove bars from the modeled structure.
         However, the software does not perform an internal check of deformation
-         contributions to determine whether a bar can be removed safely.
+        contributions to determine whether a bar can be removed safely.
 
         Parameters
         ----------

@@ -257,7 +257,6 @@ class BarPointLoad(PointLoad):
         if not (0 <= self.position <= 1):
             raise ValueError("position must be between 0 and 1")
 
-    # TODO: test
     def rotate(self):
         """Rotates the load vector based on its relative position.
 

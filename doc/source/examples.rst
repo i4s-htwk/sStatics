@@ -70,6 +70,7 @@ Stress
     examples/05_stress/shear_stress
     examples/05_stress/plot_shear_stress
     examples/05_stress/stress_disc
+    examples/05_stress/stress_t_cs
 
 Influence Line
 --------------

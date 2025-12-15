@@ -515,7 +515,7 @@ class Bar:
 
         See Also
         --------
-        :py:class:`BarLineLoad`
+        :any:`BarLineLoad`
 
         Notes
         -----
@@ -560,7 +560,7 @@ class Bar:
 
         See Also
         --------
-        :py:class:`BarPointLoad`
+        :any:`BarPointLoad`
 
         Notes
         -----
@@ -1093,14 +1093,14 @@ class BarSecond(Bar):
 
         Notes
         -----
-            The modified flexural stiffness is calculated [1] :
+            The modified flexural stiffness is calculated [1]_ :
 
             .. math::
                 B_s = EI \cdot ( 1 + \dfrac{L}{GA_s})
 
         References
         ----------
-        ..  [1] Spura, Christian: Einführung in die Balkentheorie nach
+        .. [1] Spura, Christian: Einführung in die Balkentheorie nach
             Timoshenko und Euler-Bernoulli. Springer Vieweg, 2019
             https://doi.org/10.1007/978-3-658-25216-8
         """
@@ -1649,7 +1649,7 @@ class BarSecond(Bar):
         >>> line_load = BarLineLoad(1, 1.5, 'z', 'bar', 'exact')
         >>> force = -181.99971053936605
         >>> b = BarSecond(n1, n2, cross, material, line_loads=line_load)
-        >>> b.stiffness_matrix_analytic()
+        >>> b.stiffness_matrix_analytic
         array([[1, 0, 0, 1, 0, 0],
              [0, 0.9491546296, 0.9908554233, 0, 0.9491546296, 0.9908554233],
              [0, 0.9908554233, 0.9826126598,  0, 0.9908554233, 1.0073409503],
