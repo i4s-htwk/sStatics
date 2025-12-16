@@ -43,17 +43,11 @@ class BendingLine:
             Global axial displacements per bar.
         w_global : list of np.ndarray
             Global transverse displacements per bar.
-        start_coords : list of tuple
-            Starting coordinates (x, z) of each bar in global system.
-        angles : list of float
-            Inclination angles of each bar in radians.
         """
         self.x_global = []
         self.z_global = []
         self.u_global = []
         self.w_global = []
-        self.start_coords = []
-        self.angles = []
 
         self._compute()
 
@@ -120,8 +114,6 @@ class BendingLine:
             self.z_global.append(z_glob + zi)
             self.u_global.append(u_glob)
             self.w_global.append(w_glob)
-            self.start_coords.append((xi, zi))
-            self.angles.append(bar.inclination)
 
     def deformed_lines(self):
         """
