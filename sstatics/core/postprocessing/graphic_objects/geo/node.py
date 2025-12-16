@@ -25,10 +25,11 @@ class NodeGeo(ObjectGeo):
     def __init__(
             self,
             node: Node,
+            show_load: bool = True,
             show_load_text: bool = True,
             **kwargs
     ):
-        self._validate_node(node, show_load_text)
+        self._validate_node(node, show_load, show_load_text)
         super().__init__(origin=(node.x, node.z), **kwargs)
         self._node = node
         self._show_load_text = show_load_text
@@ -69,15 +70,16 @@ class NodeGeo(ObjectGeo):
         if support is RollerSupportGeo and bits == '100':
             rotation -= np.pi / 2
 
+        line_style = self._resolve_style(
+            self._node, DEFAULT_SUPPORT, self._line_style
+        )
+        text_style = self._resolve_style(
+            self._node, DEFAULT_TEXT, self._text_style
+        )
+
         return [support(
-            self._origin, text=self._text,
-            line_style=self._resolve_style(
-                self._node, DEFAULT_SUPPORT, self._line_style
-            ),
-            text_style=self._resolve_style(
-                self._node, DEFAULT_TEXT, self._text_style
-            ),
-            rotation=rotation
+            self._origin, text=self._text, line_style=line_style,
+            text_style=text_style, rotation=rotation
         )]
 
     @property
@@ -137,10 +139,16 @@ class NodeGeo(ObjectGeo):
         ]
 
     @staticmethod
-    def _validate_node(node, show_load_text):
+    def _validate_node(node, show_load, show_load_text):
         if not isinstance(node, Node):
             raise TypeError(
                 f'"node" must be a Node, got {type(node).__name__!r}'
+            )
+
+        if not isinstance(show_load, bool):
+            raise TypeError(
+                f'"show_load" must be a boolean, got '
+                f'{type(show_load).__name__!r}'
             )
 
         if not isinstance(show_load_text, bool):

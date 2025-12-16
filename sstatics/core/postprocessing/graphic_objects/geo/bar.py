@@ -1,6 +1,6 @@
 
 import numpy as np
-from sympy.core.cache import cached_property
+from functools import cached_property
 
 from sstatics.core.preprocessing.bar import Bar
 
@@ -83,7 +83,7 @@ class BarGeo(ObjectGeo):
             self._bar, DEFAULT_CIRCLE_TEXT, self._text_style
         )
         return OpenCurveGeo(
-            *self._bar_coords, text=self._text, preferred_text_pos='1,0',
+            *self._bar_coords, text=self._text, preferred_text_pos='0,2',
             line_style=line_style, text_style=text_style
         )
 
@@ -198,7 +198,7 @@ class BarGeo(ObjectGeo):
         return [TempGeo(
             bar_coords=self._bar_coords, temp=self._bar.temp,
             rotation=self._bar.inclination
-        )]
+        )] if self._show_load else []
 
     @staticmethod
     def _validate_bar(bar, show_load, show_load_text, show_tensile_zone):

@@ -160,7 +160,7 @@ class AbstractRenderer(ABC):
             n = DEFAULT_NUMBER_OF_TEXT_POSITIONS
             m = DEFAULT_NUMBER_OF_TEXT_RINGS
 
-        offsets = np.array([(i + 1) * self.scene_scale for i in range(m)])
+        offsets = (1 + 0.5 * np.arange(m)) * self.scene_scale
         angles = np.linspace(np.pi / 2, -3 / 2 * np.pi, n, endpoint=False)
         R, A = np.meshgrid(offsets, angles, indexing="ij")
 

@@ -71,9 +71,9 @@ class OpenCurveGeo(ObjectGeo):
         text = self._text
         if not text:
             return []
-        n = len(text)
+        n_texts = len(text)
         n_points = len(self._x)
-        if n == 1:
+        if n_texts == 1:
             pos = self._preferred_text_pos
             if n_points == 2:
                 (x0, x1) = self._x
@@ -82,18 +82,35 @@ class OpenCurveGeo(ObjectGeo):
                     (x0 + x1) / 2, (z0 + z1) / 2, text, self._text_style, pos
                 )]
             return [(*self._origin, text, self._text_style, pos)]
-        elif n == n_points:
+        if n_texts > 1:
+            if n_texts > n_points:
+                raise ValueError(
+                    f'Too many text entries ({n_texts}) for {n_points} points.'
+                )
+            if n_points == n_texts:
+                return [
+                    (self._x[i], self._z[i], [t], self._text_style)
+                    for i, t in enumerate(text)
+                ]
+            # gleichmäßige Verteilung prüfen
+            if n_texts == 2:
+                indices = [0, n_points - 1]
+            else:
+                indices = []
+                step = (n_points - 1) / (n_texts - 1)
+                for i in range(n_texts):
+                    idx = round(i * step)
+                    indices.append(idx)
+                # prüfen, ob indices eindeutig und innerhalb gültiger range
+                if len(set(indices)) != n_texts or indices[-1] != n_points - 1:
+                    raise ValueError(
+                        f'Cannot distribute {n_texts} texts evenly over '
+                        f'{n_points} points.'
+                    )
             return [
-                (self._x[i], self._z[i], [t], self._text_style)
-                for i, t in enumerate(text)
+                (self._x[idx], self._z[idx], [t], self._text_style)
+                for idx, t in zip(indices, text)
             ]
-        else:
-            raise ValueError(
-                f'Invalid number of text entries: expected either 1 or'
-                f'{n_points}, but got {n}. The number of text labels must '
-                f'match the number of curve points (len(x) and len(z)) or be '
-                f'exactly one.'
-            )
 
     @classmethod
     def from_center(cls, origin: tuple[float, float], length: float, **kwargs):

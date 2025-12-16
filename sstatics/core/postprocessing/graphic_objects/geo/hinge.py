@@ -3,7 +3,7 @@ import abc
 from typing import Type
 
 import numpy as np
-from sympy.core.cache import cached_property
+from functools import cached_property
 
 from sstatics.core.postprocessing.graphic_objects.geo.geometry import (
     OpenCurveGeo, EllipseGeo, RectangleGeo

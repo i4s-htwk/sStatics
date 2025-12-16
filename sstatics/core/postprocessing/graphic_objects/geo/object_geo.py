@@ -61,7 +61,8 @@ class ObjectGeo(abc.ABC):
             text: str | list[str] = '',
             line_style: dict[str, Any] | None = None,
             point_style: dict[str, Any] | None = None,
-            text_style: dict[str, Any] | None = None
+            text_style: dict[str, Any] | None = None,
+            global_scale: float | None = None
     ):
         line_style = line_style or {}
         point_style = point_style or {}
@@ -95,6 +96,7 @@ class ObjectGeo(abc.ABC):
             class_styles.get('text'),
             user_styles['text']
         )
+        self._global_scale = global_scale
 
     @cached_property
     @abc.abstractmethod
@@ -209,7 +211,7 @@ class ObjectGeo(abc.ABC):
         x_min, x_max, z_min, z_max = self._boundaries
         return x_max - x_min, z_max - z_min
 
-    @cached_property
+    @property
     def _base_scale(self) -> float:
         """Return a normalized scaling factor based on the object size.
 
@@ -229,8 +231,10 @@ class ObjectGeo(abc.ABC):
         This property is primarily used for adjusting text or symbol positions
         relative to the object size.
         """
+        if self._global_scale is not None:
+            return self._global_scale
         dx, dz = self._max_dimensions
-        return 0.04 * max(dx, dz) + 0.01
+        return 0.04 * max(dx, 2 * dz) + 0.01
 
     @staticmethod
     def _merge_style(

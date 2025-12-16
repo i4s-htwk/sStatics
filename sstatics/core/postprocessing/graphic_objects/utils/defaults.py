@@ -233,6 +233,10 @@ DEFAULT_TENSILE_ZONE = dict(
     line=dict(dash='dash', width=1),
 )
 
+DEFAULT_STATE_LINE = dict(
+    line_color='red'
+)
+
 PLOTLY = 'plotly'
 MPL = 'mpl'
 VALID_MODES = (PLOTLY, MPL)

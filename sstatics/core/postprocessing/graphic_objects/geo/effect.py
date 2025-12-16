@@ -2,7 +2,7 @@ import abc
 from types import NoneType
 
 import numpy as np
-from sympy.core.cache import cached_property
+from functools import cached_property
 
 from sstatics.core.preprocessing.dof import NodeDisplacement
 from sstatics.core.preprocessing.loads import PointLoad, BarLineLoad

@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 import numpy as np
-from sympy.core.cache import cached_property
+from functools import cached_property
 
 from .geometry import ClosedCurveGeo
 from ..geo.object_geo import ObjectGeo

@@ -7,7 +7,7 @@ import matplotlib.colors as mcolors
 LINESTYLE_MAP = {
     'solid': '-',
     'dot': ':',
-    'dash': '--',
+    'dash': (10, 6),
     'longdash': (0, (8, 4)),
     'dashdot': '-.',
 }
@@ -75,7 +75,7 @@ def convert_plotly_to_mpl(style: dict) -> dict:
         sm = style['marker']
         mpl_style['marker'] = 'o'
         if 'size' in sm:
-            mpl_style['markersize'] = sm['size'] ** 0.5 * 3
+            mpl_style['markersize'] = sm['size'] ** 0.5 * 4
         if 'color' in sm:
             mpl_style['markerfacecolor'] = convert_color_to_mpl(sm['color'])
         sml = sm.get('line', {})
@@ -112,7 +112,11 @@ def convert_plotly_to_mpl(style: dict) -> dict:
         dash = sl['dash']
         if dash not in LINESTYLE_MAP:
             raise ValueError(f'Unrecognized line dash style: {dash}')
-        mpl_style['linestyle'] = LINESTYLE_MAP[dash]
+
+        base_pattern = LINESTYLE_MAP[dash]
+        scale = sl.get('dash_scale', 1.0)  # optionaler Skalierungsfaktor
+        mpl_style['dashes'] = [x * scale for x in base_pattern]
+        mpl_style['linestyle'] = (0, mpl_style['dashes'])
 
     # --- FILL ---
     if 'fillcolor' in style:

@@ -1,4 +1,5 @@
-from sympy.core.cache import cached_property
+
+from functools import cached_property
 
 from sstatics.core.preprocessing.geometry import Polygon
 from .geo.geometry import PolygonGeo
