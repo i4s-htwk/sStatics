@@ -19,6 +19,7 @@ class Pole:
     relative or absolute motion of connected elements.
 
     **Types of Poles**
+
     - Absolute Pole (Hauptpol):
         A fixed point in the plane that does not translate. The associated
         body rotates around this point. Examples include fixed supports or
@@ -34,24 +35,24 @@ class Pole:
 
     Parameters
     ----------
-    node : Node
+    node : :any:`Node`
         The node associated with the Pole, providing coordinates in the
         plane.
-    same_location : bool, default=False
+    same_location : :any:`bool`, default=False
         Indicates whether the Pole coincides exactly with the node
         coordinates.
-    direction : float or None, default=None
+    direction : :any:`float` or None, default=None
         Direction of the Pole for translation or Poles at infinity (in
         radians). None if not applicable.
-    is_infinite : bool, default=False
+    is_infinite : :any:`bool`, default=False
         Indicates whether the Pole is at infinity, corresponding to a
         translational motion.
 
     Attributes
     ----------
-    x : float or None
+    x : :any:`float` or None
         X-coordinate of the Pole if `same_location=True`, else None.
-    z : float or None
+    z : :any:`float` or None
         Z-coordinate of the Pole if `same_location=True`, else None.
     coords : np.ndarray
         2x1 array of the Pole coordinates, or None entries if coordinates

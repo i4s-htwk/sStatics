@@ -26,10 +26,13 @@ bar_1 = Bar(node_1, node_2, c_1, m_1, line_loads=BarLineLoad(
 # 4. Define system
 system = System([bar_1])
 
-# 5. Create a SecondOrder object
+# 5. Get First Order Solution Instance
+solution_first_order = FirstOrder(system)
+
+# 6. Create a SecondOrder object
 sec_order = SecondOrder(system)
 
-# 6. Set matrix approach and a chosen variant and get solver object
+# 7. Set matrix approach and a chosen variant and get solver object
 # analytic
 sec_order.matrix_approach('analytic')
 solution_analytic = sec_order.solver_matrix_approach
@@ -42,10 +45,7 @@ solution_taylor = sec_order.solver_matrix_approach
 sec_order.matrix_approach('p_delta')
 solution_p_delta = sec_order.solver_matrix_approach
 
-# first order
-solution_first_order = FirstOrder(system)
-
-# 7. Get moment at the beginning of the bar
+# 8. Get moment at the beginning of the bar
 moment_analytic = solution_analytic.internal_forces[0][2][0]
 moment_taylor = solution_taylor.internal_forces[0][2][0]
 moment_p_delta = solution_p_delta.internal_forces[0][2][0]

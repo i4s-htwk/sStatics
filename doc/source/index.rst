@@ -5,9 +5,7 @@
 
     installation
     getting_started
-    howtoguide
     examples
-    explanation
     api
 
 .. toctree::
@@ -15,6 +13,7 @@
     :hidden:
 
     contributing
+    uml
     License <license>
 
 ========

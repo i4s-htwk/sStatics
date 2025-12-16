@@ -25,11 +25,11 @@ class PolygonMerge(LoggerMixin):
 
     Parameters
     ----------
-    positive : list of Polygon, optional
+    positive : list of :any:`Polygon`, optional
         A list of polygons that define the base area to be merged. At least
         one polygon must be provided. All elements must be instances of
         the custom `Polygon` class.
-    negative : list of Polygon, optional
+    negative : list of :any:`Polygon`, optional
         A list of polygons to be subtracted (cut out) from the merged
         positive geometry. These are treated as holes or exclusions.
         Defaults to an empty list.
@@ -44,9 +44,9 @@ class PolygonMerge(LoggerMixin):
 
     Attributes
     ----------
-    positive : list of Polygon
+    positive : list of  :any:`Polygon`
         The list of input polygons to be merged.
-    negative : list of Polygon
+    negative : list of  :any:`Polygon`
         The list of polygons to subtract from the merged positive area.
     unary_pos : shapely.geometry.Polygon or MultiPolygon
         Union geometry of all positive polygons.
@@ -123,7 +123,7 @@ class PolygonMerge(LoggerMixin):
 
         Returns
         -------
-        Polygon
+         :any:`Polygon`
             A new `Polygon` instance representing the result of the
             difference operation.
 

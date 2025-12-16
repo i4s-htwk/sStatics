@@ -464,7 +464,7 @@ class InfluenceLine(LoggerMixin):
             f"Computing normalization force for force={force}, obj={obj}")
         delta = 0.0
         if isinstance(obj, Bar):
-            deform = self.solution.bar_deform_list
+            deform = self.solution.bar_deform_total
             bars = list(self.system.bars)
             idx = bars.index(obj)
 

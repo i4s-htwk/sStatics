@@ -5,6 +5,7 @@ from typing import List
 
 import numpy as np
 
+from sstatics.core import DifferentialEquationSecond
 from sstatics.core.postprocessing import DifferentialEquation
 
 
@@ -26,7 +27,7 @@ class BendingLine:
         List of DifferentialEquation objects, one per beam.
     """
 
-    dgl_list: List[DifferentialEquation]
+    dgl_list: List[DifferentialEquation] | List[DifferentialEquationSecond]
 
     def __post_init__(self):
         """
@@ -42,17 +43,11 @@ class BendingLine:
             Global axial displacements per bar.
         w_global : list of np.ndarray
             Global transverse displacements per bar.
-        start_coords : list of tuple
-            Starting coordinates (x, z) of each bar in global system.
-        angles : list of float
-            Inclination angles of each bar in radians.
         """
         self.x_global = []
         self.z_global = []
         self.u_global = []
         self.w_global = []
-        self.start_coords = []
-        self.angles = []
 
         self._compute()
 
@@ -75,7 +70,8 @@ class BendingLine:
 
         for dgl in self.dgl_list:
             deform = dgl.deform.flatten()
-            values.extend([abs(deform[0]), abs(deform[1]), abs(deform[2])])
+            values.extend([abs(deform[0]), abs(deform[1]), abs(deform[2]),
+                           abs(deform[3]), abs(deform[4]), abs(deform[5])])
         return max(values) if values else 1.0
 
     def _compute(self):
@@ -118,8 +114,6 @@ class BendingLine:
             self.z_global.append(z_glob + zi)
             self.u_global.append(u_glob)
             self.w_global.append(w_glob)
-            self.start_coords.append((xi, zi))
-            self.angles.append(bar.inclination)
 
     def deformed_lines(self):
         """

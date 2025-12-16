@@ -18,7 +18,7 @@ stress = CrossSectionStress(cs)
 V = 2000
 
 # shear_stress_disc requires bottom (z_i) and top (z_j) coordinates.
-# For this rectangle: z = 0 at the bottom, z = 10 at the top.
+# For this rectangle: z = 0 at the bottom, z = 40 at the top.
 #
 # n_disc = 20 means:
 # → 20 intermediate points are created between z_i and z_j
@@ -26,7 +26,7 @@ V = 2000
 #
 # At each of these z-positions, the shear stress τ(z) is computed
 # and stored internally for later plotting.
-stress.shear_stress_disc(v_z=V, z_i=0, z_j=10, n_disc=20)
+stress.shear_stress_disc(v_z=V, z_i=0, z_j=40, n_disc=20)
 
 # 4. Plot stored distribution
 stress.plot(kind="shear")

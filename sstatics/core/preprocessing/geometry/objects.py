@@ -16,16 +16,16 @@ class Polygon:
 
     Parameters
     ----------
-    points : list of tuple of float
+    points : list of tuple of :any:`float`
         A list of 2D coordinates defining the exterior boundary of the polygon.
         The polygon must be closed; i.e., the first and last point must be
         identical. A minimum of three distinct points (excluding the closing
         point) is required.
-    holes : list of tuple of float, optional
+    holes : list of tuple of :any:`float`, optional
         A list of holes, where each hole is defined by a list of coordinate
         tuples similar to the outer boundary. Each hole must also be closed.
         Default is an empty list (no holes).
-    positive : bool, optional
+    positive : :any:`bool`, optional
         Specifies whether the polygon should be oriented positively
         (counterclockwise). This affects the internal construction of the
         Shapely polygon.
@@ -172,7 +172,7 @@ class Polygon:
 
         Returns
         -------
-        float
+        :any:`float`
             The signed area of the polygon. A positive value indicates
             counterclockwise orientation (positive geometry),
             while a negative value indicates clockwise orientation.
@@ -206,8 +206,8 @@ class Polygon:
     @property
     def static_moment(self) -> Tuple[np.float64, np.float64]:
         r"""
-        Computes the static moments \( S_z \) and \( S_y \) with respect to the
-        coordinate axes.
+        Computes the static moments :math:`S_z` and :math:`S_y` with respect to
+        the coordinate axes.
 
         Returns
         -------
@@ -219,20 +219,19 @@ class Polygon:
             The static moments (also called first moments of area) are used
             to compute the centroid of the polygon.
 
-        .. math::
+            .. math::
+                S_z = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)
+                (z_i + z_{i-1})
 
-            S_z = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)(z_i + z_{i-1})
+            .. math::
+                S_y = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)
+                (y_i + y_{i-1})
 
-        .. math::
+            These are discrete approximations of the first moments:
 
-            S_y = -\frac{1}{6} \sum (y_i z_{i-1} - y_{i-1} z_i)(y_i + y_{i-1})
-
-        These are discrete approximations of the first moments:
-
-        .. math::
-
-            S_z = \int_A z \, \mathrm{d}A, \quad
-            S_y = \int_A y \, \mathrm{d}A
+            .. math::
+                S_z = \int_A z \, \mathrm{d}A, \quad
+                S_y = \int_A y \, \mathrm{d}A
 
         Examples
         --------
@@ -365,13 +364,13 @@ class Polygon:
 
         Parameters
         ----------
-        center : float
+        center :  :any:`float`
             The perpendicular distance from the centroid to the desired axis
             (in the same units as the polygon coordinates).
 
         Returns
         -------
-        float
+         :any:`float`
             The additional moment of inertia due to the axis shift, i.e.
             :math:`I_{\text{shift}} = A \cdot d^2`,
             where :math:`A` is the area and :math:`d` is the distance
@@ -511,7 +510,7 @@ class Polygon:
 
         Returns
         -------
-        float
+        :any:`float`
             Moment of inertia :math:`I_{yy}` about the y-axis,
             relative to the centroidal coordinate system,
             in units of length⁴.
@@ -530,7 +529,7 @@ class Polygon:
 
         Returns
         -------
-        float
+         :any:`float`
             Moment of inertia :math:`I_{zz}` about the z-axis,
             relative to the centroidal coordinate system,
             in units of length⁴.
@@ -548,7 +547,7 @@ class Polygon:
 
         Returns
         -------
-        float
+         :any:`float`
             Product moment of inertia :math:`I_{yz}` relative to the
             centroidal coordinate system, in units of length⁴.
 
@@ -569,17 +568,17 @@ class CircularSector:
 
     Parameters
     ----------
-    center : tuple of float
+    center : tuple of  :any:`float`
         The (y_0, z_0) coordinates of the center of the circular sector.
-    radius : float
+    radius :  :any:`float`
         The radius of the sector. Must be a positive value.
-    angle : float
+    angle :  :any:`float`
         The angular span of the sector in radians. Must be a
         non-zero number and lie within the range ± 2π.
-    start_angle : float
+    start_angle :  :any:`float`
         The angle (in radians) where the sector arc begins, measured
         clockwise from the positive y'-axis.
-    positive : bool, optional
+    positive : :any:`bool`, optional
         Specifies whether the sector is a partial or cutout area of the total
         cross-section. If “True,” the sector contributes positively to
         calculations (e.g., area and moment). If “False,” it is treated as a
@@ -1050,17 +1049,17 @@ class CircularSector:
         return z_boundary[1] - z_boundary[0]
 
     def boundary(self):
-        r"""
-        Computes the minimum and maximum boundaries of the circular
+        r"""Computes the minimum and maximum boundaries of the circular
         sector in both the y- and z-directions.
 
         Returns
         -------
-        tuple of list of float or np.float64
+        tuple of list of :any:`float` or np.float64
             A tuple containing two lists:
-            - The first list is [y_min, y_max], representing the
+
+            - The first list is ``[y_min, y_max]``, representing the
               horizontal extent.
-            - The second list is [z_min, z_max], representing the
+            - The second list is ``[z_min, z_max]``, representing the
               vertical extent.
 
         Notes
@@ -1075,7 +1074,7 @@ class CircularSector:
           end points of the circle sector).
 
         The method checks whether those extreme values within the angular range
-        of the circular sector using `_angle_in_sector`, and includes them if
+        of the circular sector using ``_angle_in_sector``, and includes them if
         applicable. This ensures the correct bounding box even for partial
         sectors that span multiple quadrants.
 
@@ -1084,8 +1083,7 @@ class CircularSector:
 
         Examples
         --------
-        >>> from sstatics.core.preprocessing.geometry.objects import
-        >>>     (CircularSector)
+        >>> from sstatics.core.preprocessing.geometry import CircularSector
         >>> import numpy as np
         >>> c = CircularSector(center = (0,0), radius = 1, angle = np.pi/2,
         >>>                    start_angle = np.pi/4, positive = True
@@ -1127,13 +1125,13 @@ class CircularSector:
 
         Parameters
         ----------
-        angle : float
+        angle :  :any:`float`
             The angle (in radians) to test. It will be normalized to the
             interval :math:`[0, 2\pi)`.
 
         Returns
         -------
-        bool
+        :any:`bool`
             True if the angle lies within the circular sector's angular range,
             False otherwise.
 

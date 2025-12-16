@@ -4,7 +4,7 @@ from typing import Literal
 
 from sstatics.core.preprocessing.system import Bar
 from sstatics.core.solution.solver import Solver
-from sstatics.core.postprocessing import BarStressDistribution
+from sstatics.core.postprocessing.stress import BarStressDistribution
 from sstatics.core.utils import get_differential_equation
 
 
@@ -33,7 +33,7 @@ class FirstOrder(Solver):
             self, bar_index: int | None = None, n_disc: int = 10
     ):
         return get_differential_equation(
-            self.system, self.bar_deform_list, self.internal_forces,
+            self.system, self.bar_deform_total, self.internal_forces,
             bar_index, n_disc
         )
 
@@ -41,7 +41,7 @@ class FirstOrder(Solver):
         return [
             BarStressDistribution(
                 bar=bar,
-                deform=self.bar_deform_list[i],
+                deform=self.bar_deform_total[i],
                 force=self.internal_forces[i],
                 n_disc=n_disc,
             )
@@ -60,7 +60,7 @@ class FirstOrder(Solver):
         from sstatics.graphic_objects import ResultGraphic
         from sstatics.core.postprocessing import SystemResult
         result = SystemResult(
-            self.system, self.bar_deform_list, self.internal_forces,
+            self.system, self.bar_deform_total, self.internal_forces,
             self.node_deform, self.node_support_forces,
             self.system_support_forces, n_disc=n_disc)
         ResultGraphic(

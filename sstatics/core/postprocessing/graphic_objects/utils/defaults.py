@@ -102,9 +102,23 @@ DEFAULT_CENTER_OF_MASS = dict(
 #     # alpha=1.0,
 # )
 
-DEFAULT_CROSS_SECTION_POSITIVE = 'rgba(60, 225, 0, 0.1)'
+DEFAULT_CROSS_SECTION_POSITIVE = dict(
+    fillcolor='rgba(60, 225, 0, 0.1)'
+)
 
-DEFAULT_CROSS_SECTION_NEGATIVE = 'rgba(255, 0, 0, 0.1)'
+DEFAULT_CROSS_SECTION_POINT_STYLE_POSITIVE = dict(
+    mode='markers',
+    marker=dict(color='rgba(60, 225, 0, 1)'),
+)
+
+DEFAULT_CROSS_SECTION_NEGATIVE = dict(
+    fillcolor='rgba(255, 0, 0, 0.1)'
+)
+
+DEFAULT_CROSS_SECTION_POINT_STYLE_NEGATIVE = dict(
+    mode='markers',
+    marker=dict(color='rgba(255, 0, 0, 1)'),
+)
 
 DEFAULT_HATCH = dict(
     spacing=0.2,

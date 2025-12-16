@@ -102,7 +102,6 @@ class TestNode(TestCase):
             'Nodes with equal coordinates share the same location.'
         )
 
-    # TODO: test base case
     def test_load(self):
         loads = (
             NodePointLoad(1, 1, 1), NodePointLoad(-3.5, 8, -0.2),
@@ -275,9 +274,6 @@ class TestBar(TestCase):
                              0.866025403784439, 0.0],
                             [0.0, 0.0, 0.0, 0.0, 0.0, 1.000000000000000]
                         ]))
-
-    def test_same_location(self):
-        """TODO"""
 
     def test_inclination(self):
         n1, n2 = Node(0, 0), Node(5, 0)
@@ -1383,34 +1379,6 @@ class TestSolver(TestCase):
                     "linear system."
         )
 
-    def test_node_deform_list(self):
-        # Check node_deform_list construction for multi-bar systems
-        cross1 = CrossSection(0.3 * 0.5 ** 3/12, 0.3 * 0.5, 0.5, 0.3, 0.1)
-        cross2 = CrossSection(0.3 * 0.3 ** 3 / 12, 0.3 * 0.3, 0.3, 0.3, 0.1)
-        mat1 = Material(3000e3, 1.2, 60e3, 0.1)
-        n1, n2 = Node(0, 0, w='fixed'), Node(2, 0)
-        n3 = Node(5, 0, w='fixed')
-        n4 = Node(2, 2.5, u='fixed', w='fixed', phi='fixed')
-        b1 = Bar(n1, n2, cross1, mat1, line_loads=BarLineLoad(30, 30),
-                 deformations=['moment'])
-        b2 = Bar(n2, n3, cross1, mat1, deformations=['moment'])
-        b3 = Bar(n4, n2, cross2, mat1,
-                 point_loads=BarPointLoad(60, 0, 0, 0, 0.6),
-                 deformations=['moment'])
-        system = System([b1, b2, b3])
-        assert_allclose(
-            Solver(system).node_deform_list,
-            [np.array([[0.025618694], [0], [-0.0002861296],
-                       [0.025618694], [0.0000003651], [-0.0004949552]]),
-             np.array([[0.025618694], [0.0000003651], [-0.0004949552],
-                       [0.025618694], [0], [0.0002476602]]),
-             np.array([[0], [0], [0], [0.0185560632], [0.0000002191],
-                       [-0.0136303065]]),
-             np.array([[0.0185560632], [0.0000002191], [-0.0136303065],
-                       [0.025618694], [0.0000003651], [-0.0004949552]])],
-            err_msg='Unexpected node_deform_list for the given multi-bar '
-                    'system.')
-
     def test_bar_deform(self):
         cross = CrossSection(1940e-8, 28.5e-4, 0.2, 0.1, 0.1)
         mat = Material(2.1e8, 0.1, 0.1, 0.1)
@@ -1421,7 +1389,7 @@ class TestSolver(TestCase):
         bd = fo.bar_deform[0]
         # Check definition-based reconstruction
         expected = (np.transpose(b1.transformation_matrix()) @
-                    fo.node_deform_list[0])
+                    fo.node_deform)
         assert_allclose(
             bd, expected,
             err_msg="bar_deform must equal T^T @ stacked nodal deformations.")
@@ -1440,11 +1408,11 @@ class TestSolver(TestCase):
         b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
         fo = Solver(System([b1]))
 
-        sys_def = fo.system_deform_list[0]
-        node_def = fo.node_deform_list[0]
+        sys_def = fo.system_deform[0]
+        bar_def = fo.bar_deform_total[0]
         assert_allclose(
-            sys_def, node_def,
-            err_msg="system_deform_list must equal node_deform_list when "
+            sys_def, bar_def,
+            err_msg="system_deform must equal bar_deform_total when "
                     "transforming back to system coordinates."
         )
 
@@ -1592,16 +1560,16 @@ class TestSolver(TestCase):
         b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1),
                  hinge_phi_i=True, hinge_w_i=True)
         assert_allclose(
-            Solver(System([b1])).bar_deform_list,
+            Solver(System([b1])).bar_deform_total,
             np.array([[[1], [2.485272459e-3], [1.104565538e-3],
                        [0], [0], [0]]]),
-            err_msg='bar_deform_list must equal hinge_modifier + bar_deform + '
-                    'bar_deform_displacements.')
+            err_msg='bar_deform_total must equal hinge_modifier + '
+                    'bar_deform + bar_deform_displacements.')
         # Case with no hinges and fixed supports: zero deformation expected
         n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
         b1 = Bar(n1, n2, cross, mat, line_loads=BarLineLoad(1, 1))
         assert_allclose(
-            Solver(System([b1])).bar_deform_list,
+            Solver(System([b1])).bar_deform_total,
             [np.zeros((6, 1))],
             err_msg='Total bar-end deformation must be zero with no hinges, '
                     'blocked supports, and no node displacements.')
@@ -1630,7 +1598,7 @@ class TestSolver(TestCase):
     #     )
     #     self.assertEqual(
     #         len(fo.calc), 2,
-    #         'calc must return (bar_deform_list, internal_forces).'
+    #         'calc must return (bar_deform_total, internal_forces).'
     #     )
 
 

@@ -43,7 +43,7 @@ solution_p_delta = sec_order.solver_matrix_approach
 
 # 8. Get the bar deformations of the bar
 # here only 1 bar -> index [0] of bar deform list
-bar_deform = solution_p_delta.bar_deform_list[0]
+bar_deform = solution_p_delta.bar_deform_total[0]
 
 # 9. Plot the deformation of the system
 sec_order.plot('matrix', kind='w', decimals=4)

@@ -17,12 +17,36 @@ class Solver(LoggerMixin):
 
     The analysis is based on the deformation method, assuming linear-elastic
     material behavior and small displacements. Suitable for systems where
-    second-order effects can be neglected. The
+    second-order effects can be neglected. The implementation of the solver
+    is based on the literature [1]_, [2]_, [3]_, [4]_, [5]_, [6]_ and [7]_
 
      Parameters
     ----------
     system : :any:`System`
         The structural system to be analyzed using first-order theory.
+
+    References
+    ----------
+    .. [1] R. Dallmann. "Baustatik 3: Theorie II. Ordnung und
+            computerorientierte Methoden der Stabtragwerke". 2. Auflage, 2015.
+
+    .. [2] H. Werkle. "Finite Elemente in der Baustatik: Statik und Dynamik der
+            Stab- und Flächentragwerke". 3. Auflage, 2008.
+
+    .. [3] W. Graf, T. Vassilev. "Einführung in computerorientierte Methoden
+            der Baustatik". 2006.
+
+    .. [4] H. Ahlert. "Finite Elemente in der Stabstatik - Grundlagen der
+            Finite-Elemente-Methode - Baupraktische Zahlenbeispiele". 1992.
+
+    .. [5] W. Graf, T. Vassilev. "Einführung in computerorientierte Methoden
+            der Baustatik". 2006.
+
+    .. [6] J. Dankert, H. Dankert (Hrsg.). "MATHEMATIK FÜR DIE TECHNISCHE
+            MECHANIK". http://www.tm-mathe.de/ , accessed on: 09.12.2025
+
+    .. [7] J. Dankert, H. Dankert. "Dankert/Dankert - Technische Mechanik:
+            Statik, Festigkeitslehre, Kinematik/Kinetik.", Bd. 7, 2013
     """
 
     system: System
@@ -51,8 +75,8 @@ class Solver(LoggerMixin):
                  self.node_support_forces, self.system_support_forces,
                  self.internal_forces,
                  self.bar_deform, self.bar_deform_hinge,
-                 self.bar_deform_displacements, self.bar_deform_list,
-                 self.system_deform_list]
+                 self.bar_deform_displacements, self.bar_deform_total,
+                 self.system_deform]
 
             # Define all tables in a list of (description, data, headers,
             # function)
@@ -67,14 +91,14 @@ class Solver(LoggerMixin):
                  table_node),
                 ("Bar Deformation",
                  [self.bar_deform, self.bar_deform_hinge,
-                  self.bar_deform_displacements, self.bar_deform_list],
+                  self.bar_deform_displacements, self.bar_deform_total],
                  [["u' wgv", "w' wgv", "φ' wgv"],
                   ["u' hinge", "w' hinge", "φ' hinge"],
                   ["u' displacements", "w' displacements", "φ' displacements"],
                   ["u'", "w'", "φ'"]],
                  lambda data, header: table_bar(data, mapping, header)),
                 ("Bar deformation",
-                 [self.bar_deform_list, self.system_deform_list],
+                 [self.bar_deform_total, self.system_deform],
                  [["u'", "w'", "φ'"], ['u\u0303', 'w\u0303', 'φ\u0303']],
                  lambda data, header: table_bar(data, mapping, header)),
                 ("Internal forces",
@@ -430,7 +454,7 @@ class Solver(LoggerMixin):
 
         Returns
         -------
-        :any:`tuple` of `numpy.array`
+        :any:`tuple` of :any:`numpy.array`
             A tuple `(k, p)` where `k` is the modified global stiffness matrix,
             and `p` is the modified global load vector after applying boundary
             conditions.
@@ -922,7 +946,7 @@ class Solver(LoggerMixin):
                 A = k'{red_n}
                 b = -k'{red} \cdot \delta^{(n)'} - f^{(0)'}
 
-            The solution vector :math:x represents the total relative
+            The solution vector :math:`x` represents the total relative
             deformations caused by the hinges.
         """
         if not self.solvable:
@@ -934,7 +958,7 @@ class Solver(LoggerMixin):
         self.logger.info(
             "Calculating bar deformations from hinge modifications")
         deform_list = []
-        bar_deform_list = self.bar_deform
+        bar_deform_total = self.bar_deform
         total_bars = len(self.mesh)
         bars_with_hinges = 0
 
@@ -947,7 +971,7 @@ class Solver(LoggerMixin):
                 bars_with_hinges += 1
 
                 k = bar.stiffness_matrix(hinge_modification=False)
-                bar_deform = bar_deform_list[i]
+                bar_deform = bar_deform_total[i]
                 f0 = bar.f0(hinge_modification=False)
 
                 idx = [i for i, value in enumerate(bar.hinge) if value]
@@ -1010,12 +1034,12 @@ class Solver(LoggerMixin):
         return deformations
 
     @cached_property
-    def bar_deform_list(self):
+    def bar_deform_total(self):
         """Combines all deformation contributions for each bar, resulting in
         the total deformation at the bar ends in the local coordinate system.
 
         This method adds the deformations from three different sources:
-            * Deformation due to hinges (:py:attr:`hinge_modifier`)
+            * Deformation due to hinges (:py:attr:`bar_deform_hinge`)
             * Internal deformation from structural analysis \
             (:py:attr:`bar_deform`)
             * Displacement-induced deformation from nodal support movements \
@@ -1052,7 +1076,7 @@ class Solver(LoggerMixin):
         return combined_results
 
     @cached_property
-    def system_deform_list(self):
+    def system_deform(self):
         """Transforms the bar deformations for each bar into the
         system deformations.
 
@@ -1068,46 +1092,8 @@ class Solver(LoggerMixin):
                 "The stiffness matrix is singular or poorly conditioned. "
                 "Check the supports, hinges, or the overall system definition."
             )
-        bar_deform = self.bar_deform_list
+        bar_deform = self.bar_deform_total
         return [
             bar.transformation_matrix(False) @ deform
             for bar, deform in zip(self.mesh, bar_deform)
-        ]
-
-    @cached_property
-    def node_deform_list(self):
-        """Constructs a list of nodal deformation arrays for each bar in the
-        system.
-
-        This function assembles the nodal displacement vectors for each
-        individual bar by extracting the corresponding deformation values from
-        the global displacement vector. Each bar connects two nodes, and each
-        node has three degrees of freedom (e.g., displacement in x and z
-        directions, and rotation). Therefore, each array in the resulting list
-        has a shape of (6, 1), representing the deformations associated with
-        both nodes of the bar. The deformations are given in the local node
-        coordinate system.
-
-        Returns
-        -------
-        :any:`list` of numpy.ndarray
-            A list of (6, 1) arrays, one for each bar, containing the nodal
-            deformations (3 DOFs per node) in the node coordinate system.
-        """
-        if not self.solvable:
-            raise ValueError(
-                "The linear system is not solvable. "
-                "The stiffness matrix is singular or poorly conditioned. "
-                "Check the supports, hinges, or the overall system definition."
-            )
-        deform = self.node_deform
-        dof = self.dof
-        return [
-            np.vstack([
-                deform[self.nodes.index(bar.node_i) * dof:
-                       self.nodes.index(bar.node_i) * dof + dof],
-                deform[self.nodes.index(bar.node_j) * dof:
-                       self.nodes.index(bar.node_j) * dof + dof]
-            ])
-            for bar in self.mesh
         ]

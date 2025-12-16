@@ -59,7 +59,7 @@ class SystemModifier:
         example when using the principle of virtual forces to create unit load
         systems corresponding to removed constraints.
 
-    memory_bar_point_load : dict[:any:`Bar`, list[float]]
+    memory_bar_point_load : dict[:any:`Bar`, list[:any:`float`]]
         Records bars that have point loads acting at positions strictly between
         0 and 1 (non-endpoint). The list of floats denotes the relative
         position of each such load along the bar.
@@ -608,7 +608,7 @@ class SystemModifier:
             'fz' = vertical,
             'fm' = moment.
 
-        virt_force : float, optional
+        virt_force :  :any:`float`, optional
             Magnitude of the virtual force (default is 1.0).
 
         Returns
@@ -666,10 +666,10 @@ class SystemModifier:
             'fz' = transverse,
             'fm' = moment.
 
-        position : float, optional
+        position :  :any:`float`, optional
             Relative position along the bar (0 to 1), default is 0.
 
-        virt_force : float, optional
+        virt_force :  :any:`float`, optional
             Magnitude of the virtual force, default is 1.
 
         Returns
@@ -724,9 +724,12 @@ class SystemModifier:
           a unit load is applied directly to the node in the corresponding
           direction (horizontal, vertical, or rotational).
 
+        * **Bar deletion** - For the removed bar unit loads are applied, at the
+          connection points of the now deleted bar.
+
         Returns
         -------
-        list of System
+        list of :any:`System`
             A list of systems, each containing a single unit load state.
         """
 
@@ -899,7 +902,7 @@ class SystemModifier:
         Returns a dictionary mapping each bar to a
         list of relative positions (0 < pos < 1) where point loads exist.
         This is compatible with the `user_divisions` argument of
-        `MeshGenerator`.
+        `Mesh`.
 
         Returns
         -------

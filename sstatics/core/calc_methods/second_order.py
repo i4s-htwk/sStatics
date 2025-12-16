@@ -22,6 +22,9 @@ class SecondOrder(LoggerMixin):
     displacements or axial forces. Two solution strategies are available:
     a matrix-based approach and an iterative approach.
 
+    The implementation of this class is based on the literature [1]_, [2]_,
+    [3]_, [4]_ and [5]_
+
     Parameters
     ----------
     system : :any:`System`
@@ -249,8 +252,8 @@ class SecondOrder(LoggerMixin):
         -----
         The results of each iteration are stored in ``_iteration_results`` and
         can be accessed via :meth:`solver_iteration_cumulative()` for the
-        'cumulative' result type or via :meth:`iterative_growth()` for the
-        'incremental' result type.
+        'cumulative' result type or via :meth:`results_iterative_growth()`
+        for the 'incremental' result type.
 
         Raises
         ------
@@ -342,7 +345,7 @@ class SecondOrder(LoggerMixin):
 
     def results_iterative_growth(
             self, iteration: int = -1, difference: Literal[
-                'internal_forces', 'bar_deform_list', 'node_deform',
+                'internal_forces', 'bar_deform_total', 'node_deform',
                 'node_support_forces', 'system_support_forces']
             = 'internal_forces'
     ):
@@ -362,9 +365,10 @@ class SecondOrder(LoggerMixin):
             The iteration index to extract. Supports negative indexing to count
             from the end of the iteration history.
 
-        difference : {'internal_forces', 'bar_deform_list', 'node_deform',
+        difference : {'internal_forces', 'bar_deform_total', 'node_deform', \
                       'node_support_forces', 'system_support_forces'},
                       default='internal_forces'
+
             Specifies which incremental data field to return when using the
             incremental iteration mode.
 
@@ -380,9 +384,8 @@ class SecondOrder(LoggerMixin):
             If no iterations have been performed yet.
 
         ValueError
-            - If the function is called while the iteration mode is
-            ``cumulative``.
-            - If the requested `difference` type is invalid.
+            If the function is called while the iteration mode is
+            ``cumulative``. If the requested `difference` type is invalid.
 
         IndexError
             If the requested iteration index does not exist.
@@ -405,10 +408,10 @@ class SecondOrder(LoggerMixin):
             raise ValueError(msg)
 
         if difference not in [
-            'internal_forces', 'bar_deform_list', 'node_deform',
+            'internal_forces', 'bar_deform_total', 'node_deform',
                 'node_support_forces', 'system_support_forces']:
             msg = ("difference has to be either 'internal_forces', "
-                   "'bar_deform_list', 'node_deform', 'node_support_forces' "
+                   "'bar_deform_total', 'node_deform', 'node_support_forces' "
                    "or 'system_support_forces'")
             self.logger.error(msg)
             raise ValueError(msg)
@@ -574,7 +577,7 @@ class SecondOrder(LoggerMixin):
             "forces and deformations.")
         l_avg = []
         for i, (deform, force) in enumerate(
-                zip(solution.bar_deform_list,
+                zip(solution.bar_deform_total,
                     solution.internal_forces)):
             self.logger.info(
                 f"[Bar {i}] Calculating averaged longitudinal force.")
@@ -647,7 +650,7 @@ class SecondOrder(LoggerMixin):
             "Transforming internal forces based on current bar-end rotations.")
         forces_list = []
         for i, (deform, force) in (
-                enumerate(zip(solver.bar_deform_list,
+                enumerate(zip(solver.bar_deform_total,
                               solver.internal_forces))):
             self.logger.info(f"[Bar {i}] Transforming internal forces.")
             phi_i, phi_j = deform[2, 0], deform[5, 0]
@@ -899,8 +902,8 @@ class SecondOrder(LoggerMixin):
                                              prev.node_support_forces),
             "system_support_forces_diff": diff(curr.system_support_forces,
                                                prev.system_support_forces),
-            "bar_deform_list_diff": diff(curr.bar_deform_list,
-                                         prev.bar_deform_list),
+            "bar_deform_total_diff": diff(curr.bar_deform_total,
+                                          prev.bar_deform_total),
             "node_deform_diff": diff(curr.node_deform, prev.node_deform),
         }
 
@@ -1008,7 +1011,7 @@ class SecondOrder(LoggerMixin):
             if bar_index is not None:
                 return DifferentialEquationSecond(
                     bar=bars[bar_index],
-                    deform=solver.bar_deform_list[bar_index],
+                    deform=solver.bar_deform_total[bar_index],
                     forces=solver.internal_forces[bar_index],
                     n_disc=n_disc,
                     f_axial=self.averaged_longitudinal_force[bar_index]
@@ -1017,7 +1020,7 @@ class SecondOrder(LoggerMixin):
                 return [
                     DifferentialEquationSecond(
                         bar=bars[i],
-                        deform=solver.bar_deform_list[i],
+                        deform=solver.bar_deform_total[i],
                         forces=solver.internal_forces[i],
                         n_disc=n_disc,
                         f_axial=self.averaged_longitudinal_force[i]
@@ -1028,7 +1031,7 @@ class SecondOrder(LoggerMixin):
                 solver = self.solver_iteration_cumulative(iteration_index)
                 return get_differential_equation(
                     self.system,
-                    solver.bar_deform_list,
+                    solver.bar_deform_total,
                     solver.internal_forces,
                     bar_index, n_disc
                 )
@@ -1045,7 +1048,8 @@ class SecondOrder(LoggerMixin):
             self, approach: Literal['matrix', 'iterative'],
             iteration_index: Optional[int] = None,
             kind: Literal[
-                'normal', 'shear', 'moment', 'u', 'w', 'phi'] = 'normal',
+                'normal', 'shear', 'moment', 'u', 'w', 'phi',
+                'bending_line'] = 'normal',
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
             result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
             decimals: Optional[int] = None, n_disc: int = 10
@@ -1056,7 +1060,7 @@ class SecondOrder(LoggerMixin):
         either:
 
         - matrix-based second-order theory, or
-        - (cumulative / incremental) iterative results,
+        - (cumulative; incremental) iterative results,
 
         and visualizes the selected quantity using
         :class:`ResultGraphic`.
@@ -1068,10 +1072,10 @@ class SecondOrder(LoggerMixin):
             be plotted.
         iteration_index : int, optional
             Required for the iterative approach. Specifies the iteration
-            step.
-            Supports negative indices.
-        kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi'},
-                default='normal'
+            step. Supports negative indices.
+        kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi', \
+                'bending_line'}, default='normal'
+
             Selects the result quantity to display.
         bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
             Mesh used for the graphic bar geometry.
@@ -1093,9 +1097,9 @@ class SecondOrder(LoggerMixin):
 
         Notes
         -----
-            Incremental mode plots incremental quantities (differences
-            between consecutive iterations), whereas cumulative mode
-            displays the absolute state of the structure at that iteration.
+        Incremental mode plots incremental quantities (differences
+        between consecutive iterations), whereas cumulative mode
+        displays the absolute state of the structure at that iteration.
         """
         self._validation_approach_index(approach, iteration_index)
         from sstatics.graphic_objects import ResultGraphic
@@ -1105,7 +1109,7 @@ class SecondOrder(LoggerMixin):
             solver = self.solver_matrix_approach
             result = SystemResult(
                 self._modified_system_matrix,
-                solver.bar_deform_list,
+                solver.bar_deform_total,
                 solver.internal_forces,
                 solver.node_deform,
                 solver.node_support_forces,
@@ -1117,7 +1121,7 @@ class SecondOrder(LoggerMixin):
                 solver = self.solver_iteration_cumulative(iteration_index)
                 result = SystemResult(
                     self.system,
-                    solver.bar_deform_list,
+                    solver.bar_deform_total,
                     solver.internal_forces,
                     solver.node_deform,
                     solver.node_support_forces,
@@ -1128,7 +1132,7 @@ class SecondOrder(LoggerMixin):
                 entry = self._iteration_results[iteration_index]
                 result = SystemResult(
                     self.system,
-                    entry['bar_deform_list_diff'],
+                    entry['bar_deform_total_diff'],
                     entry['internal_forces_diff'],
                     entry['node_deform_diff'],
                     entry['node_support_forces_diff'],
