@@ -8,6 +8,13 @@ import numpy as np
 from sstatics.core.preprocessing import CrossSection, Bar, Polygon
 from sstatics.core.postprocessing import DifferentialEquation
 
+from sstatics.core.postprocessing.graphic_objects import ObjectRenderer
+from sstatics.core.postprocessing.graphic_objects.geo.cross_section import \
+    CrossSectionGeo
+from sstatics.core.postprocessing.graphic_objects.geo.state_line import \
+    StateLineGeo
+
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon as MplPolygon
 
@@ -549,40 +556,52 @@ class CrossSectionStress:
         return self._shear_stress_disc
 
     def plot(self, kind: Literal['normal', 'bending', 'shear']):
+        geo_cs = CrossSectionGeo(self.cross_section)
         if kind == 'normal':
             if self._normal_stress_disc is None:
                 raise AttributeError(
                     "`normal_stress_disc` must be called before accessing "
                     "`plot`."
                 )
-            # geo_obj = GeoNormalStress(self, value=self.normal_stress)
-            stress_plot = self._normal_stress_disc
+            x = self._normal_stress_disc[0]
+            z = self._normal_stress_disc[1]
+
         elif kind == 'bending':
             if self._bending_stress_disc is None:
                 raise AttributeError(
                     "`bending_stress_disc` must be called before accessing "
                     "`plot`."
                 )
-            # geo_obj = GeoBendingStress(self, value=self.bending_stress)
-            stress_plot = self._bending_stress_disc
+            x = self._bending_stress_disc[0]
+            z = self._bending_stress_disc[1]
         elif kind == 'shear':
             if self._shear_stress_disc is None:
                 raise AttributeError(
                     "`bending_stress_disc` must be called before accessing "
                     "`plot`."
                 )
-            # geo_obj = GeoBendingStress(self, value=self.bending_stress)
-            stress_plot = self._shear_stress_disc
+            x = self._shear_stress_disc[0]
+            z = self._shear_stress_disc[1]
         else:
             raise AttributeError('gibts nicht!')
-        # geo_cs = GeoCrossSection(self.cross_section)
-        # Renderer([geo_cs, geo_obj], mpl).show()
-        plot_cross_section_with_shear_stress(
-            self.cross_section,
-            z_values=stress_plot[0],
-            tau_values=stress_plot[1],
-            title=kind
+
+        geo_obj = StateLineGeo(
+            [dict(x=x,
+                  z=z,
+                  translation=(0, 0),
+                  rotation=-np.pi/2
+                  )],
+            global_scale=geo_cs._base_scale
         )
+
+        ObjectRenderer([geo_cs, geo_obj], 'mpl').show()
+
+        # plot_cross_section_with_shear_stress(
+        #     self.cross_section,
+        #     z_values=x,
+        #     tau_values=z,
+        #     title=kind
+        # )
 
 
 @dataclass
