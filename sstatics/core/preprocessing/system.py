@@ -406,6 +406,7 @@ class Mesh:
             if not user_pos and not load_pos:
                 calc_mesh.append(bar)
                 user_mesh.append(bar)
+                map_bar_mesh[bar] = [bar]
                 continue
 
             if user_pos:
