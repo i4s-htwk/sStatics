@@ -12,6 +12,9 @@ from sstatics.core.utils import get_differential_equation
 from sstatics.core.preprocessing import Bar, BarSecond, System, SystemModifier
 from sstatics.core.solution.solver import Solver
 
+from sstatics.core.utils import plot_results
+from sstatics.core.postprocessing.graphic_objects import ObjectRenderer
+
 
 @dataclass
 class SecondOrder(LoggerMixin):
@@ -1051,8 +1054,12 @@ class SecondOrder(LoggerMixin):
                 'normal', 'shear', 'moment', 'u', 'w', 'phi',
                 'bending_line'] = 'normal',
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
-            result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
-            decimals: Optional[int] = None, n_disc: int = 10
+            decimals: int = 2,
+            sig_digits: int | None = None,
+            n_disc: int = 10,
+            mode: str = 'mpl',
+            color: 'str' = 'red',
+            show_load: bool = False
     ):
         r"""Plot second-order internal forces or deformation results.
 
@@ -1079,8 +1086,6 @@ class SecondOrder(LoggerMixin):
             Selects the result quantity to display.
         bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
             Mesh used for the graphic bar geometry.
-        result_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='mesh'
-            Mesh used for plotting the result distribution.
         decimals : int, optional
             Number of decimals for label annotation.
         n_disc : int, default=10
@@ -1102,43 +1107,20 @@ class SecondOrder(LoggerMixin):
         displays the absolute state of the structure at that iteration.
         """
         self._validation_approach_index(approach, iteration_index)
-        from sstatics.graphic_objects import ResultGraphic
-        from sstatics.core.postprocessing import SystemResult
 
-        if approach == 'matrix':
-            solver = self.solver_matrix_approach
-            result = SystemResult(
-                self._modified_system_matrix,
-                solver.bar_deform_total,
-                solver.internal_forces,
-                solver.node_deform,
-                solver.node_support_forces,
-                solver.system_support_forces,
-                n_disc=n_disc
+        valid_kinds = ['normal', 'shear', 'moment', 'u', 'w', 'phi',
+                       'bending_line']
+        if kind not in valid_kinds:
+            raise ValueError(
+                f"Invalid kind '{kind}'. "
+                f"Expected one of {valid_kinds}."
             )
-        else:
-            if self._iteration_mode == 'cumulative':
-                solver = self.solver_iteration_cumulative(iteration_index)
-                result = SystemResult(
-                    self.system,
-                    solver.bar_deform_total,
-                    solver.internal_forces,
-                    solver.node_deform,
-                    solver.node_support_forces,
-                    solver.system_support_forces,
-                    n_disc=n_disc
-                )
-            else:
-                entry = self._iteration_results[iteration_index]
-                result = SystemResult(
-                    self.system,
-                    entry['bar_deform_total_diff'],
-                    entry['internal_forces_diff'],
-                    entry['node_deform_diff'],
-                    entry['node_support_forces_diff'],
-                    entry['system_support_forces_diff'],
-                    n_disc=n_disc
-                )
 
-        ResultGraphic(result, kind, bar_mesh_type, result_mesh_type,
-                      decimals).show()
+        diff = self.differential_equation(n_disc=n_disc, approach=approach,
+                                          iteration_index=iteration_index)
+
+        sys_geo, result_geo = plot_results(
+            self.system, diff, kind, bar_mesh_type, decimals, sig_digits,
+            color, show_load)
+
+        ObjectRenderer([sys_geo, result_geo], mode).show()

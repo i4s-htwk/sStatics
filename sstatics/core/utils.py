@@ -168,12 +168,13 @@ def plot_results(
         decimals: int | None = None,
         sig_digits: int | None = None,
         color: 'str' = 'red',
+        show_load: bool = False
 ):
     # from sstatics.core.postprocessing.bending_line import BendingLin
     from sstatics.core.postprocessing.graphic_objects import (
         SystemGeo, StateLineGeo)
 
-    sys_geo = SystemGeo(system, mesh_type=bar_mesh_type)
+    sys_geo = SystemGeo(system, mesh_type=bar_mesh_type, show_load=show_load)
 
     if kind == 'bending_line':
         # bending_line = BendingLine(diff)

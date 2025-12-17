@@ -61,6 +61,7 @@ class FirstOrder(Solver):
             n_disc: int = 10,
             mode: str = 'mpl',
             color: 'str' = 'red',
+            show_load: bool = False
     ):
         valid_kinds = ['normal', 'shear', 'moment', 'u', 'w', 'phi',
                        'bending_line']
@@ -74,7 +75,7 @@ class FirstOrder(Solver):
 
         sys_geo, result_geo = plot_results(self.system, diff, kind,
                                            bar_mesh_type, decimals,
-                                           sig_digits, color)
+                                           sig_digits, color, show_load)
 
         ObjectRenderer([sys_geo, result_geo], mode).show()
 
