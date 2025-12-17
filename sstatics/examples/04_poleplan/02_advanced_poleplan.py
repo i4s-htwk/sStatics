@@ -20,6 +20,8 @@ from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System
 )
 from sstatics.core.solution import Poleplan
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 # 1. Define cross-section and material
 c_1 = CrossSection(mom_of_int=2769, area=76.84, height=20, width=10,
@@ -47,6 +49,9 @@ bars = [bar_1, bar_2, bar_3, bar_4, bar_5, bar_6]
 
 # 4. Define system
 system = System(bars)
+
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
 
 # 5. Create poleplan
 poleplan = Poleplan(system)

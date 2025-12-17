@@ -595,20 +595,25 @@ class PVF(LoggerMixin):
         raise ValueError(msg)
 
     def plot(
-            self, mode: Literal['real', 'virt'] = 'real',
+            self, system_mode: Literal['real', 'virt'] = 'real',
             kind: Literal[
                 'normal', 'shear', 'moment', 'u', 'w', 'phi',
                 'bending_line'] = 'normal',
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
-            result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
-            decimals: int | None = None, n_disc: int = 10
+            decimals: int = 2,
+            sig_digits: int | None = None,
+            n_disc: int = 10,
+            mode: str = 'mpl',
+            color: 'str' = 'red',
+            show_load: bool = False,
+            scale: int = 1
     ):
         r"""Plot internal forces or deformation results of either the system
         with real or virtual loads.
 
         Parameters
         ----------
-        mode : {'real', 'virt'}
+        system_mode : {'real', 'virt'}
             Defines whether the results of the system with real loads or the
             system with virtual loads should be plotted.
         kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi', \
@@ -617,30 +622,40 @@ class PVF(LoggerMixin):
             Selects the result quantity to display.
         bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
             Mesh used for the graphic bar geometry.
-        result_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='mesh'
-            Mesh used for plotting the result distribution.
         decimals : int, optional
             Number of decimals for label annotation.
+        sig_digits: int | None, default=None
+            Number of significant digits for label annotation.
         n_disc : int, default=10
             Number of subdivisions for result interpolation.
+        mode : {'mpl', 'plotly'}, default='mpl'
+            Chosen renderer
+        color : str, default='red'
+            Color of the plot
+        show_load : bool, default=False
+            Specifies whether the load is plotted.
+        scale : int, default=1
+            Scale factor for plot
 
         Raises
         ------
         ValueError
-            If the mode is invalid.
+            If the system mode is invalid.
         """
-        if mode not in ['real', 'virt']:
+        if system_mode not in ['real', 'virt']:
             msg = (f'Mode has to be either "real" or "virt".'
                    f'Got {mode} instead.')
             self.logger.error(msg)
             raise ValueError(msg)
 
-        if mode == 'real':
+        if system_mode == 'real':
             return self.solution_real_system.plot(
-                kind, bar_mesh_type, result_mesh_type, decimals, n_disc)
+                kind, bar_mesh_type, decimals, sig_digits, n_disc, mode,
+                color, show_load, scale)
         else:
             return self.solution_virtual_system.plot(
-                kind, bar_mesh_type, result_mesh_type, decimals, n_disc)
+                kind, bar_mesh_type, decimals, sig_digits, n_disc, mode,
+                color, show_load, scale)
 
     def _validate_virtual_load(self, force: Literal['fx', 'fz', 'fm']):
         """Validates the specified virtual load component.

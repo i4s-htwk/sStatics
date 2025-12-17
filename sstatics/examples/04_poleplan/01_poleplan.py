@@ -12,6 +12,8 @@ from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System
 )
 from sstatics.core.solution import Poleplan
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 
 # 1. Define cross-section and material
@@ -35,6 +37,9 @@ bars = [bar_1, bar_2, bar_3]
 
 # 4. Define system
 system = System(bars)
+
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
 
 # 5. Create poleplan and plot rigid-body displacements
 poleplan = Poleplan(system)

@@ -9,9 +9,9 @@ from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_STATE_LINE, DEFAULT_STATE_LINE_TEXT
 )
-from sstatics.core.postprocessing.graphic_objects.geo import (
-    OpenCurveGeo, TextGeo
-)
+from sstatics.core.postprocessing.graphic_objects.geo.geometry import \
+    OpenCurveGeo
+from sstatics.core.postprocessing.graphic_objects.geo.text import TextGeo
 
 
 class StateLineGeo(ObjectGeo):

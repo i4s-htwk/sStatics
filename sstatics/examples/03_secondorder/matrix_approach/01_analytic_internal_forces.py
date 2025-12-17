@@ -15,6 +15,8 @@ case, only Step 6 needs to be adjusted (use "taylor" or "p_delta" accordingly).
 from sstatics.core.preprocessing import (Bar, BarLineLoad, CrossSection,
                                          Material, Node, NodePointLoad, System)
 from sstatics.core.calc_methods import SecondOrder
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 # Optional: Modify the output of the print
 import numpy as np
@@ -28,7 +30,7 @@ c_1 = CrossSection(0.00002769, 0.007684, 0.2, 0.2, 0.6275377)
 m_1 = Material(210000000, 0.1, 81000000, 0.1)
 
 # 2. Define nodes (cantilever system)
-node_1 = Node(x=0, z=0, u='fixed', w='fixed', phi='fixed')
+node_1 = Node(x=0, z=0, u='fixed', w='fixed', phi='fixed', rotation=np.pi/2)
 node_2 = Node(x=0, z=-4, loads=NodePointLoad(x=0, z=182, phi=0, rotation=0))
 
 # 3. Define bar
@@ -37,6 +39,9 @@ bar_1 = Bar(node_1, node_2, c_1, m_1, line_loads=BarLineLoad(
 
 # 4. Define system
 system = System([bar_1])
+
+# Show system graphic
+ObjectRenderer(SystemGeo(system), 'plotly').show()
 
 # 5. Create a SecondOrder object
 sec_order = SecondOrder(system)

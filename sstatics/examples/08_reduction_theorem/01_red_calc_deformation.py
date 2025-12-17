@@ -24,6 +24,8 @@ from sstatics.core.calc_methods import ReductionTheorem
 from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System, BarLineLoad
 )
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 import numpy as np
 
 # 2. Define material and cross-section
@@ -47,6 +49,9 @@ bar_3 = Bar(n3, n4, cs, material, deformations="moment")
 
 system = System([bar_1, bar_2, bar_3])
 
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+
 # 6. Initialize Reduction Theorem
 red = ReductionTheorem(system)
 
@@ -61,10 +66,13 @@ print("Degree of static indeterminacy (after):",
 # → 0 (system is now statically determinate)
 
 # Show the released system
-red.plot_released_system()
+red.plot_released_system(mode='plotly')
 
 # 8. Apply a virtual unit vertical load at midspan of Bar 2
 red.add_virtual_bar_load(bar_2, 'fz', position=0.5)
+
+# Show virtual system
+ObjectRenderer(SystemGeo(red.virtual_system), 'plotly').show()
 
 # 9. Compute deformation using the Reduction Theorem
 delta_reduction = red.deformation()

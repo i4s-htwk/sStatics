@@ -24,6 +24,8 @@ from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System
 )
 from sstatics.core.calc_methods import FirstOrder
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 # 2. Define cross-section and material
 cs = CrossSection(
@@ -55,6 +57,9 @@ bars = [bar_1, bar_2, bar_3]
 
 # 5. Build the system
 system = System(bars=bars)
+
+# Show system graphic
+ObjectRenderer(SystemGeo(system), 'plotly').show()
 
 # 6. Attempt structural analysis
 solution = FirstOrder(system=system)

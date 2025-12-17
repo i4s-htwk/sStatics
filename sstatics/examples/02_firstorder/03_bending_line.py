@@ -15,6 +15,8 @@ from sstatics.core.preprocessing import (
     Material, CrossSection, NodePointLoad, Node, Bar, BarLineLoad, System
 )
 from sstatics.core.calc_methods import FirstOrder
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 
 # 1. Define material and cross-section
@@ -44,11 +46,14 @@ bar_4 = Bar(node_4, node_5, cs, mat, line_loads=line_load_3)
 
 system_2 = System([bar_1, bar_2, bar_3, bar_4])
 
+# Show system graphic
+ObjectRenderer(SystemGeo(system_2), 'plotly').show()
+
 # 5. Solve using first-order (linear) method
 solution = FirstOrder(system_2)
 
 # 6. Plot bending line (deflection curve)
-solution.plot(kind='bending_line')
+solution.plot(kind='bending_line', mode='plotly')
 
 print("=== Bending Line Example ===")
 print("Bending line computed and plotted for multi-bar frame system.")

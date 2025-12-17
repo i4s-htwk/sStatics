@@ -15,10 +15,12 @@ The system includes:
 """
 
 # 1. Import required modules
-from sstatics.core.calc_methods import ForceMethod, FirstOrder
+from sstatics.core.calc_methods import FirstOrder, ForceMethod
 from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System, BarLineLoad, BarPointLoad
 )
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 import numpy as np
 
 # 2. Define material and cross-sections
@@ -30,7 +32,7 @@ cs_2 = CrossSection(0.000675, 0.09, 0.3, 0.3, 1.0)
 n1 = Node(0, 0, u="free", w="fixed", phi="free")
 n2 = Node(2, 0)
 n3 = Node(5, 0, u="free", w="fixed", phi="free")
-n4 = Node(2, 2.5, u="fixed", w="fixed", phi="fixed")
+n4 = Node(2, 2.5, u="fixed", w="fixed", phi="fixed", rotation=np.pi/2)
 
 # 4. Define loads
 line_load = BarLineLoad(pi=30, pj=30, direction="z")
@@ -47,6 +49,9 @@ bars = [b1, b2, b3]
 # 6. Create system
 system = System(bars)
 
+# Show system graphic
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+
 # 7. Initialize Force Method
 force_method = ForceMethod(system)
 
@@ -62,7 +67,11 @@ print("Degree of static indeterminacy:",
       force_method.degree_of_static_indeterminacy)
 
 # plot released system
-force_method.plot_released_system()
+force_method.plot_released_system('plotly')
+
+# plot unit load states
+for system in force_method.uls_systems:
+    ObjectRenderer(SystemGeo(system), 'plotly').show()
 
 # 9. Compute influence coefficients (delta_i_j = Vorzahlen)
 #    and load coefficients (delta_i_0 = Belastungszahlen)
@@ -126,9 +135,12 @@ print(f"Moment at end of bar 1 (FirstOrder): {m_j_b1_f0}")
 print("Results match:", np.allclose(m_j_b1, m_j_b1_f0, atol=1e-2))
 
 # 11. Optional visualizations
-force_method.plot(mode='rls', kind='moment')    # released system
-force_method.plot(mode='uls', uls_index=0, kind='moment')  # ULS 1
-force_method.plot(mode='uls', uls_index=1, kind='moment')  # ULS 2
+# released system
+force_method.plot(system_mode='rls', kind='moment', mode='plotly')
+# ULS 1
+force_method.plot(system_mode='uls', uls_index=0, kind='moment', mode='plotly')
+# ULS 2
+force_method.plot(system_mode='uls', uls_index=1, kind='moment', mode='plotly')
 
 # 12. Inspecting the work matrix:
 #

@@ -210,13 +210,28 @@ class ReductionTheorem(PVF):
         super().add_virtual_moment_couple(
             bar_positive_m, bar_negative_m, connecting_node, virt_force)
 
-    def plot_released_system(self):
+    def plot_released_system(self, mode: Literal['mpl', 'plotly'] = 'mpl'):
+        r"""Plot of the released system.
+
+        Parameters
+        ----------
+        mode : {'mpl', 'plotly'}, default='mpl'
+            Specifies which renderer is chosen
+
+        Raises
+        ------
+        ValueError
+            If the released system is not defined.
+        """
         if self.released_system is None:
             msg = "No released system is defined."
             self.logger.error(msg)
             raise ValueError(msg)
-        # from sstatics.graphic_objects.system import SystemGraphic
-        # return SystemGraphic(self.released_system).show()
+        from sstatics.core.postprocessing.graphic_objects import (
+            ObjectRenderer, SystemGeo
+        )
+        return (ObjectRenderer(SystemGeo(
+            self.released_system), mode).show())
 
     def _validate_released_system(self):
         """Validate that the system is released and statically determinate.

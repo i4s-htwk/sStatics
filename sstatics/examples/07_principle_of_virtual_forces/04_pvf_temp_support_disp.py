@@ -37,6 +37,8 @@ from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System, BarLineLoad, BarPointLoad,
     BarTemp, NodeDisplacement
 )
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 # 2. Define material
 mat_1 = Material(210000000, 1, 81000000, 0.000012)
@@ -82,12 +84,22 @@ b6 = Bar(n7, n4, cs_4, mat_1, hinge_phi_j=True, temp=bar_temp_4,
 # 7. Assemble system
 system = System([b1, b2, b3, b4, b5, b6])
 
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+
 # 8. PVF calculation
 pvf = PVF(system)
 
 # Apply a virtual vertical force fz at node_2 to obtain w(n2)
 pvf.add_virtual_node_load(n2, force="fz")
 
+# Show virtual system
+ObjectRenderer(SystemGeo(pvf.virtual_system), 'plotly').show()
+
 # Compute and print vertical displacement at node_2
 w_n2 = pvf.deformation()
 print("Vertical displacement at node 2 (PVK) [m]:", w_n2)
+
+# 9. Plot moment distribution
+pvf.plot('real', kind='moment', mode='plotly')
+pvf.plot('virt', kind='moment', mode='plotly')

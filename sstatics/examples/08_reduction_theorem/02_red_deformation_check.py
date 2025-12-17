@@ -25,6 +25,8 @@ from sstatics.core.calc_methods import ReductionTheorem
 from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System, BarLineLoad
 )
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 import numpy as np
 
 # 2. Define material and cross-section
@@ -47,6 +49,9 @@ bar_3 = Bar(n3, n4, cs, material, deformations="moment")
 
 system = System([bar_1, bar_2, bar_3])
 
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+
 # 6. Degree of static indeterminacy
 red = ReductionTheorem(system)
 print("Degree of static indeterminacy (before):",
@@ -59,17 +64,23 @@ print("Degree of static indeterminacy (after):",
       red.degree_of_static_indeterminacy)
 # → 0
 
+# Show the released system
+red.plot_released_system(mode='plotly')
+
 # 8. Apply a virtual moment couple at the released joint
 #    This corresponds to the removed rotational constraint.
 red.add_virtual_moment_couple(bar_2, bar_3, n3)
+
+# Show virtual system
+ObjectRenderer(SystemGeo(red.virtual_system), 'plotly').show()
 
 # 9. Compute deformation using the Reduction Theorem
 delta_reduction = red.deformation()
 print("δ (Reduction Theorem):", delta_reduction)
 
 # 10. Hand-calculated reference value using standard integration tables
-red.plot('real', kind='moment')
-red.plot('virt', kind='moment')
+red.plot('real', kind='moment', mode='plotly')
+red.plot('virt', kind='moment', mode='plotly')
 
 delta_hand = (
         2 * 1/3 * 1 * (-2.5) * 2 / 21000

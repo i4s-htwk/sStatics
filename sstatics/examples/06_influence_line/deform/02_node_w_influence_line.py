@@ -16,6 +16,8 @@ from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System
 )
 from sstatics.core.calc_methods import InfluenceLine
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 # 1. Define material and cross-section
 mat = Material(21000, 0.1, 8100, 0.1)          # S235
@@ -30,6 +32,9 @@ node_3 = Node(600, 0)
 bar_1 = Bar(node_1, node_2, cs, mat)
 bar_2 = Bar(node_2, node_3, cs, mat)
 system = System([bar_1, bar_2])
+
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
 
 # 4. Define Influence line module
 il = InfluenceLine(system)

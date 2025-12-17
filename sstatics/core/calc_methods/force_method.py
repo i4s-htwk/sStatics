@@ -461,67 +461,77 @@ class ForceMethod(ReductionTheorem):
         return self._get_work_of(obj, uls_index_i, uls_index_j, sum)
 
     def plot(
-            self, mode: Literal['uls', 'rls'] = 'rls',
+            self, system_mode: Literal['uls', 'rls'] = 'rls',
             uls_index: int | None = None,
             kind: Literal[
                 'normal', 'shear', 'moment', 'u', 'w', 'phi',
                 'bending_line'] = 'normal',
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
-            result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
-            decimals: int | None = None, n_disc: int = 10
+            decimals: int = 2,
+            sig_digits: int | None = None,
+            n_disc: int = 10,
+            mode: str = 'mpl',
+            color: 'str' = 'red',
+            show_load: bool = False,
+            scale: int = 1
     ):
         r"""Plot internal forces or deformation results of either the system
         with real loads, the unit load states or the real load state.
 
         Parameters
         ----------
-        mode : {'uls', 'rls'}, default='rls'
+        systen_mode : {'uls', 'rls'}, default='rls'
 
             Defines whether the results of a unit load state or the real load
             state.
         uls_index : :any:`int` or None
             If the chosen mode is uls, then an index of the unit loads \
             system is needed to plot the chosen system.
-        kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi', \
-                'bending_line'}, default='normal'
-
-            Selects the result quantity to display.
-        bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
-            Mesh used for the graphic bar geometry.
-        result_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='mesh'
-            Mesh used for plotting the result distribution.
         decimals : int, optional
             Number of decimals for label annotation.
+        sig_digits: int | None, default=None
+            Number of significant digits for label annotation.
         n_disc : int, default=10
             Number of subdivisions for result interpolation.
+        mode : {'mpl', 'plotly'}, default='mpl'
+            Chosen renderer
+        color : str, default='red'
+            Color of the plot
+        show_load : bool, default=False
+            Specifies whether the load is plotted.
+        scale : int, default=1
+            Scale factor for plot
+
 
         Raises
         ------
         ValueError
-            If the mode is invalid.
+            If the system mode is invalid.
         """
-        if mode not in ['uls', 'rls']:
+        if system_mode not in ['uls', 'rls']:
             raise ValueError(
                 f'Mode has to be either "uls" or "rls".'
                 f'Got {mode} instead.'
             )
-        if mode in ['rls'] and uls_index is not None:
+        if system_mode in ['rls'] and uls_index is not None:
             raise ValueError(
                 f'If the mode is set to "rls", the '
                 f'uls_index has to be set to None. Got mode: {mode} and'
                 f'uls_index: {uls_index} instead.'
             )
-        if mode == 'uls' and uls_index is None:
+        if system_mode == 'uls' and uls_index is None:
             raise ValueError(
                 f'If the mode is set to "uls", the index can not be None.'
                 f'Got mode: {mode} and index: {uls_index} instead.'
             )
-        if mode == 'rls':
+        if system_mode == 'rls':
             return self.solution_rls_system.plot(
-                kind, bar_mesh_type, result_mesh_type, decimals, n_disc)
+                kind, bar_mesh_type, decimals, sig_digits, n_disc, mode,
+                color, show_load, scale)
         else:
             return self.solution_uls_systems[uls_index].plot(
-                kind, bar_mesh_type, result_mesh_type, decimals, n_disc)
+                kind, bar_mesh_type, decimals, sig_digits, n_disc, mode,
+                color, show_load, scale)
 
     def _validate_virtual_load(self, force):
         r"""Disallows virtual loads for this method.

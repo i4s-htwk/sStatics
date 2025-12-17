@@ -23,6 +23,8 @@ from sstatics.core.calc_methods import ReductionTheorem
 from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System, BarLineLoad, Polygon
 )
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 import numpy as np
 
 # 2. Define material
@@ -65,6 +67,9 @@ bar_5 = Bar(node_e, node_f, cs_2, material, line_loads=line_load_1,
 # 7. Define system
 system = System([bar_1, bar_2, bar_3, bar_4, bar_5])
 
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+
 # 8. Create ReductionTheorem instance
 red = ReductionTheorem(system)
 
@@ -80,15 +85,24 @@ red.modify_bar(bar_2, 'hinge_phi_i')
 red.modify_node(node_b, 'phi')
 red.modify_node(node_f, 'u')
 
+print("Degree of static indeterminacy (after):",
+      red.degree_of_static_indeterminacy)
+
+# Show the released system
+red.plot_released_system(mode='plotly')
+
 red.add_virtual_bar_load(bar_5, 'fz', position=0.6)
+
+# Show virtual system
+ObjectRenderer(SystemGeo(red.virtual_system), 'plotly').show()
 
 # 10. Compute deformation directly at bar_5
 delta_dv_sstatics = red.deformation()
 print("Deformation (ReductionTheorem):", delta_dv_sstatics)
 
 # 11. Hand-calculated reference value using standard formulas
-red.plot('real', kind='moment')
-red.plot('virt', kind='moment')
+red.plot('real', kind='moment', mode='plotly')
+red.plot('virt', kind='moment', mode='plotly')
 delta_dv_seminar = (1/4 * 2.4 * (-288) * 10 / 207900 +
                     5/12 * 2.4 * 350 * 10 / 207900)
 

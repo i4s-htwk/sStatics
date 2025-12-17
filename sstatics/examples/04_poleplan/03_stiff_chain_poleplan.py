@@ -19,6 +19,8 @@ elements on the mechanism behavior.
 
 from sstatics.core import Node, Bar, Material, CrossSection, System
 from sstatics.core.solution import Poleplan
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 
 # 1. Define material and cross-section
@@ -49,6 +51,9 @@ bars = [bar_1, bar_2, bar_3, bar_4, bar_5, bar_6, bar_7, bar_8]
 
 # 4. Define system
 system = System(bars)
+
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
 
 # 5. Create poleplan and plot rigid-body displacements
 poleplan = Poleplan(system)

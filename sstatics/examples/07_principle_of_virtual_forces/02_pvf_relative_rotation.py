@@ -17,6 +17,9 @@ from sstatics.core.preprocessing import (
     Bar, BarLineLoad, CrossSection, Material, Node, NodePointLoad, System
 )
 from sstatics.core.calc_methods import PVF
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
+import numpy as np
 
 # 2. Define material
 s253 = Material(210000000, 0.1, 81000000, 0.1)
@@ -26,7 +29,7 @@ ipe_360 = CrossSection(16270 * 1e-8, 72.7 * 1e-4, 0.360, 0.170, 5/6)
 ipe_220 = CrossSection(2772 * 1e-8, 33.4 * 1e-4, 0.240, 0.120, 5/6)
 
 # 4. Define nodes
-n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed')
+n1 = Node(0, 0, u='fixed', w='fixed', phi='fixed', rotation=np.pi/2)
 n2 = Node(0, -3)
 n3 = Node(3, -3)
 n4 = Node(7, -3, loads=[NodePointLoad(x=-20)])
@@ -47,6 +50,9 @@ b4 = Bar(n4, n5, ipe_220, s253, deformations=def_comp)
 # 7. Assemble system
 system = System(bars=[b1, b2, b3, b4])
 
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+
 # 8. Compute relative rotation using PVF
 pvf = PVF(system)
 
@@ -56,6 +62,9 @@ pvf.add_virtual_moment_couple(
     bar_negative_m=b3,
     connecting_node=n3
 )
+
+# Show virtual system
+ObjectRenderer(SystemGeo(pvf.virtual_system), 'plotly').show()
 
 # Plot moment of the virtual and the real system
 pvf.plot(mode='virt', kind='moment')

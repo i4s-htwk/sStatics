@@ -28,6 +28,8 @@ from sstatics.core.preprocessing import (
     NodePointLoad, System
 )
 from sstatics.core.calc_methods import PVF
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 # 2. Define material
 s253 = Material(210000000, 0.1, 81000000, 0.1)
@@ -65,6 +67,9 @@ b4 = Bar(n4, n5, heb_220, s253,
 # 7. Assemble system
 system = System(bars=[b1, b2, b3, b4])
 
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+
 # 8. PVK calculation
 pvf = PVF(system=system)
 
@@ -76,6 +81,9 @@ pvf = PVF(system)
 
 # Apply a virtual horizontal force fx at node_5
 pvf.add_virtual_node_load(n5, 'fx')
+
+# Show virtual system
+ObjectRenderer(SystemGeo(pvf.virtual_system), 'plotly').show()
 
 node_5_u = pvf.deformation()
 print("Horizontal displacement at node 5 (PVK) [m]:", node_5_u)

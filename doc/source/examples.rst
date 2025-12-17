@@ -33,6 +33,7 @@ First Order
     examples/02_firstorder/02_bar_deflection
     examples/02_firstorder/03_bending_line
     examples/02_firstorder/04_unstable_system
+    examples/02_firstorder/05_divided_bar
 
 Second Order
 ------------

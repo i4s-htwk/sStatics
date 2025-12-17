@@ -66,4 +66,4 @@ class PlotlyRenderer(AbstractRenderer):
             )
 
     def show(self, *args, **kwargs):
-        self.figure.show(renderer='browser', *args, **kwargs)
+        self.figure.show(*args, **kwargs)

@@ -10,7 +10,8 @@ are extracted afterwards.
 
 from sstatics.core.preprocessing.geometry import Polygon
 from sstatics.core.preprocessing import CrossSection
-from sstatics.graphic_objects import CrossSectionGraphic
+from sstatics.core.postprocessing.graphic_objects import (
+    CrossSectionGeo, ObjectRenderer)
 
 
 # 1. Define geometry
@@ -28,10 +29,10 @@ beam = Polygon([
 beam_with_slab = CrossSection(geometry=[slab, beam])
 
 # 3. Visualize geometry objects (before merging)
-CrossSectionGraphic(cross_section=beam_with_slab, merged=False).show()
+ObjectRenderer(CrossSectionGeo(beam_with_slab, merged=False), 'plotly').show()
 
 # 4. Visualize merged cross-section
-CrossSectionGraphic(cross_section=beam_with_slab).show()
+ObjectRenderer(CrossSectionGeo(beam_with_slab), 'plotly').show()
 
 # 5. Extract geometric properties
 A = beam_with_slab.area

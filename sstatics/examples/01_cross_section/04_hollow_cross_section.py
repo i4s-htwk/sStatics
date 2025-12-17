@@ -14,7 +14,8 @@ import numpy as np
 from sstatics.core.preprocessing.geometry.objects import (
     Polygon, CircularSector)
 from sstatics.core.preprocessing import CrossSection
-from sstatics.graphic_objects import CrossSectionGraphic
+from sstatics.core.postprocessing.graphic_objects import (
+    CrossSectionGeo, ObjectRenderer)
 
 
 # Parameters
@@ -76,8 +77,9 @@ geometry = [outer_rect] + outer_arcs + [inner_rect] + inner_arcs
 cs = CrossSection(geometry=geometry)
 
 # 6. Visualize cross-section
-CrossSectionGraphic(cross_section=cs, merged=False).show()
-CrossSectionGraphic(cross_section=cs).show()
+ObjectRenderer(CrossSectionGeo(
+    cross_section=cs, merged=False), 'plotly').show()
+ObjectRenderer(CrossSectionGeo(cross_section=cs), 'plotly').show()
 
 # 7. Extract geometric properties
 A = cs.area

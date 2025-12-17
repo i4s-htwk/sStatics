@@ -1,11 +1,9 @@
 
 from functools import cached_property
-
-from sstatics.core.preprocessing import CrossSection
+from sstatics.core.preprocessing.cross_section import CrossSection
 from sstatics.core.preprocessing.geometry import (
     Polygon, PolygonMerge, CircularSector
 )
-
 from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
     ObjectGeo
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
@@ -13,7 +11,8 @@ from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_CROSS_SECTION_POINT_STYLE_POSITIVE,
     DEFAULT_CROSS_SECTION_POINT_STYLE_NEGATIVE
 )
-from sstatics.core.postprocessing.graphic_objects.geo import PolygonGeo
+from sstatics.core.postprocessing.graphic_objects.geo.geometry import \
+    PolygonGeo
 
 
 class CrossSectionGeo(ObjectGeo):
@@ -117,7 +116,8 @@ class CrossSectionGeo(ObjectGeo):
             self._add_by_sign(cs.polygon, positive, negative)
 
         for sector in cs.circular_sector:
-            self._add_by_sign(sector, positive, negative)
+            polygon = sector.convert_to_polygon()
+            self._add_by_sign(polygon, positive, negative)
 
         return positive, negative
 

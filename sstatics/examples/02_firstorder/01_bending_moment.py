@@ -23,6 +23,8 @@ from sstatics.core.preprocessing import (
     Bar, CrossSection, Polygon, Material, Node, NodePointLoad, System
 )
 from sstatics.core.calc_methods import FirstOrder
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 
 # 2. Define the cross-section using polygon geometry
 cross_sec = CrossSection(
@@ -41,6 +43,9 @@ bar_1 = Bar(n1, n2, cross_sec, material)
 
 # 6. Build the structural system
 system = System([bar_1])
+
+# Show system graphic
+ObjectRenderer(SystemGeo(system), 'plotly').show()
 
 # 7. Perform first-order structural analysis
 solution = FirstOrder(system)
@@ -70,4 +75,4 @@ print("\nSupport forces:\n", support_forces)
 print("Fixed-end moment from support reaction:", support_forces[2][0])
 
 # 11. Plot bending moment distribution
-solution.plot(kind='moment')
+solution.plot(kind='moment', mode='plotly')

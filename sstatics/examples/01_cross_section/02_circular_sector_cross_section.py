@@ -11,7 +11,8 @@ moment of inertia, boundaries) are extracted.
 import numpy as np
 from sstatics.core.preprocessing.geometry.objects import CircularSector
 from sstatics.core.preprocessing import CrossSection
-from sstatics.graphic_objects import CrossSectionGraphic
+from sstatics.core.postprocessing.graphic_objects import (
+    CrossSectionGeo, ObjectRenderer)
 
 
 # 1. Define circular sector geometry (full circle)
@@ -27,7 +28,7 @@ sector = CircularSector(
 cs = CrossSection(geometry=[sector])
 
 # 3. Visualize cross-section
-CrossSectionGraphic(cross_section=cs).show()
+ObjectRenderer(CrossSectionGeo(cs), 'plotly').show()
 
 # 4. Extract geometric properties
 A = cs.area

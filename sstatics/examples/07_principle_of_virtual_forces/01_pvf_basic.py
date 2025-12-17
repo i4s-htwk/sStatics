@@ -25,6 +25,8 @@ from sstatics.core.preprocessing import (
 )
 from sstatics.core.preprocessing.geometry import Polygon
 from sstatics.core.calc_methods import FirstOrder, PVF
+from sstatics.core.postprocessing.graphic_objects import (
+    ObjectRenderer, SystemGeo)
 import numpy as np
 
 # 2. Define cross-section using polygon geometry
@@ -43,12 +45,18 @@ n2 = Node(3, 0, loads=NodePointLoad(z=1))  # Real vertical load at free end
 bar = Bar(n1, n2, cs_1, mat_1)
 system = System([bar])
 
+# Visualize system
+ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+
 # 6. Compute displacement using Principle of Virtual Forces (PVK)
 pvf = PVF(system)
 
 # For displacement w at node_2:
 # → Apply a virtual vertical force fz at the bar end (position=1)
 pvf.add_virtual_bar_load(obj=bar, force='fz', position=1)
+
+# Show virtual system
+ObjectRenderer(SystemGeo(pvf.virtual_system), 'plotly').show()
 
 w_node_2_pvf = pvf.deformation()
 print("w at node 2 (PVK) [m]:", w_node_2_pvf)
@@ -65,3 +73,9 @@ print("w at node 2 (FirstOrder) [m]:", w_node_2)
 
 # 8. Verify equality of both methods
 print("Results match:", np.allclose(w_node_2, w_node_2_pvf))
+
+# 9. Plot moment distribution real loads
+pvf.plot('real', kind='moment')
+
+# 9. Plot moment distribution virtual loads
+pvf.plot('virt', kind='moment')

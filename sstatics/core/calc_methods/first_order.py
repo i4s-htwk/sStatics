@@ -60,11 +60,43 @@ class FirstOrder(Solver):
             decimals: int = 2,
             sig_digits: int | None = None,
             n_disc: int = 10,
-            mode: str = 'mpl',
+            mode: Literal['mpl', 'plotly'] = 'mpl',
             color: 'str' = 'red',
             show_load: bool = False,
             scale: int = 1
     ):
+        r"""Plot internal forces or deformation results.
+
+        Parameters
+        ----------
+        kind : {'normal', 'shear', 'moment', 'u', 'w', 'phi', \
+                'bending_line'}, default='normal'
+
+            Selects the result quantity to display.
+        bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
+            Mesh used for the graphic bar geometry.
+        decimals : int, optional
+            Number of decimals for label annotation.
+        sig_digits: int | None, default=None
+            Number of significant digits for label annotation.
+        n_disc : int, default=10
+            Number of subdivisions for result interpolation.
+        mode : {'mpl', 'plotly'}, default='mpl'
+            Specifies which renderer is chosen
+        color : str, default='red'
+            Color of the plot
+        show_load : bool, default=False
+            Specifies whether the load is plotted.
+        scale : int, default=1
+            Scale factor for plot
+
+        Raises
+        ------
+        ValueError
+            If the mode is invalid.
+        """
+        if kind == 'bending_line':
+            return None
         valid_kinds = ['normal', 'shear', 'moment', 'u', 'w', 'phi',
                        'bending_line']
         if kind not in valid_kinds:

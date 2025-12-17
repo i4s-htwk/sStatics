@@ -9,8 +9,8 @@ moments of inertia, and boundaries.
 
 from sstatics.core.preprocessing.geometry.objects import Polygon
 from sstatics.core.preprocessing import CrossSection
-from sstatics.graphic_objects import CrossSectionGraphic
-
+from sstatics.core.postprocessing.graphic_objects import (
+    CrossSectionGeo, ObjectRenderer)
 
 # 1. Define rectangle (width = 40, height = 40)
 rect = Polygon(
@@ -21,7 +21,7 @@ rect = Polygon(
 cs = CrossSection(geometry=[rect])
 
 # 3. Visualize geometry
-CrossSectionGraphic(cross_section=cs).show()
+ObjectRenderer(CrossSectionGeo(cs), 'plotly').show()
 
 # 4. Extract properties
 A = cs.area

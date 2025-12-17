@@ -1058,7 +1058,8 @@ class SecondOrder(LoggerMixin):
             n_disc: int = 10,
             mode: str = 'mpl',
             color: 'str' = 'red',
-            show_load: bool = False
+            show_load: bool = False,
+            scale: int = 1
     ):
         r"""Plot second-order internal forces or deformation results.
 
@@ -1087,8 +1088,18 @@ class SecondOrder(LoggerMixin):
             Mesh used for the graphic bar geometry.
         decimals : int, optional
             Number of decimals for label annotation.
+        sig_digits: int | None, default=None
+            Number of significant digits for label annotation.
         n_disc : int, default=10
             Number of subdivisions for result interpolation.
+        mode : {'mpl', 'plotly'}, default='mpl'
+            Chosen renderer
+        color : str, default='red'
+            Color of the plot
+        show_load : bool, default=False
+            Specifies whether the load is plotted.
+        scale : int, default=1
+            Scale factor for plot
 
         Raises
         ------
@@ -1120,6 +1131,6 @@ class SecondOrder(LoggerMixin):
 
         sys_geo, result_geo = plot_results(
             self.system, diff, kind, bar_mesh_type, decimals, sig_digits,
-            color, show_load)
+            color, show_load, scale)
 
         ObjectRenderer([sys_geo, result_geo], mode).show()
