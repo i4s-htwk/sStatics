@@ -209,40 +209,40 @@ def plot_results(
         SystemGeo, StateLineGeo
     )
 
-    if kind == 'bending_line':
-        raise ValueError('Not implemented yet')
-
-    kind_map = {
-        'normal': ('forces_disc', 0),
-        'shear': ('forces_disc', 1),
-        'moment': ('forces_disc', 2),
-        'u': ('deform_disc', 0),
-        'w': ('deform_disc', 1),
-        'phi': ('deform_disc', 2),
-    }
-
-    attr, idx = kind_map[kind]
-
     sys_geo = SystemGeo(system, mesh_type=bar_mesh_type, show_load=show_load)
 
-    result = []
-    for bar, diff_i in zip(system.mesh, diff):
-        data = getattr(diff_i, attr)
-        result.append({
-            'x': diff_i.x,
-            'z': data[:, idx],
-            'translation': (bar.node_i.x, bar.node_i.z),
-            'rotation': bar.inclination,
-        })
+    if kind == 'bending_line':
+        raise ValueError('Not implemented yet')
+    else:
+        kind_map = {
+            'normal': ('forces_disc', 0),
+            'shear': ('forces_disc', 1),
+            'moment': ('forces_disc', 2),
+            'u': ('deform_disc', 0),
+            'w': ('deform_disc', 1),
+            'phi': ('deform_disc', 2),
+        }
 
-    result_geo = StateLineGeo(
-        state_line_data=result,
-        global_scale=sys_geo.global_scale,
-        decimals=decimals,
-        sig_digits=sig_digits,
-        text_style={'textfont': {'color': color}},
-        line_style={'line_color': color},
-    )
+        attr, idx = kind_map[kind]
+
+        result = []
+        for bar, diff_i in zip(system.mesh, diff):
+            data = getattr(diff_i, attr)
+            result.append({
+                'x': diff_i.x,
+                'z': data[:, idx],
+                'translation': (bar.node_i.x, bar.node_i.z),
+                'rotation': bar.inclination,
+            })
+
+        result_geo = StateLineGeo(
+            state_line_data=result,
+            global_scale=sys_geo.global_scale,
+            decimals=decimals,
+            sig_digits=sig_digits,
+            text_style={'textfont': {'color': color}},
+            line_style={'line_color': color},
+        )
 
     return sys_geo, result_geo
 
