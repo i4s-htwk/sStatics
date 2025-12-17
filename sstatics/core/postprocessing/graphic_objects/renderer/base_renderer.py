@@ -118,37 +118,44 @@ class AbstractRenderer(ABC):
                 yield x, z, style
 
     def _iter_text_elements(self, obj):
+        # Elemente, die direkt Text enthalten
         for element in getattr(obj, 'text_elements', []):
-            if not (4 <= len(element) <= 6):
-                raise ValueError(
-                    'Each element in text_elements must be a tuple of '
-                    'length 4, 5 or 6.'
-                )
-
-            # unpack gracefully
-            if len(element) == 4:
-                x, z, text, style = element
-                preferred_pos = None
-                rotation = None
-            elif len(element) == 5:
-                x, z, text, style, preferred_pos = element
-                rotation = None
-            else:  # len == 6
-                x, z, text, style, preferred_pos, rotation = element
-
-            if text != ['']:
-                x, z = obj.transform(x, z)
-                yield x, z, text, style, preferred_pos, rotation
-
-        # Rekursion bleibt gleich:
-        for sub in getattr(obj, 'graphic_elements', []):
-            if (hasattr(sub, 'text_elements')
-                    or hasattr(sub, 'graphic_elements')):
-                for (
-                        x, z, text, style, preferred_pos, rotation
-                ) in self._iter_text_elements(sub):
+            # falls es ein ObjectGeo ist (z.B. TextGeo), rekursiv
+            if hasattr(element, 'text_elements'):
+                for x, z, text, style, preferred, rotation \
+                        in self._iter_text_elements(element):
                     x, z = obj.transform(x, z)
-                    yield x, z, text, style, preferred_pos, rotation
+                    yield x, z, text, style, preferred, rotation
+            else:
+                # unpack element tuple
+                if not (4 <= len(element) <= 6):
+                    raise ValueError(
+                        'Each element in text_elements must be a tuple of '
+                        'length 4, 5 or 6.'
+                    )
+                if len(element) == 4:
+                    x, z, text, style = element
+                    preferred, rotation = None, None
+                elif len(element) == 5:
+                    x, z, text, style, preferred = element
+                    rotation = None
+                else:
+                    x, z, text, style, preferred, rotation = element
+
+                if text != ['']:
+                    x, z = obj.transform(x, z)
+                    yield x, z, text, style, preferred, rotation
+
+        # Rekursion durch untergeordnete Elemente
+        for sub in getattr(obj, 'graphic_elements', []):
+            if (
+                    hasattr(sub, 'text_elements') or
+                    hasattr(sub, 'graphic_elements')
+            ):
+                for x, z, text, style, preferred, rotation \
+                        in self._iter_text_elements(sub):
+                    x, z = obj.transform(x, z)
+                    yield x, z, text, style, preferred, rotation
 
     def _find_optimal_text_position(self, x, z, text, preferred_pos, rotation):
         if preferred_pos is not None and preferred_pos.endswith('!'):
