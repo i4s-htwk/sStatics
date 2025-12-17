@@ -1,9 +1,11 @@
 
-
 from functools import cached_property
+
 from sstatics.core.preprocessing import CrossSection
-from sstatics.core.preprocessing.geometry import Polygon, PolygonMerge, \
-    CircularSector
+from sstatics.core.preprocessing.geometry import (
+    Polygon, PolygonMerge, CircularSector
+)
+
 from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
     ObjectGeo
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (

@@ -54,7 +54,7 @@ class MplRenderer(AbstractRenderer):
 
     @cached_property
     def figure(self):
-        return self._fig
+        return plt
 
     def add_graphic(self, x, y, **style):
         style = self._fix_z_order(style)

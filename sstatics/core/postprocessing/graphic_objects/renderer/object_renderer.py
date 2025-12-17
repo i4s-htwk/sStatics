@@ -25,11 +25,11 @@ class ObjectRenderer:
         pending_objects = []
         for obj in objects:
 
-            if isinstance(obj, str) and obj in (PLOTLY, MPL):
+            if isinstance(obj, str) and obj.lower() in (PLOTLY, MPL):
                 for po in pending_objects:
                     self._groups.append((
                         po if isinstance(po, (list, tuple)) else [po],
-                        obj
+                        obj.lower()
                     ))
                 pending_objects = []
 

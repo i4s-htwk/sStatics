@@ -2,6 +2,7 @@
 from __future__ import annotations
 import abc
 from functools import cached_property
+from types import NoneType
 from typing import Any
 
 from ..utils.defaults import (
@@ -67,7 +68,9 @@ class ObjectGeo(abc.ABC):
         line_style = line_style or {}
         point_style = point_style or {}
         text_style = text_style or {}
-        self._validate_base(text, line_style, text_style, point_style)
+        self._validate_base(
+            text, line_style, text_style, point_style, global_scale
+        )
         user_styles = {
             'line': line_style or {},
             'point': point_style or {},
@@ -301,7 +304,9 @@ class ObjectGeo(abc.ABC):
         return default_style
 
     @staticmethod
-    def _validate_base(text, line_style, text_style, point_style):
+    def _validate_base(
+            text, line_style, text_style, point_style, global_scale
+    ):
         """
         Validate text, line_style and text_style parameters.
 
@@ -327,7 +332,7 @@ class ObjectGeo(abc.ABC):
         """
         if not isinstance(text, (str, list, tuple, int, float)):
             raise TypeError(
-                f'text must be string, list, tuple, int or float, got '
+                f'"text" must be string, list, tuple, int or float, got '
                 f'{type(text).__name__}'
             )
         if isinstance(text, (list, tuple)):
@@ -338,20 +343,26 @@ class ObjectGeo(abc.ABC):
 
         if not isinstance(line_style, dict):
             raise TypeError(
-                f'line_style must be a dictionary, got '
+                f'"line_style" must be a dictionary, got '
                 f'{type(line_style).__name__}'
             )
 
         if not isinstance(point_style, dict):
             raise TypeError(
-                f'point_style must be a dictionary, got '
+                f'"point_style" must be a dictionary, got '
                 f'{type(point_style).__name__}'
             )
 
         if not isinstance(text_style, dict):
             raise TypeError(
-                f'text_style must be a dictionary, got '
+                f'"text_style" must be a dictionary, got '
                 f'{type(text_style).__name__}'
+            )
+
+        if not isinstance(global_scale, (int, float, NoneType)):
+            raise TypeError(
+                f'"global_scal" must be int, float or NoneType, got '
+                f'{type(global_scale).__name__}'
             )
 
     @property
@@ -377,3 +388,7 @@ class ObjectGeo(abc.ABC):
     @property
     def text_style(self):
         return self._text_style
+
+    @property
+    def global_scale(self):
+        return self._base_scale

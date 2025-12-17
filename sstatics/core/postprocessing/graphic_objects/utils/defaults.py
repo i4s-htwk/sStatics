@@ -251,6 +251,10 @@ DEFAULT_STATE_LINE = dict(
     line_color='red'
 )
 
+DEFAULT_STATE_LINE_TEXT = dict(
+    textfont=dict(color='red')
+)
+
 PLOTLY = 'plotly'
 MPL = 'mpl'
 VALID_MODES = (PLOTLY, MPL)

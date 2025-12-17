@@ -6,27 +6,30 @@ from types import NoneType
 
 from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
     ObjectGeo
-from sstatics.core.postprocessing.graphic_objects.geo.geometry import (
-    OpenCurveGeo
-)
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
-    DEFAULT_STATE_LINE
+    DEFAULT_STATE_LINE, DEFAULT_STATE_LINE_TEXT
+)
+from sstatics.core.postprocessing.graphic_objects.geo import (
+    OpenCurveGeo, TextGeo
 )
 
 
 class StateLineGeo(ObjectGeo):
     CLASS_STYLES = {
-        'line': DEFAULT_STATE_LINE
+        'line': DEFAULT_STATE_LINE,
+        'text': DEFAULT_STATE_LINE_TEXT
     }
 
     def __init__(
             self,
             state_line_data: list[dict],
-            decimals: int | None = None,
+            global_scale: float,
+            decimals: int = 2,
             sig_digits: int | None = None,
             scale_state_line: float = 3.0,
             show_maximum: bool = False,
             show_text: bool = True,
+            show_connecting_line: bool = False,
             **kwargs
     ):
         """
@@ -37,27 +40,52 @@ class StateLineGeo(ObjectGeo):
             - rotation: float
         """
         self._validate_state_line(
-            state_line_data, decimals, sig_digits, scale_state_line,
-            show_maximum, show_text
+            state_line_data, global_scale, decimals, sig_digits,
+            scale_state_line, show_maximum, show_text, show_connecting_line
         )
-        super().__init__(origin=(0.0, 0.0), **kwargs)
+        super().__init__(
+            origin=(0.0, 0.0), global_scale=global_scale, **kwargs
+        )
         self._state_line_data = state_line_data
         self._decimals = decimals
         self._sig_digits = sig_digits
         self._scale_state_line = scale_state_line
         self._show_maximum = show_maximum
         self._show_text = show_text
+        self._show_connecting_line = show_connecting_line
 
     @cached_property
     def graphic_elements(self):
         return [
-            *self._boundary_line_elements,
             *self._profile_line_elements
         ]
 
     @cached_property
     def text_elements(self):
-        return []
+        elements = []
+        if not self._show_text:
+            return []
+        for line, process in zip(
+                self._state_line_data, self._process_state_lines
+        ):
+            text_idx = {0, len(line['z']) - 1}
+            if self._show_maximum:
+                text_idx.add(np.argmax(np.abs(line['z'])))
+            points_text = [
+                (
+                    (process['x'][i], process['z'][i]),
+                    self._round_value(line['z'][i])
+                )
+                for i in text_idx
+            ]
+            points, texts = zip(*points_text)
+            elements.append(TextGeo(
+                self._origin, insertion_points=list(points), texts=list(texts),
+                rotation=line['rotation'],
+                post_translation=line['translation'],
+                text_style=self._text_style
+            ))
+        return elements
 
     @cached_property
     def _max_value(self):
@@ -76,64 +104,40 @@ class StateLineGeo(ObjectGeo):
         )
 
         for line in state_lines:
-            x = np.array(line['x'])
             z = np.array(line['z']) * scale_factor
-            line['x'] = x
             line['z'] = z
         return state_lines
 
-    def _vertical_boundary(self, x, z, line):
-        return OpenCurveGeo(
-            [x, x], [0.0, z],
-            origin=self._origin,
-            rotation=line['rotation'], post_translation=line['translation'],
-            line_style=self._line_style
-        )
-
-    @property
-    def _boundary_line_elements(self):
-        elements = []
-        for line in self._process_state_lines:
-            elements.extend([
-                self._vertical_boundary(0.0, line['z'][0], line),
-                self._vertical_boundary(line['x'][-1], line['z'][-1], line),
-            ])
-        return elements
-
     def _round_value(self, value):
-        if self._decimals is not None:
-            round_value = np.round(value, self._decimals)
-        elif self._sig_digits is not None:
-            round_value = float(f"{value:.{self._sig_digits}g}")
+        if self._sig_digits is not None:
+            value = float(f"{value:.{self._sig_digits}g}")
         else:
-            round_value = np.round(value, 2)
-        return (
-            0.0 if np.isclose(round_value, 0.0, atol=1e-8) else round_value
-        )
+            value = round(value, self._decimals)
+        return 0.0 if np.isclose(value, 0.0, atol=1e-8) else value
 
-    @cached_property
-    def _text_values(self):
-        return [
-            [self._round_value(line['z'][0]), self._round_value(line['z'][-1])]
-            for line in self._state_line_data
-        ]
+    def _add_points(self, x: np.ndarray, z: np.ndarray):
+        x = [x[0], *x, x[-1]]
+        z = [0.0, *z, 0.0]
+        if self._show_connecting_line:
+            x.append(x[0])
+            z.append(0.0)
+        return x, z
 
     @property
     def _profile_line_elements(self):
         return [
             OpenCurveGeo(
-                list(line['x']), list(line['z']), origin=self._origin,
-                text=self._text_values[i] if self._show_text else '',
+                *self._add_points(line['x'], line['z']),
                 rotation=line['rotation'],
                 post_translation=line['translation'],
-                line_style=self._line_style, text_style=self._text_style
-            ) for i, line in enumerate(self._process_state_lines)
+                line_style=self._line_style
+            ) for line in self._process_state_lines
         ]
 
     @staticmethod
     def _validate_state_line(
-            state_line_data, decimals, sig_digits, scale_state_line,
-            show_maximum, show_text
+            state_line_data, global_scale, decimals, sig_digits,
+            scale_state_line, show_maximum, show_text, show_connecting_line
     ):
         if not isinstance(state_line_data, list):
             raise TypeError(
@@ -224,7 +228,13 @@ class StateLineGeo(ObjectGeo):
                     f'got {type(rotation).__name__} at index {i}.'
                 )
 
-        if not isinstance(decimals, (int, NoneType)):
+        if not isinstance(global_scale, (int, float)):
+            raise TypeError(
+                f'"global_scal" must be int or float, got '
+                f'{type(global_scale).__name__}'
+            )
+
+        if not isinstance(decimals, int):
             raise TypeError(
                 f'"decimals" must be int or None, '
                 f'got {type(decimals).__name__!r}'
@@ -234,11 +244,6 @@ class StateLineGeo(ObjectGeo):
             raise TypeError(
                 f'"sig_digits" must be int or None, '
                 f'got {type(sig_digits).__name__!r}'
-            )
-
-        if decimals is not None and sig_digits is not None:
-            raise ValueError(
-                'Specify only one of "decimals" or "sig_digits", not both.'
             )
 
         if sig_digits is not None and sig_digits <= 0:
@@ -260,6 +265,12 @@ class StateLineGeo(ObjectGeo):
             raise TypeError(
                 f'"show_text" must be a boolean, got '
                 f'{type(show_text).__name__!r}'
+            )
+
+        if not isinstance(show_connecting_line, bool):
+            raise TypeError(
+                f'"show_connecting_line" must be a boolean, got '
+                f'{type(show_connecting_line).__name__!r}'
             )
 
     @property
@@ -286,6 +297,10 @@ class StateLineGeo(ObjectGeo):
     def show_text(self):
         return self._show_text
 
+    @property
+    def show_connecting_line(self):
+        return self._show_connecting_line
+
     def __repr__(self):
         return (
             f'{self.__class__.__name__}('
@@ -295,6 +310,7 @@ class StateLineGeo(ObjectGeo):
             f'scale_state_line={self._scale_state_line}, '
             f'show_maximum={self._show_maximum}, '
             f'show_text={self._show_text}, '
+            f'show_connecting_line={self._show_connecting_line}, '
             f'line_style={self._line_style}, '
             f'text_style={self._text_style}, '
             f'Transform={self._transform})'

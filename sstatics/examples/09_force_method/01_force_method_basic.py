@@ -72,9 +72,9 @@ delta_i_0 = np.array(force_method.load_coef)
 # 10. Display system of equations A * x = b
 print("System of equations (delta_i_j * x = delta_i_0):")
 for i in range(delta_i_j.shape[0]):
-    row = " + ".join(f"{delta_i_j[i,j]:.4e}*x{j+1}"
+    row = " + ".join(f"{delta_i_j[i, j]:.4e}*x{j+1}"
                      for j in range(delta_i_j.shape[1]))
-    print(f"{row} = {delta_i_0[i,0]:.4e}")
+    print(f"{row} = {delta_i_0[i, 0]:.4e}")
 
 # Solve for redundant forces (x = unbekannte Kräfte)
 x = np.array(force_method.redundants)
