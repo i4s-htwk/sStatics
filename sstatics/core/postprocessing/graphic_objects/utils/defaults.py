@@ -28,7 +28,7 @@ DEFAULT_LINE: dict[str, Any] = dict(
 """
 DEFAULT_TEXT: dict[str, Any] = dict(
     mode='text',
-    textfont=dict(size=20, family='Times New Roman', color='black'),
+    textfont=dict(size=20, color='black'),
     **DEFAULT
 )
 
