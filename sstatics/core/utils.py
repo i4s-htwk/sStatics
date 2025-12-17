@@ -205,14 +205,30 @@ def plot_results(
     result_geo : StateLineGeo
         Graphical representation of the evaluated state lines.
     """
+    from sstatics.core.postprocessing.bending_line import BendingLine
     from sstatics.core.postprocessing.graphic_objects import (
-        SystemGeo, StateLineGeo
+        SystemGeo, StateLineGeo, BendingLineGeo
     )
 
     sys_geo = SystemGeo(system, mesh_type=bar_mesh_type, show_load=show_load)
 
     if kind == 'bending_line':
-        raise ValueError('Not implemented yet')
+        result = []
+        bend = BendingLine(diff)
+        for x, z, u, w in zip(bend.x_global, bend.z_global,
+                              bend.u_global, bend.w_global):
+            result.append({
+                'x': x,
+                'z': z,
+                'u': u,
+                'w': w
+            })
+
+        result_geo = BendingLineGeo(
+            bending_line_data=result,
+            global_scale=sys_geo.global_scale,
+            line_style={'line_color': color}
+        )
     else:
         kind_map = {
             'normal': ('forces_disc', 0),

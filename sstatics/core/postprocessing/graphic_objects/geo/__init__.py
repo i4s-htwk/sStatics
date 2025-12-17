@@ -25,13 +25,14 @@ from sstatics.core.postprocessing.graphic_objects.geo.hinge import (
 from sstatics.core.postprocessing.graphic_objects.geo.node import NodeGeo
 from sstatics.core.postprocessing.graphic_objects.geo.text import TextGeo
 from sstatics.core.postprocessing.graphic_objects.geo.state_line import (
-    StateLineGeo
+    StateLineGeo, BendingLineGeo
 )
 from sstatics.core.postprocessing.graphic_objects.geo.system import SystemGeo
 
 
 __all__ = [
     'BarGeo',
+    'BendingLineGeo',
     'ClampedSupportGeo',
     'CrossSectionGeo',
     'CurvedArrowGeo',
