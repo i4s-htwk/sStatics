@@ -34,7 +34,7 @@ cs = CrossSection(geometry=[rect])
 
 # 3. Define System: single-span beam (4 m)
 n1 = Node(0, 0, u='fixed', w='fixed')
-n2 = Node(4, 0, w='fixed', loads=(NodePointLoad(x=1)))
+n2 = Node(4, 0, w='fixed', loads=(NodePointLoad(x=-1)))
 
 line_load = BarLineLoad(1, 1)
 b1 = Bar(n1, n2, cs, mat, line_loads=line_load)

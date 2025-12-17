@@ -5,7 +5,8 @@ from typing import Literal
 from sstatics.core.preprocessing.system import Bar
 from sstatics.core.solution.solver import Solver
 from sstatics.core.postprocessing.stress import BarStressDistribution
-from sstatics.core.utils import get_differential_equation, plot_results
+from sstatics.core.utils import (get_differential_equation, plot_results,
+                                 plot_stress_results)
 
 from sstatics.core.postprocessing.graphic_objects import ObjectRenderer
 
@@ -81,20 +82,30 @@ class FirstOrder(Solver):
 
     def plot_stress(
             self,
-            kind: Literal['normal', 'shear', 'bending_top', 'bending_bottom'],
+            kind: Literal[
+                'normal', 'shear', 'bending', 'bending_top',
+                'bending_bottom'] = 'normal',
             z: float | None = None,
             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
-            result_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'mesh',
-            decimals: int | None = None,
-            n_disc: int = 10
+            decimals: int = 2,
+            sig_digits: int | None = None,
+            n_disc: int = 10,
+            mode: str = 'mpl',
+            color: 'str' = 'red',
+            show_load: bool = False
     ):
-        # TODO: not implemented yet
-        stress = [
-            sd.stress_at_z(z) if z is not None else sd.stress_disc
-            for sd in self.stress_distribution(n_disc)
-        ]
-        print(stress)
-        print(kind)
-        print(bar_mesh_type)
-        print(result_mesh_type)
-        print(decimals)
+        valid_kinds = ['normal', 'shear', 'bending',
+                       'bending_top', 'bending_bottom']
+        if kind not in valid_kinds:
+            raise ValueError(
+                f"Invalid kind '{kind}'. "
+                f"Expected one of {valid_kinds}."
+            )
+
+        diff = self.stress_distribution(n_disc)
+
+        sys_geo, result_geo = plot_stress_results(
+            self.system, diff, kind, z, bar_mesh_type, decimals,
+            sig_digits, color, show_load)
+
+        ObjectRenderer([sys_geo, result_geo], mode).show()

@@ -165,53 +165,179 @@ def plot_results(
         diff,
         kind: str,
         bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
-        decimals: int | None = None,
+        decimals: int = None,
         sig_digits: int | None = None,
-        color: 'str' = 'red',
+        color: str = 'red',
         show_load: bool = False
 ):
-    # from sstatics.core.postprocessing.bending_line import BendingLin
+    """
+    Create graphical objects for plotting internal forces or displacements.
+
+    The function evaluates discretized results along each bar and converts
+    them into graphical state lines in the local bar coordinate system. The
+    resulting objects can be rendered by a compatible object renderer.
+
+    Parameters
+    ----------
+    system
+        Structural system containing geometry, nodes, and bar elements.
+    diff
+        Discretized result objects per bar, typically obtained from a
+        differential equation or displacement evaluation.
+    kind : str
+        Type of result to plot. Supported values are ``'normal'``,
+        ``'shear'``, ``'moment'``, ``'u'``, ``'w'``, and ``'phi'``.
+    bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, optional
+        Type of mesh used for visualizing the system geometry.
+    decimals : int, optional
+        Number of decimal places used for numeric annotations.
+    sig_digits : int or None, optional
+        Number of significant digits used for numeric annotations.
+    color : str, optional
+        Color used for plotting the state lines.
+    show_load : bool, optional
+        If True, applied loads are shown in the system geometry.
+
+    Returns
+    -------
+    sys_geo : SystemGeo
+        Graphical representation of the system geometry.
+    result_geo : StateLineGeo
+        Graphical representation of the evaluated state lines.
+    """
     from sstatics.core.postprocessing.graphic_objects import (
-        SystemGeo, StateLineGeo)
+        SystemGeo, StateLineGeo
+    )
+
+    if kind == 'bending_line':
+        raise ValueError('Not implemented yet')
+
+    kind_map = {
+        'normal': ('forces_disc', 0),
+        'shear': ('forces_disc', 1),
+        'moment': ('forces_disc', 2),
+        'u': ('deform_disc', 0),
+        'w': ('deform_disc', 1),
+        'phi': ('deform_disc', 2),
+    }
+
+    attr, idx = kind_map[kind]
 
     sys_geo = SystemGeo(system, mesh_type=bar_mesh_type, show_load=show_load)
 
-    if kind == 'bending_line':
-        # bending_line = BendingLine(diff)
-        # result_geo = BendingLineGeo(...)
-        raise ValueError('Not implemented yet')
+    result = []
+    for bar, diff_i in zip(system.mesh, diff):
+        data = getattr(diff_i, attr)
+        result.append({
+            'x': diff_i.x,
+            'z': data[:, idx],
+            'translation': (bar.node_i.x, bar.node_i.z),
+            'rotation': bar.inclination,
+        })
+
+    result_geo = StateLineGeo(
+        state_line_data=result,
+        global_scale=sys_geo.global_scale,
+        decimals=decimals,
+        sig_digits=sig_digits,
+        text_style={'textfont': {'color': color}},
+        line_style={'line_color': color},
+    )
+
+    return sys_geo, result_geo
+
+
+def plot_stress_results(
+        system,
+        diff,
+        kind: str,
+        z_value: float | None = None,
+        bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
+        decimals: int = None,
+        sig_digits: int | None = None,
+        color: str = 'red',
+        show_load: bool = False
+):
+    """
+    Create graphical objects for plotting stress distributions.
+
+    The function evaluates normal, shear, or bending stresses either over the
+    discretized bar height or at a specific coordinate ``z_value`` and converts
+    them into graphical state lines.
+
+    Parameters
+    ----------
+    system
+        Structural system containing geometry, nodes, and bar elements.
+    diff
+        Discretized stress result objects per bar.
+    kind : str
+        Type of stress to plot. Supported values depend on ``z_value``.
+        If ``z_value`` is None: ``'normal'``, ``'shear'``,
+        ``'bending_bottom'``, ``'bending_top'``.
+        If ``z_value`` is given: ``'normal'``, ``'shear'``, ``'bending'``.
+    z_value : float or None, optional
+        Local z-coordinate at which stresses are evaluated.
+    bar_mesh_type : {'bars', 'user_mesh', 'mesh'}, optional
+        Type of mesh used for visualizing the system geometry.
+    decimals : int, optional
+        Number of decimal places used for numeric annotations.
+    sig_digits : int or None, optional
+        Number of significant digits used for numeric annotations.
+    color : str, optional
+        Color used for plotting the stress state lines.
+    show_load : bool, optional
+        If True, applied loads are shown in the system geometry.
+
+    Returns
+    -------
+    sys_geo : SystemGeo
+        Graphical representation of the system geometry.
+    result_geo : StateLineGeo
+        Graphical representation of the evaluated stress state lines.
+    """
+    from sstatics.core.postprocessing.graphic_objects import (
+        SystemGeo, StateLineGeo
+    )
+
+    if z_value is None:
+        kind_map = {
+            'normal': ('stress_disc', 0),
+            'shear': ('stress_disc', 1),
+            'bending_bottom': ('stress_disc', 2),
+            'bending_top': ('stress_disc', 3),
+        }
     else:
         kind_map = {
-            'normal': ('forces_disc', 0),
-            'shear': ('forces_disc', 1),
-            'moment': ('forces_disc', 2),
-            'u': ('deform_disc', 0),
-            'w': ('deform_disc', 1),
-            'phi': ('deform_disc', 2),
+            'normal': ('stress_at_z', 0),
+            'shear': ('stress_at_z', 1),
+            'bending': ('stress_at_z', 2),
         }
-        attr, idx = kind_map[kind]
 
-        result = []
+    attr, idx = kind_map[kind]
 
-        for i, bar in enumerate(system.mesh):
-            data = getattr(diff[i], attr)
-            x = diff[i].x
-            z = data[:, idx]
+    sys_geo = SystemGeo(system, mesh_type=bar_mesh_type, show_load=show_load)
 
-            translation = (bar.node_i.x, bar.node_i.z)
-            rotation = bar.inclination
-            result.append(dict(
-                x=x, z=z, translation=translation, rotation=rotation
-            ))
+    result = []
+    for bar, diff_i in zip(system.mesh, diff):
+        data = getattr(diff_i, attr)
+        z = data[:, idx] if z_value is None else data(z_value)[:, idx]
 
-        result_geo = StateLineGeo(state_line_data=result,
-                                  global_scale=sys_geo.global_scale,
-                                  decimals=decimals,
-                                  sig_digits=sig_digits,
-                                  text_style={
-                                      'textfont': dict(
-                                          color=color), },
-                                  line_style={'line_color': color}
-                                  )
+        result.append({
+            'x': diff_i.x,
+            'z': z,
+            'translation': (bar.node_i.x, bar.node_i.z),
+            'rotation': bar.inclination,
+        })
+
+    result_geo = StateLineGeo(
+        state_line_data=result,
+        global_scale=sys_geo.global_scale,
+        decimals=decimals,
+        sig_digits=sig_digits,
+        text_style={'textfont': {'color': color}},
+        line_style={'line_color': color},
+        show_maximum=True,
+    )
 
     return sys_geo, result_geo
