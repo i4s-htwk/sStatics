@@ -1,6 +1,8 @@
 
 import numpy as np
 
+from typing import Literal
+
 
 def transformation_matrix(alpha: float):
     r"""Create a 3x3 rotation matrix.
@@ -156,3 +158,59 @@ def get_differential_equation(
         )
         for i in range(len(bars))
     ]
+
+
+def plot_results(
+        system,
+        diff,
+        kind: str,
+        bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
+        decimals: int | None = None,
+        sig_digits: int | None = None,
+        color: 'str' = 'red',
+):
+    # from sstatics.core.postprocessing.bending_line import BendingLin
+    from sstatics.core.postprocessing.graphic_objects import (
+        SystemGeo, StateLineGeo)
+
+    sys_geo = SystemGeo(system, mesh_type=bar_mesh_type)
+
+    if kind == 'bending_line':
+        # bending_line = BendingLine(diff)
+        # result_geo = BendingLineGeo(...)
+        raise ValueError('Not implemented yet')
+    else:
+        kind_map = {
+            'normal': ('forces_disc', 0),
+            'shear': ('forces_disc', 1),
+            'moment': ('forces_disc', 2),
+            'u': ('deform_disc', 0),
+            'w': ('deform_disc', 1),
+            'phi': ('deform_disc', 2),
+        }
+        attr, idx = kind_map[kind]
+
+        result = []
+
+        for i, bar in enumerate(system.mesh):
+            data = getattr(diff[i], attr)
+            x = diff[i].x
+            z = data[:, idx]
+
+            translation = (bar.node_i.x, bar.node_i.z)
+            rotation = bar.inclination
+            result.append(dict(
+                x=x, z=z, translation=translation, rotation=rotation
+            ))
+
+        result_geo = StateLineGeo(state_line_data=result,
+                                  global_scale=sys_geo.global_scale,
+                                  decimals=decimals,
+                                  sig_digits=sig_digits,
+                                  text_style={
+                                      'textfont': dict(
+                                          color=color), },
+                                  line_style={'line_color': color}
+                                  )
+
+    return sys_geo, result_geo

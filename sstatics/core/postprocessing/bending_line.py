@@ -5,7 +5,7 @@ from typing import List
 
 import numpy as np
 
-from sstatics.core import DifferentialEquationSecond
+from sstatics.core.postprocessing import DifferentialEquationSecond
 from sstatics.core.postprocessing import DifferentialEquation
 
 

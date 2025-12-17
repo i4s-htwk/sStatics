@@ -15,74 +15,6 @@ from sstatics.core.postprocessing.graphic_objects.geo.state_line import \
     StateLineGeo
 
 
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon as MplPolygon
-
-
-def plot_cross_section_with_shear_stress(cs, z_values, tau_values, title,
-                                         v_z=0, invert_y=True):
-    if not hasattr(cs, "geometry"):
-        raise AttributeError(
-            "CrossSection object must have a 'geometry' attribute.")
-
-    fig, (ax_geo, ax_tau) = plt.subplots(1, 2, figsize=(10, 6), sharey=True,
-                                         gridspec_kw={'width_ratios': [2, 1]})
-
-    # --- Querschnitt zeichnen ---
-    for poly in cs.geometry:
-        points = getattr(poly, "points", None)
-        if points is None:
-            raise AttributeError(
-                "Each Polygon must have a 'points' attribute.")
-        patch = MplPolygon(points, closed=True, facecolor='lightgray',
-                           edgecolor='black', alpha=0.8)
-        ax_geo.add_patch(patch)
-
-    ax_geo.set_aspect('equal', 'box')
-    ax_geo.set_xlabel("y")
-    ax_geo.set_ylabel("z")
-    ax_geo.set_title("Cross-section")
-    ax_geo.autoscale_view()
-    if invert_y:
-        ax_geo.invert_yaxis()
-    ax_geo.grid(True, linestyle='--', alpha=0.5)
-
-    # --- Schubspannungsverlauf τ(z) ---
-    ax_tau.set_xlim(0, max(tau_values) * 1.25)  # 10% Platz rechts lassen
-    ax_tau.plot(tau_values, z_values, color='red', linewidth=2)
-    ax_tau.fill_betweenx(z_values, 0, tau_values, color='red', alpha=0.3)
-
-    ax_tau.set_title(title)
-    ax_tau.grid(True, linestyle='--', alpha=0.5)
-
-    # --- Maximalwert markieren ---
-    max_idx = np.argmax(tau_values)
-    z_max = z_values[max_idx]
-    tau_max = tau_values[max_idx]
-
-    ax_tau.plot(tau_max, z_max, 'ro')  # Punkt an Maximum
-
-    # Grenzen abrufen
-    x_min, x_max = ax_tau.get_xlim()
-    text_offset = 0.05 * (x_max - x_min)  # 5% des Achsenbereichs
-    text_x = tau_max + text_offset
-
-    # Text innerhalb des Plots halten
-    if text_x > x_max:
-        text_x = tau_max - text_offset  # falls rechts nicht mehr passt
-
-    ax_tau.text(text_x, z_max, f"{tau_max:.4f}", color='red', fontsize=10,
-                va='bottom')
-
-    ax_tau.text(tau_values[0] * 1.1, z_values[0], f"{tau_values[0]:.4f}",
-                color='red', fontsize=10, va='bottom')
-    ax_tau.text(tau_values[-1] * 1.1, z_values[-1], f"{tau_values[-1]:.4f}",
-                color='red', fontsize=10, va='bottom')
-
-    plt.tight_layout()
-    plt.show()
-
-
 class CrossSectionStress:
     """
     Calculate stresses in a cross-section under various loading conditions.
@@ -557,6 +489,8 @@ class CrossSectionStress:
 
     def plot(self, kind: Literal['normal', 'bending', 'shear']):
         geo_cs = CrossSectionGeo(self.cross_section)
+        yb, zb = self.cross_section.boundary()
+        translation = (-yb[1] * 3, zb[0])
         if kind == 'normal':
             if self._normal_stress_disc is None:
                 raise AttributeError(
@@ -582,26 +516,22 @@ class CrossSectionStress:
                 )
             x = self._shear_stress_disc[0]
             z = self._shear_stress_disc[1]
+            translation = (-yb[1] * 2, x[0])
         else:
             raise AttributeError('gibts nicht!')
 
         geo_obj = StateLineGeo(
             [dict(x=x,
                   z=z,
-                  translation=(0, 0),
+                  translation=translation,
                   rotation=-np.pi/2
                   )],
-            global_scale=geo_cs._base_scale
+            global_scale=geo_cs.global_scale,
+            show_connecting_line=True,
+            show_maximum=True,
         )
 
         ObjectRenderer([geo_cs, geo_obj], 'mpl').show()
-
-        # plot_cross_section_with_shear_stress(
-        #     self.cross_section,
-        #     z_values=x,
-        #     tau_values=z,
-        #     title=kind
-        # )
 
 
 @dataclass
