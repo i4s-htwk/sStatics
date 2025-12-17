@@ -1,6 +1,6 @@
 
 from dataclasses import dataclass, field
-from typing import Optional, Type
+from typing import Optional, Type, Literal
 import numpy as np
 
 from sstatics.core.logger_mixin import LoggerMixin
@@ -733,7 +733,7 @@ class Poleplan(LoggerMixin):
         from sstatics.core.solution.poleplan.operation import (
             DisplacementCalculator,
         )
-        from sstatics.core.postprocessing.results import RigidBodyDisplacement
+        from sstatics.core.postprocessing import RigidBodyDisplacement
         try:
             fig = DisplacementCalculator(
                 self.chains, self.system.bars, self.node_to_multiple_chains,
@@ -753,42 +753,6 @@ class Poleplan(LoggerMixin):
 
             self.logger.debug("Displacement figure created")
             return rbd_objects
-        except Exception as exc:
-            self.logger.error(
-                f"Displacement calculation failed: {exc}",
-                exc_info=True,
-            )
-            raise
-
-    def fig(self, n_disc: int = 2):
-        """
-        Return a list of Rigid Body Displacement Objects. They can use for
-        plotting.
-        """
-        self.logger.info("Generating displacement vector for each bar")
-        from sstatics.core.solution.poleplan.operation import (
-            DisplacementCalculator,
-        )
-        from sstatics.core.postprocessing.results import RigidBodyDisplacement
-        try:
-            fig = DisplacementCalculator(
-                self.chains, self.system.bars, self.node_to_multiple_chains,
-                debug=self.debug
-            )()
-            self.logger.info("Generating for each bar a "
-                             "rigid-body-displacement-object for plotting.")
-            # creating rigid-body-displacement-object for plotting
-            rbd_objects = []
-            for i, bar in enumerate(self.system.bars):
-                rdb = RigidBodyDisplacement(
-                    bar=bar,
-                    deform=fig[i],
-                    n_disc=n_disc
-                )
-                rbd_objects.append(rdb)
-
-            self.logger.debug("Displacement figure created")
-            return fig
         except Exception as exc:
             self.logger.error(
                 f"Displacement calculation failed: {exc}",
@@ -891,10 +855,22 @@ class Poleplan(LoggerMixin):
         self.logger.warning("No suitable adjacent non‑stiff chain found")
         return None, None, None
 
-    def plot(self, mode: str = 'MPL'):
-        from sstatics.graphic_objects.poleplan import PoleplanGraphic
+    def plot(self,
+             bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
+             n_disc: int = 1,
+             color: 'str' = 'red',
+             show_load: bool = False,
+             mode: str = 'MPL',
+             scale: int = 1):
+        from sstatics.core.postprocessing.graphic_objects import ObjectRenderer
+        from sstatics.core.utils import plot_rigid_motion
 
         if not self._set_angle:
             self.set_angle()
 
-        PoleplanGraphic(poleplan=self).show()
+        diff = self.rigid_motion(n_disc=n_disc)
+
+        sys_geo, result_geo = plot_rigid_motion(
+            self.system, diff, bar_mesh_type, color, show_load, scale)
+
+        ObjectRenderer([sys_geo, result_geo], mode).show()

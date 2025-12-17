@@ -4,9 +4,9 @@ from typing import Literal
 
 from sstatics.core.preprocessing.system import Bar
 from sstatics.core.solution.solver import Solver
-from sstatics.core.postprocessing.stress import BarStressDistribution
-from sstatics.core.utils import (get_differential_equation, plot_results,
-                                 plot_stress_results)
+from sstatics.core.postprocessing import BarStressDistribution
+from sstatics.core.utils import (
+    get_differential_equation, plot_results, plot_stress_results)
 
 from sstatics.core.postprocessing.graphic_objects import ObjectRenderer
 
@@ -62,7 +62,8 @@ class FirstOrder(Solver):
             n_disc: int = 10,
             mode: str = 'mpl',
             color: 'str' = 'red',
-            show_load: bool = False
+            show_load: bool = False,
+            scale: int = 1
     ):
         valid_kinds = ['normal', 'shear', 'moment', 'u', 'w', 'phi',
                        'bending_line']
@@ -76,7 +77,7 @@ class FirstOrder(Solver):
 
         sys_geo, result_geo = plot_results(self.system, diff, kind,
                                            bar_mesh_type, decimals,
-                                           sig_digits, color, show_load)
+                                           sig_digits, color, show_load, scale)
 
         ObjectRenderer([sys_geo, result_geo], mode).show()
 
@@ -92,7 +93,8 @@ class FirstOrder(Solver):
             n_disc: int = 10,
             mode: str = 'mpl',
             color: 'str' = 'red',
-            show_load: bool = False
+            show_load: bool = False,
+            scale: int = 1
     ):
         valid_kinds = ['normal', 'shear', 'bending',
                        'bending_top', 'bending_bottom']
@@ -106,6 +108,6 @@ class FirstOrder(Solver):
 
         sys_geo, result_geo = plot_stress_results(
             self.system, diff, kind, z, bar_mesh_type, decimals,
-            sig_digits, color, show_load)
+            sig_digits, color, show_load, scale)
 
         ObjectRenderer([sys_geo, result_geo], mode).show()

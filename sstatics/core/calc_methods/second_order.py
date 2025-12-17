@@ -4,8 +4,6 @@ from functools import cached_property
 import numpy as np
 from typing import List, Literal, Optional
 
-from sstatics.core.postprocessing.results import DifferentialEquationSecond
-
 from sstatics.core.logger_mixin import LoggerMixin
 from sstatics.core.utils import get_differential_equation
 
@@ -14,6 +12,7 @@ from sstatics.core.solution.solver import Solver
 
 from sstatics.core.utils import plot_results
 from sstatics.core.postprocessing.graphic_objects import ObjectRenderer
+from sstatics.core.postprocessing import DifferentialEquationSecond
 
 
 @dataclass

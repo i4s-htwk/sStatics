@@ -215,8 +215,8 @@ class ReductionTheorem(PVF):
             msg = "No released system is defined."
             self.logger.error(msg)
             raise ValueError(msg)
-        from sstatics.graphic_objects.system import SystemGraphic
-        return SystemGraphic(self.released_system).show()
+        # from sstatics.graphic_objects.system import SystemGraphic
+        # return SystemGraphic(self.released_system).show()
 
     def _validate_released_system(self):
         """Validate that the system is released and statically determinate.

@@ -7,7 +7,8 @@ import numpy as np
 
 from sstatics.core.logger_mixin import table_matrix, LoggerMixin
 from sstatics.core.preprocessing import Node, Bar
-from sstatics.core.postprocessing.results import DifferentialEquation
+from sstatics.core.postprocessing.differential_equation import (
+    DifferentialEquation)
 
 
 @dataclass

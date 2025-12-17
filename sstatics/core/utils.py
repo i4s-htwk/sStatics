@@ -101,7 +101,8 @@ def get_differential_equation(
     >>> type(eq)
     <class 'sstatics.core.postprocessing.results.DifferentialEquation'>
     """
-    from sstatics.core.postprocessing.results import DifferentialEquation
+    from sstatics.core.postprocessing.differential_equation import (
+        DifferentialEquation)
 
     if system.__class__.__name__ != "System":
         raise TypeError("`system` must be a System instance.")
@@ -168,7 +169,8 @@ def plot_results(
         decimals: int = None,
         sig_digits: int | None = None,
         color: str = 'red',
-        show_load: bool = False
+        show_load: bool = False,
+        scale: int = 1
 ):
     """
     Create graphical objects for plotting internal forces or displacements.
@@ -227,7 +229,8 @@ def plot_results(
         result_geo = BendingLineGeo(
             bending_line_data=result,
             global_scale=sys_geo.global_scale,
-            line_style={'line_color': color}
+            line_style={'line_color': color},
+            scale_bending_line=scale
         )
     else:
         kind_map = {
@@ -258,6 +261,7 @@ def plot_results(
             sig_digits=sig_digits,
             text_style={'textfont': {'color': color}},
             line_style={'line_color': color},
+            scale_state_line=scale
         )
 
     return sys_geo, result_geo
@@ -272,7 +276,8 @@ def plot_stress_results(
         decimals: int = None,
         sig_digits: int | None = None,
         color: str = 'red',
-        show_load: bool = False
+        show_load: bool = False,
+        scale: int = 1
 ):
     """
     Create graphical objects for plotting stress distributions.
@@ -354,6 +359,43 @@ def plot_stress_results(
         text_style={'textfont': {'color': color}},
         line_style={'line_color': color},
         show_maximum=True,
+        scale_state_line=scale
+    )
+
+    return sys_geo, result_geo
+
+
+def plot_rigid_motion(
+        system,
+        diff,
+        bar_mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
+        color: str = 'red',
+        show_load: bool = False,
+        scale: int = 1
+):
+    from sstatics.core.postprocessing.graphic_objects import (
+        SystemGeo, BendingLineGeo
+    )
+    from sstatics.core.postprocessing.bending_line import BendingLine
+
+    sys_geo = SystemGeo(system, mesh_type=bar_mesh_type, show_load=show_load)
+
+    result = []
+    bend = BendingLine(diff)
+    for x, z, u, w in zip(bend.x_global, bend.z_global,
+                          bend.u_global, bend.w_global):
+        result.append({
+            'x': x,
+            'z': z,
+            'u': u,
+            'w': w
+        })
+
+    result_geo = BendingLineGeo(
+        bending_line_data=result,
+        global_scale=sys_geo.global_scale,
+        line_style={'line_color': color},
+        scale_bending_line=scale
     )
 
     return sys_geo, result_geo

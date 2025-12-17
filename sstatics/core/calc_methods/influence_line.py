@@ -8,7 +8,8 @@ from sstatics.core.logger_mixin import LoggerMixin
 from sstatics.core.calc_methods import FirstOrder
 from sstatics.core.preprocessing import Bar, Node, SystemModifier, System
 from sstatics.core.solution import Poleplan
-from sstatics.core.postprocessing import BarResult, RigidBodyDisplacement
+from sstatics.core.postprocessing import (RigidBodyDisplacement,
+                                          DifferentialEquation)
 
 
 @dataclass(eq=False)
@@ -40,7 +41,7 @@ class InfluenceLine(LoggerMixin):
         Class for modifying systems to compute influence lines.
     :py:class:`FirstOrder` :
         Class for solving first-order systems.
-    :py:class:`BarResult` :
+    :py:class:`DifferentialEquation` :
         Class for storing bar results.
     """
 
@@ -50,7 +51,7 @@ class InfluenceLine(LoggerMixin):
     _modified_system: System | None = field(init=False, default=None)
     _solution: FirstOrder | None = field(init=False, default=None)
     _norm_force: float | None = field(init=False, default=None)
-    _differential_equation: List[BarResult] | None = (
+    _differential_equation: List[DifferentialEquation] | None = (
         field(init=False, default=None))
     _poleplan: Poleplan | None = field(init=False, default=None)
     _rigid_motions: List[RigidBodyDisplacement] | None = (
@@ -127,7 +128,7 @@ class InfluenceLine(LoggerMixin):
             Method to modify the system for influence calculation.
         :py:class:`SystemModifier` :
             Class for system modifications.
-        :py:class:`BarResult` :
+        :py:class:`DifferentialEquation` :
             Class for bar results.
         """
         self.logger.debug(
@@ -220,7 +221,7 @@ class InfluenceLine(LoggerMixin):
         --------
         :py:meth:`_create_deflection_objects` :
             Method to create deflection objects.
-        :py:class:`BarResult` :
+        :py:class:`DifferentialEquation` :
             Class for bar results.
         """
         self.logger.debug(
@@ -317,13 +318,13 @@ class InfluenceLine(LoggerMixin):
         return self._poleplan
 
     @property
-    def differential_equation(self) -> List[BarResult]:
+    def differential_equation(self) -> List[DifferentialEquation]:
         """
         The deflection curves of the members in the analysis mesh.
 
         Returns
         -------
-        List[BarResult]
+        List[DifferentialEquation]
         """
         if self._solution is None:
             raise AttributeError(
@@ -635,8 +636,9 @@ class InfluenceLine(LoggerMixin):
         """
         Determines the differential equations of the deflection curves from
         the results of the displacement method (`solution`) using the class
-        'BarResult'. The deflection equations of all members in the analysis
-        mesh are stored in the private attribute `self._differential_equation`.
+        'DifferentialEquation'. The deflection equations of all members in the
+        analysis mesh are stored in the private attribute
+        `self._differential_equation`.
 
         Parameters
         ----------
@@ -649,7 +651,7 @@ class InfluenceLine(LoggerMixin):
 
         See Also
         --------
-        :py:class:`BarResult` : Class for storing bar results.
+        :py:class:`DifferentialEquation` : Class for storing bar results.
         """
         self._differential_equation = (
             self.solution.differential_equation(n_disc=n_disc)
@@ -671,13 +673,15 @@ class InfluenceLine(LoggerMixin):
         self._poleplan = None
         self._rigid_motions = None
 
-    def plot(self, mode: str = 'MPL'):
+    def plot(self, scale: int = 1, mode: str = 'MPL'):
         """
         Plot the influence line, either based on deformation results or
         rigid-body motion results.
 
         Parameters
         ----------
+        scale : int
+            Scale factor for scaling the results.
         mode : str, default='MPL'
             Rendering mode for graphical output.
 
@@ -690,15 +694,22 @@ class InfluenceLine(LoggerMixin):
         AttributeError
             If no influence line data is available.
         """
+        from sstatics.core.utils import plot_results, plot_rigid_motion
+        from sstatics.core.postprocessing.graphic_objects import ObjectRenderer
+
         self.logger.debug(f"Plotting influence line (mode={mode})")
         if self._differential_equation is not None:
-            self.solution.plot(kind='bending_line')
+            sys_geo, result_geo = plot_results(
+                self.system, self.differential_equation, 'bending_line',
+                scale=scale)
             self.logger.debug("Plotted based on deflection objects.")
         elif self._rigid_motions is not None:
-            self.poleplan.plot()
+            sys_geo, result_geo = plot_rigid_motion(
+                self.system, self.rigid_motions, scale=scale)
             self.logger.debug("Plotted based on rigid-body motions.")
         else:
             self.logger.error("No influence line data available for plotting.")
             raise AttributeError(
                 "No influence line data found. Call `force()` or `deform()` "
                 "before using `plot()`.")
+        ObjectRenderer([sys_geo, result_geo], mode).show()

@@ -39,5 +39,7 @@ il = InfluenceLine(system)
 # 5. Influence line for vertical force fm in bar_1 at xi = 0.5
 il.force('fm', bar_1, 0.5)
 
+il.plot(scale=10)
+
 print("=== Influence Line Example ===")
 print("Computed influence line for fm on bar_1 at xi = 0.5")

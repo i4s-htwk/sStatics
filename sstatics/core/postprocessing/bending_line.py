@@ -1,6 +1,5 @@
 
 from dataclasses import dataclass
-from functools import cached_property
 from typing import List
 
 import numpy as np
@@ -51,29 +50,6 @@ class BendingLine:
 
         self._compute()
 
-    @cached_property
-    def delta_max(self):
-        """
-        Computes the global maximum deformation scaling factor.
-
-        The scaling factor Δ_max is defined as the maximum absolute value of
-        any displacement (axial, transverse) or rotation over all bars. Used
-        for normalized plotting of deformed beam lines.
-
-        Returns
-        -------
-        float
-            Maximum absolute deformation across all bars. Returns 1.0 if
-            no deformation data is available to avoid division by zero.
-        """
-        values = []
-
-        for dgl in self.dgl_list:
-            deform = dgl.deform.flatten()
-            values.extend([abs(deform[0]), abs(deform[1]), abs(deform[2]),
-                           abs(deform[3]), abs(deform[4]), abs(deform[5])])
-        return max(values) if values else 1.0
-
     def _compute(self):
         """
         Computes global coordinates and transforms local displacements.
@@ -114,27 +90,3 @@ class BendingLine:
             self.z_global.append(z_glob + zi)
             self.u_global.append(u_glob)
             self.w_global.append(w_glob)
-
-    def deformed_lines(self):
-        """
-        Returns deformed global beam lines normalized by Δ_max.
-
-        For each bar, computes the global deformed coordinates by adding
-        the scaled displacements to the undeformed global coordinates.
-
-        Returns
-        -------
-        list of tuple of np.ndarray
-            Each tuple contains:
-            - x_def : np.ndarray
-                Deformed global x-coordinates for a bar.
-            - z_def : np.ndarray
-                Deformed global z-coordinates for a bar.
-        """
-        lines = []
-        for xg, zg, ug, wg in zip(self.x_global, self.z_global,
-                                  self.u_global, self.w_global):
-            x_def = xg + ug / self.delta_max
-            z_def = zg + wg / self.delta_max
-            lines.append((x_def, z_def))
-        return lines
