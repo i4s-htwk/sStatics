@@ -32,6 +32,7 @@ class NodeGeo(ObjectGeo):
         self._validate_node(node, show_load, show_load_text)
         super().__init__(origin=(node.x, node.z), **kwargs)
         self._node = node
+        self._show_load = show_load
         self._show_load_text = show_load_text
 
     @cached_property
@@ -121,7 +122,7 @@ class NodeGeo(ObjectGeo):
                     load, DEFAULT_TEXT, self._text_style
                 ),
             ) for load in self._node.loads
-        ]
+        ] if self._show_load else []
 
     @property
     def _displacement_elements(self):
@@ -136,7 +137,7 @@ class NodeGeo(ObjectGeo):
                     displacement, DEFAULT_TEXT, self._text_style
                 ),
             ) for displacement in self._node.displacements
-        ]
+        ] if self._show_load else []
 
     @staticmethod
     def _validate_node(node, show_load, show_load_text):
@@ -162,6 +163,10 @@ class NodeGeo(ObjectGeo):
         return self._node
 
     @property
+    def show_load(self):
+        return self._show_load
+
+    @property
     def show_load_text(self):
         return self._show_load_text
 
@@ -170,6 +175,7 @@ class NodeGeo(ObjectGeo):
             f'{self.__class__.__name__}('
             f'origin={self._origin}, '
             f'node={self._node}, '
+            f'show_load={self._show_load}, '
             f'show_load_text={self._show_load_text}, '
             f'line_style={self._line_style}, '
             f'text_style={self._text_style}, '

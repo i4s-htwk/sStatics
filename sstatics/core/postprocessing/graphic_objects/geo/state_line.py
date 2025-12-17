@@ -1,5 +1,5 @@
-import copy
 
+import copy
 import numpy as np
 from functools import cached_property
 from types import NoneType
@@ -311,6 +311,203 @@ class StateLineGeo(ObjectGeo):
             f'show_maximum={self._show_maximum}, '
             f'show_text={self._show_text}, '
             f'show_connecting_line={self._show_connecting_line}, '
+            f'line_style={self._line_style}, '
+            f'text_style={self._text_style}, '
+            f'Transform={self._transform})'
+        )
+
+
+class BendingLineGeo(ObjectGeo):
+    CLASS_STYLES = {
+        'line': DEFAULT_STATE_LINE,
+        'text': DEFAULT_STATE_LINE_TEXT
+    }
+
+    def __init__(
+            self,
+            bending_line_data: list[dict],
+            global_scale: float,
+            scale_bending_line: float = 1.0,
+            **kwargs
+    ):
+        """
+        bending_line_data: list of dicts with keys:
+            - x: np.ndarray
+            - z: np.ndarray
+            - u: np.ndarray
+            - w: np.ndarray
+        """
+        self._validate_state_line(
+            bending_line_data, global_scale, scale_bending_line
+        )
+        super().__init__(
+            origin=(0.0, 0.0), global_scale=global_scale, **kwargs
+        )
+        self._bending_line_data = bending_line_data
+        self._scale_bending_line = scale_bending_line
+
+    @cached_property
+    def graphic_elements(self):
+        return self._profile_line_elements
+
+    @cached_property
+    def text_elements(self):
+        return []
+
+    @cached_property
+    def _max_value(self):
+        u_all = np.concatenate([line['u'] for line in self._bending_line_data])
+        w_all = np.concatenate([line['w'] for line in self._bending_line_data])
+
+        u_max = np.max(np.abs(u_all))
+        w_max = np.max(np.abs(w_all))
+
+        delta_max = max(u_max, w_max)
+        return 1.0 if np.isclose(delta_max, 0.0) else delta_max
+
+    @cached_property
+    def _process_bending_lines(self):
+        bending_lines = copy.deepcopy(self._bending_line_data)
+        scale_factor = (
+                self._base_scale / self._max_value * self._scale_bending_line
+        )
+
+        x_def, z_def = [], []
+        for line in bending_lines:
+            x, z = np.array(line['x']), np.array(line['z'])
+            u, w = np.array(line['u']), np.array(line['w'])
+            x_def.append(list(x + u * scale_factor))
+            z_def.append(list(z + w * scale_factor))
+
+        return x_def, z_def
+
+    @property
+    def _profile_line_elements(self):
+        x_list, z_list = self._process_bending_lines
+        return [
+            OpenCurveGeo(x, z, line_style=self._line_style)
+            for x, z in zip(x_list, z_list)
+        ]
+
+    @staticmethod
+    def _validate_state_line(
+            bending_line_data, global_scale, scale_bending_line
+    ):
+        if not isinstance(bending_line_data, list):
+            raise TypeError(
+                f'"bending_line_data" must be a list, '
+                f'got {type(bending_line_data).__name__}.'
+            )
+
+        if len(bending_line_data) == 0:
+            raise ValueError('state_line_data must not be empty.')
+
+        for i, item in enumerate(bending_line_data):
+
+            if not isinstance(item, dict):
+                raise TypeError(
+                    f'Each bending line must be a dict, '
+                    f'got {type(item).__name__} at index {i}.'
+                )
+
+            required_keys = {'x', 'z', 'u', 'w'}
+            missing = required_keys - item.keys()
+            if missing:
+                raise KeyError(
+                    f'Bending line at index {i} is missing keys: '
+                    f'{sorted(missing)}.'
+                )
+
+            x = item['x']
+            z = item['z']
+            u = item['u']
+            w = item['w']
+
+            if not isinstance(x, (list, tuple, np.ndarray)):
+                raise TypeError(
+                    f'x must be a list, tuple or ndarray, '
+                    f'got {type(x).__name__} at index {i}.'
+                )
+
+            if not isinstance(z, (list, tuple, np.ndarray)):
+                raise TypeError(
+                    f'z must be a list, tuple or ndarray, '
+                    f'got {type(z).__name__} at index {i}.'
+                )
+
+            if not isinstance(u, (list, tuple, np.ndarray)):
+                raise TypeError(
+                    f'u must be a list, tuple or ndarray, '
+                    f'got {type(u).__name__} at index {i}.'
+                )
+
+            if not isinstance(w, (list, tuple, np.ndarray)):
+                raise TypeError(
+                    f'w must be a list, tuple or ndarray, '
+                    f'got {type(w).__name__} at index {i}.'
+                )
+
+            x_array = np.asarray(x)
+            z_array = np.asarray(z)
+            u_array = np.asarray(u)
+            w_array = np.asarray(w)
+
+            if not np.issubdtype(x_array.dtype, np.number):
+                raise TypeError(
+                    f'All x values must be numeric at index {i}.'
+                )
+
+            if not np.issubdtype(z_array.dtype, np.number):
+                raise TypeError(
+                    f'All z values must be numeric at index {i}.'
+                )
+
+            if not np.issubdtype(u_array.dtype, np.number):
+                raise TypeError(
+                    f'All u values must be numeric at index {i}.'
+                )
+
+            if not np.issubdtype(w_array.dtype, np.number):
+                raise TypeError(
+                    f'All w values must be numeric at index {i}.'
+                )
+
+            arrays = {'x': x_array, 'z': z_array, 'u': u_array, 'w': w_array}
+            shapes = [arr.shape for arr in arrays.values()]
+            if not all(s == shapes[0] for s in shapes):
+                raise ValueError(
+                    f"All arrays must have the same shape at index {i}.")
+
+            if x_array.size < 2:
+                raise ValueError(
+                    f'A state line requires at least two points at index {i}.'
+                )
+
+        if not isinstance(global_scale, (int, float)):
+            raise TypeError(
+                f'"global_scal" must be int or float, got '
+                f'{type(global_scale).__name__}'
+            )
+
+        if not isinstance(scale_bending_line, (int, float)):
+            raise TypeError(
+                f'"scale_bending_line" must be int or float, '
+                f'got {type(scale_bending_line).__name__!r}'
+            )
+
+    @property
+    def bending_line_data(self):
+        return self._bending_line_data
+
+    @property
+    def scale_bending_line(self):
+        return self._scale_bending_line
+
+    def __repr__(self):
+        return (
+            f'{self.__class__.__name__}('
+            f'bending_line_data={self._bending_line_data}, '
+            f'scale_bending_line={self._scale_bending_line}, '
             f'line_style={self._line_style}, '
             f'text_style={self._text_style}, '
             f'Transform={self._transform})'
