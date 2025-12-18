@@ -93,12 +93,26 @@ Influence Line
 
 Principle of Virtual Forces
 ---------------------------
+This section introduces the Principle of Virtual Forces (PVF) as a general
+method for computing structural deformations.
+
+The first diagram shows how the different static calculation methods are
+related.
+The second diagram focuses specifically on the class structure of the PVF-based
+methods.
+
 .. image:: images/structural_diagramms/structural_diagramm_static_methods.svg
-    :width: 600px
+    :width: 800px
     :align: center
 
+The PVF class serves as the base class for all subsequent methods.
+The Reduction Theorem inherits from PVF, the Force Method inherits from
+Reduction Theorem, and DMG extends the Force Method.
+This inheritance structure allows shared functionality while progressively
+adding method-specific behavior.
+
 .. image:: images/structural_diagramms/pvf_diagramm.svg
-    :width: 600px
+    :width: 500px
     :align: center
 
 .. nbgallery::
