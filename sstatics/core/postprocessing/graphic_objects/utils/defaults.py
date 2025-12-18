@@ -28,7 +28,7 @@ DEFAULT_LINE: dict[str, Any] = dict(
 """
 DEFAULT_TEXT: dict[str, Any] = dict(
     mode='text',
-    textfont=dict(size=20, family='Times New Roman', color='black'),
+    textfont=dict(size=20, family='DejaVu Serif', color='black'),
     **DEFAULT
 )
 
@@ -42,7 +42,7 @@ DEFAULT_POINT = dict(
 
 DEFAULT_CIRCLE_TEXT = dict(
     mode='markers+text',
-    textfont=dict(size=20, family='Times New Roman', color='black'),
+    textfont=dict(size=20, family='DejaVu Serif', color='black'),
     marker=dict(
         symbol='circle',
         color='white',
