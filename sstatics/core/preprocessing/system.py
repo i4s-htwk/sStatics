@@ -1,7 +1,7 @@
 
 from collections import defaultdict
 from dataclasses import dataclass, replace
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Dict, List, Literal, Optional
 
 import numpy as np
 
@@ -37,7 +37,7 @@ class System:
 
     Attributes
     ----------
-    mesh : tuple[:any:`Bar`, ...]
+    mesh : tuple[:any:`Bar`, ...] | tuple[:any:`BarSecond`, ...]
         The bars of the system after segmentation.
     """
 
@@ -278,38 +278,90 @@ class System:
         return n
 
     @property
-    def max_dimensions(self) -> Tuple[float, float]:
-        nodes = self.nodes(mesh_type='bars')
-        x_coords = [node.x for node in nodes]
-        z_coords = [node.z for node in nodes]
-        return max(x_coords) - min(x_coords), max(z_coords) - min(z_coords)
-
-    @property
-    def boundary(self):
-        nodes = self.nodes(mesh_type='bars')
-        x_coords = [node.x for node in nodes]
-        z_coords = [node.z for node in nodes]
-        return (min(x_coords), max(x_coords),
-                min(z_coords), max(z_coords))
-
-    @property
     def mesh(self):
+        r"""Returns the generated mesh bars.
+
+        Returns
+        -------
+        List[Bar | BarSecond]
+            The list of bars representing the generated mesh.
+        """
         return self._mesh.mesh
 
     @property
     def user_mesh(self):
+        r"""Returns the user-defined mesh bars.
+
+        Returns
+        -------
+        List[Bar | BarSecond]
+            The list of bars resulting from user-defined divisions.
+        """
         return self._mesh.user
 
     def mesh_segments_of(self, bar):
+        r"""Returns the mesh segments corresponding to a given bar.
+
+        Parameters
+        ----------
+        bar : Bar | BarSecond
+            The original bar.
+
+        Returns
+        -------
+        List[Bar | BarSecond]
+            The list of mesh segments derived from the given bar.
+        """
         return self._mesh.mesh_segments_of(bar)
 
-    def user_segments_of(self, bar: Bar) -> List[Bar]:
+    def user_segments_of(self, bar: Bar | BarSecond) -> List[Bar | BarSecond]:
+        r"""Returns the user-defined segments of a given bar.
+
+        Parameters
+        ----------
+        bar : Bar | BarSecond
+            The original bar.
+
+        Returns
+        -------
+        List[Bar | BarSecond]
+            The list of user-defined segments of the bar.
+        """
         return self._mesh.user_segments_of(bar)
 
-    def bar_of(self, mesh_segment: Bar) -> Bar:
+    def bar_of(self, mesh_segment: Bar | BarSecond) -> Bar | BarSecond:
+        r"""Returns the original bar of a given mesh segment.
+
+        Parameters
+        ----------
+        mesh_segment : Bar | BarSecond
+            A bar segment from the generated mesh.
+
+        Returns
+        -------
+        Bar | BarSecond
+            The original bar from which the mesh segment was created.
+        """
         return self._mesh.bar_of(mesh_segment)
 
     def create_mesh(self, user_divisions=None):
+        r"""Creates the mesh for the current system.
+
+        Parameters
+        ----------
+        user_divisions : dict, optional
+            A dictionary mapping bars to lists of relative positions at which
+            the bars should be divided.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        This method initializes and generates a :any:`Mesh` object based on
+        the system bars and optional user-defined divisions.
+        """
         self._mesh = Mesh(bars=self.bars, user_divisions=user_divisions)()
 
 
@@ -319,7 +371,7 @@ class Mesh:
 
     Attributes
     ----------
-    bars : List[Bar]
+    bars : List[Bar | BarSecond]
         A list of bars to be meshed.
     user_divisions : Optional[Dict[Bar, List[:any:`float`]]]
         Optional user-defined divisions for each bar.
@@ -329,16 +381,16 @@ class Mesh:
     The `user_divisions` dictionary maps each bar to a list of positions
     where the bar should be divided.
     """
-    bars: List[Bar]
-    user_divisions: Optional[Dict[Bar, List[float]]] = None
+    bars: List[Bar | BarSecond]
+    user_divisions: Optional[dict[Bar | BarSecond, list[float]]] = None
 
     def __post_init__(self):
         self.bars = list(self.bars)
-        self._mesh: List[Bar] = []
-        self._user: List[Bar] = []
+        self._mesh: list[Bar | BarSecond] = []
+        self._user: list[Bar | BarSecond] = []
 
-        self._map_bar_user: Dict[Bar, List[Bar]] = {}
-        self._map_bar_mesh: Dict[Bar, List[Bar]] = {}
+        self._map_bar_user: dict[Bar | BarSecond, list[Bar | BarSecond]] = {}
+        self._map_bar_mesh: dict[Bar | BarSecond, list[Bar | BarSecond]] = {}
 
     @property
     def mesh(self):
@@ -346,7 +398,7 @@ class Mesh:
 
         Returns
         -------
-        List[Bar]
+        List[Bar | BarSecond]
             The list of bars in the mesh.
         """
         return self._mesh
@@ -357,7 +409,7 @@ class Mesh:
 
         Returns
         -------
-        List[Bar]
+        List[Bar | BarSecond]
             The list of bars in the user-defined mesh.
         """
         return self._user
@@ -368,7 +420,7 @@ class Mesh:
 
         Returns
         -------
-        Dict[Bar, Bar]
+        Dict[Bar | BarSecond, Bar | BarSecond]
             A dictionary mapping each mesh bar to its original bar.
         """
         reverse_map = {}
@@ -440,47 +492,47 @@ class Mesh:
         self._map_bar_user = map_bar_user
         self._map_bar_mesh = map_bar_mesh
 
-    def mesh_segments_of(self, bar: Bar) -> List[Bar]:
+    def mesh_segments_of(self, bar: Bar | BarSecond) -> list[Bar | BarSecond]:
         r"""Gets the mesh segments corresponding to a given bar.
 
         Parameters
         ----------
-        bar : Bar
+        bar : Bar | BarSecond
             The bar for which to retrieve mesh segments.
 
         Returns
         -------
-        List[Bar]
+        List[Bar | BarSecond]
             The list of mesh segments corresponding to the given bar.
         """
         return self._map_bar_mesh.get(bar)
 
-    def user_segments_of(self, bar: Bar) -> List[Bar]:
+    def user_segments_of(self, bar: Bar | BarSecond) -> list[Bar | BarSecond]:
         r"""Gets the user-defined segments corresponding to a given bar.
 
         Parameters
         ----------
-        bar : Bar
+        bar : Bar | BarSecond
             The bar for which to retrieve user-defined segments.
 
         Returns
         -------
-        List[Bar]
+        List[Bar | BarSecond]
             The list of user-defined segments corresponding to the given bar.
         """
         return self._map_bar_user.get(bar)
 
-    def bar_of(self, mesh_segment: Bar) -> Bar:
+    def bar_of(self, mesh_segment: Bar | BarSecond) -> Bar | BarSecond:
         r"""Gets the original bar corresponding to a given mesh segment.
 
         Parameters
         ----------
-        mesh_segment : Bar
+        mesh_segment : Bar | BarSecond
             The mesh segment for which to retrieve the original bar.
 
         Returns
         -------
-        Bar
+        Bar | BarSecond
             The original bar corresponding to the given mesh segment.
         """
         return self._map_mesh_bar.get(mesh_segment)
@@ -627,16 +679,16 @@ class Mesh:
         )
 
     @staticmethod
-    def _interp_lloads(bar: Bar,
-                       prev_bar: Optional[Bar],
+    def _interp_lloads(bar: Bar | BarSecond,
+                       prev_bar: Optional[Bar | BarSecond],
                        pos: Optional[float] = None):
         r"""Interpolates line loads on a bar.
 
         Parameters
         ----------
-        bar : Bar
+        bar : Bar | BarSecond
             The bar for which to interpolate line loads.
-        prev_bar : Optional[Bar]
+        prev_bar : Optional[Bar | BarSecond]
             The previous bar (if any).
         pos : Optional[float]
             The position on the bar (if any).
@@ -659,21 +711,22 @@ class Mesh:
         ]
 
     def _split(self,
-               bar: Bar,
-               pos_dict: Dict[float, List[NodePointLoad]]) -> List[Bar]:
+               bar: Bar | BarSecond,
+               pos_dict: Dict[float, List[NodePointLoad]]
+               ) -> List[Bar | BarSecond]:
         r"""Splits a bar into segments based on user-defined positions and
         loads.
 
         Parameters
         ----------
-        bar : Bar
+        bar : Bar | BarSecond
             The bar to be split.
         pos_dict : Dict[float, List[NodePointLoad]]
             A dictionary of positions and loads.
 
         Returns
         -------
-        List[Bar]
+        List[Bar | BarSecond]
             The list of split bars.
         """
         bars = []
@@ -702,7 +755,7 @@ class Mesh:
 
         Parameters
         ----------
-        bar : Bar
+        bar : Bar | BarSecond
             The bar on which to create the node.
         position : float
             The position on the bar.
@@ -722,7 +775,7 @@ class Mesh:
 
         Parameters
         ----------
-        bar : Bar
+        bar : Bar | BarSecond
             The original bar.
         node_j : Node
             The end node of the segment.
@@ -733,7 +786,7 @@ class Mesh:
 
         Returns
         -------
-        Bar
+        Bar | BarSecond
             The created bar segment.
         """
         return replace(
@@ -752,9 +805,9 @@ class Mesh:
 
         Parameters
         ----------
-        bar : Bar
+        bar : Bar | BarSecond
             The original bar.
-        prev_bar : Bar
+        prev_bar : Bar | BarSecond
             The previous bar segment.
         node_j : Node
             The end node of the segment.
@@ -763,7 +816,7 @@ class Mesh:
 
         Returns
         -------
-        Bar
+        Bar | BarSecond
             The created bar segment.
         """
         return replace(
@@ -787,16 +840,16 @@ class Mesh:
 
         Parameters
         ----------
-        bar : Bar
+        bar : Bar | BarSecond
             The original bar.
-        prev_bar : Bar
+        prev_bar : Bar | BarSecond
             The previous bar segment.
         end_point_loads : List[BarPointLoad]
             The point loads at the end node.
 
         Returns
         -------
-        Bar
+        Bar | BarSecond
             The created bar segment.
         """
         return replace(

@@ -1008,7 +1008,7 @@ class SecondOrder(LoggerMixin):
         self._validation_approach_index(approach, iteration_index)
 
         if approach == 'matrix':
-            bars = self._modified_system_matrix.mesh.bars
+            bars = self._modified_system_matrix.mesh
             solver = self.solver_matrix_approach
             if bar_index is not None:
                 return DifferentialEquationSecond(

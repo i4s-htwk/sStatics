@@ -959,21 +959,6 @@ class TestBarSecond(TestCase):
             )
 
 
-class TestSystem(TestCase):
-
-    def test_connected_nodes(self):
-        """TODO"""
-
-    def test_node_to_bar_map(self):
-        """TODO"""
-
-    def test_nodes(self):
-        """TODO"""
-
-    def test_get_polplan(self):
-        """TODO"""
-
-
 class TestSolver(TestCase):
 
     def test_get_zero_matrix(self):
