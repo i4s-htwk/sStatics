@@ -1,4 +1,4 @@
-
+from types import NoneType
 from typing import Literal
 
 from functools import cached_property
@@ -24,11 +24,13 @@ class SystemGeo(ObjectGeo):
             show_node_text: bool = True,
             show_load_text: bool = True,
             show_full_hinge: bool = True,
+            decimals: int = 2,
+            sig_digits: int | None = None,
             **kwargs
     ):
         self._validate_system(
             system, mesh_type, show_load, show_bar_text, show_node_text,
-            show_load_text
+            show_load_text, decimals, sig_digits
         )
         self._system = system
         self._mesh_type = mesh_type
@@ -37,6 +39,8 @@ class SystemGeo(ObjectGeo):
         self._show_node_text = show_node_text
         self._show_load_text = show_load_text
         self._show_full_hinge = show_full_hinge
+        self._decimals = decimals
+        self._sig_digits = sig_digits
         super().__init__(
             origin=(system.bars[0].node_i.x, system.bars[0].node_i.z), **kwargs
         )
@@ -70,6 +74,7 @@ class SystemGeo(ObjectGeo):
                 bar, show_load=self._show_load,
                 show_load_text=self._show_load_text,
                 text=(i + 1) if self._show_bar_text else '',
+                decimals=self._decimals, sig_digits=self._sig_digits,
                 line_style=self._resolve_style(
                     bar, DEFAULT_BAR, self._line_style
                 ),
@@ -87,6 +92,7 @@ class SystemGeo(ObjectGeo):
                 node, show_load=self._show_load,
                 show_load_text=self._show_load_text,
                 text=(i + 1) if self._show_node_text else '',
+                decimals=self._decimals, sig_digits=self._sig_digits,
                 line_style=self._resolve_style(
                     node, DEFAULT_LINE, self._line_style
                 ),
@@ -100,7 +106,7 @@ class SystemGeo(ObjectGeo):
     @staticmethod
     def _validate_system(
             system, mesh_type, show_load, show_bar_text, show_node_text,
-            show_load_text
+            show_load_text, decimals, sig_digits
     ):
         if not isinstance(system, System):
             raise TypeError(
@@ -143,6 +149,21 @@ class SystemGeo(ObjectGeo):
                 f'{type(show_load_text).__name__!r}'
             )
 
+        if not isinstance(decimals, int):
+            raise TypeError(
+                f'"decimals" must be int or None, '
+                f'got {type(decimals).__name__!r}'
+            )
+
+        if not isinstance(sig_digits, (int, NoneType)):
+            raise TypeError(
+                f'"sig_digits" must be int or None, '
+                f'got {type(sig_digits).__name__!r}'
+            )
+
+        if sig_digits is not None and sig_digits <= 0:
+            raise ValueError('"sig_digits" has to be greater than zero.')
+
     @property
     def system(self):
         return self._system
@@ -167,6 +188,14 @@ class SystemGeo(ObjectGeo):
     def show_load_text(self):
         return self._show_load_text
 
+    @property
+    def decimals(self):
+        return self._decimals
+
+    @property
+    def sig_digits(self):
+        return self._sig_digits
+
     def __repr__(self):
         return (
             f'{self.__class__.__name__}('
@@ -177,6 +206,8 @@ class SystemGeo(ObjectGeo):
             f'show_bar_text={self._show_bar_text}, '
             f'show_node_text={self._show_node_text}, '
             f'show_load_text={self._show_load_text}, '
+            f'decimals={self._decimals}, '
+            f'sig_digits={self._sig_digits}, '
             f'line_style={self._line_style}, '
             f'text_style={self._text_style}, '
             f'Transform={self._transform})'

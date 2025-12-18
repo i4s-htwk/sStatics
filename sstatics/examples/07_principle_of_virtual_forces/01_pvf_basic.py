@@ -75,7 +75,7 @@ print("w at node 2 (FirstOrder) [m]:", w_node_2)
 print("Results match:", np.allclose(w_node_2, w_node_2_pvf))
 
 # 9. Plot moment distribution real loads
-pvf.plot('real', kind='moment')
+pvf.plot('real', kind='moment', mode='plotly')
 
 # 9. Plot moment distribution virtual loads
-pvf.plot('virt', kind='moment')
+pvf.plot('virt', kind='moment', mode='plotly')

@@ -12,7 +12,7 @@ from .object_geo import ObjectGeo
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_POLYGON, DEFAULT_CENTER_OF_MASS, DEFAULT_HATCH
 )
-from ..utils.uitls import is_clockwise
+from ..utils.utils import is_clockwise
 
 
 class PointGeo(ObjectGeo):

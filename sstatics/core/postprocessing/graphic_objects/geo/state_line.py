@@ -9,6 +9,9 @@ from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_STATE_LINE, DEFAULT_STATE_LINE_TEXT
 )
+from sstatics.core.postprocessing.graphic_objects.utils.utils import (
+    round_value
+)
 from sstatics.core.postprocessing.graphic_objects.geo.geometry import \
     OpenCurveGeo
 from sstatics.core.postprocessing.graphic_objects.geo.text import TextGeo
@@ -109,11 +112,7 @@ class StateLineGeo(ObjectGeo):
         return state_lines
 
     def _round_value(self, value):
-        if self._sig_digits is not None:
-            value = float(f"{value:.{self._sig_digits}g}")
-        else:
-            value = round(value, self._decimals)
-        return 0.0 if np.isclose(value, 0.0, atol=1e-8) else value
+        return round_value(value, self._decimals, self._sig_digits)
 
     def _add_points(self, x: np.ndarray, z: np.ndarray):
         x = [x[0], *x, x[-1]]

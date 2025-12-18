@@ -1,3 +1,4 @@
+
 import abc
 from types import NoneType
 
@@ -11,6 +12,9 @@ from sstatics.core.preprocessing.temperature import BarTemp
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_POINT_FORCE, DEFAULT_LOAD_DISTANCE, DEFAULT_POINT_MOMENT,
     DEFAULT_ARROW_DISTANCE, DEFAULT_DISPLACEMENT
+)
+from sstatics.core.postprocessing.graphic_objects.utils.utils import (
+    round_value
 )
 from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
     ObjectGeo
@@ -30,13 +34,19 @@ class PointEffectGeo(ObjectGeo):
             effect: NodeDisplacement | PointLoad,
             distance: float | None = None,
             show_text: bool = True,
+            decimals: int = 2,
+            sig_digits: int | None = None,
             **kwargs
     ):
         super().__init__(origin=origin, **kwargs)
-        self._validate_point_effect(effect, distance, show_text)
+        self._validate_point_effect(
+            effect, distance, show_text, decimals, sig_digits
+        )
         self._effect = effect
         self._distance = distance or DEFAULT_LOAD_DISTANCE
         self._show_text = show_text
+        self._decimals = decimals
+        self._sig_digits = sig_digits
 
     @cached_property
     def graphic_elements(self):
@@ -84,6 +94,9 @@ class PointEffectGeo(ObjectGeo):
             line_style=self._line_style, text_style=self._text_style
         )
 
+    def _round_value(self, value):
+        return round_value(abs(float(value)), self._decimals, self._sig_digits)
+
     @abc.abstractmethod
     def _text_value(self, value: int | float, is_phi: bool):
         pass
@@ -101,7 +114,9 @@ class PointEffectGeo(ObjectGeo):
         return 0
 
     @staticmethod
-    def _validate_point_effect(effect, distance, show_text):
+    def _validate_point_effect(
+            effect, distance, show_text, decimals, sig_digits
+    ):
         if not all(hasattr(effect, a) for a in ('x', 'z', 'phi')):
             raise TypeError('"effect" must have numeric attributes x, z, phi')
 
@@ -117,6 +132,21 @@ class PointEffectGeo(ObjectGeo):
                 f'{type(show_text).__name__!r}'
             )
 
+        if not isinstance(decimals, int):
+            raise TypeError(
+                f'"decimals" must be int or None, '
+                f'got {type(decimals).__name__!r}'
+            )
+
+        if not isinstance(sig_digits, (int, NoneType)):
+            raise TypeError(
+                f'"sig_digits" must be int or None, '
+                f'got {type(sig_digits).__name__!r}'
+            )
+
+        if sig_digits is not None and sig_digits <= 0:
+            raise ValueError('"sig_digits" has to be greater than zero.')
+
     @property
     def distance(self):
         return self._distance
@@ -124,6 +154,14 @@ class PointEffectGeo(ObjectGeo):
     @property
     def show_text(self):
         return self._show_text
+
+    @property
+    def decimals(self):
+        return self._decimals
+
+    @property
+    def sig_digits(self):
+        return self._sig_digits
 
 
 class DisplacementGeo(PointEffectGeo):
@@ -142,7 +180,10 @@ class DisplacementGeo(PointEffectGeo):
     def _text_value(self, value: int | float, is_phi: bool):
         start = '\u03C6 = ' if is_phi else '\u03B4 = '
         end = ' rad' if is_phi else ' LE'
-        text = start + str(abs(float(value))) + end if self._show_text else ''
+        text = (
+            start + str(self._round_value(value)) + end
+            if self._show_text else ''
+        )
         return text
 
     @property
@@ -172,6 +213,8 @@ class DisplacementGeo(PointEffectGeo):
             f'displacement={self._effect}, '
             f'distance={self._distance}, '
             f'show_text={self._show_text}, '
+            f'decimals={self._decimals}, '
+            f'sig_digits={self._sig_digits}, '
             f'line_style={self._line_style}, '
             f'Transform={self._transform})'
         )
@@ -191,7 +234,7 @@ class PointLoadGeo(PointEffectGeo):
         self._rotate_moment = rotate_moment
 
     def _text_value(self, value: int | float, is_phi: bool):
-        return abs(float(value)) if self._show_text else ''
+        return self._round_value(value) if self._show_text else ''
 
     @property
     def _effect_rotation(self):
@@ -226,6 +269,8 @@ class PointLoadGeo(PointEffectGeo):
             f'load={self._effect}, '
             f'distance={self._distance}, '
             f'show_text={self._show_text}, '
+            f'decimals={self._decimals}, '
+            f'sig_digits={self._sig_digits}, '
             f'line_style={self._line_style}, '
             f'Transform={self._transform})'
         )
@@ -240,11 +285,14 @@ class LineLoadGeo(ObjectGeo):
             distance_to_bar: float | None = None,
             distance_to_arrow: float | None = None,
             show_text: bool = True,
+            decimals: int = 2,
+            sig_digits: int | None = None,
             arrow_style: dict | None = None,
             **kwargs
     ):
         self._validate_line_load(
-            bar_coords, load, distance_to_bar, distance_to_arrow, show_text
+            bar_coords, load, distance_to_bar, distance_to_arrow, show_text,
+            decimals, sig_digits
         )
         super().__init__(
             origin=((bar_coords[0][0] + bar_coords[0][1]) / 2,
@@ -256,6 +304,8 @@ class LineLoadGeo(ObjectGeo):
         self._distance_to_bar = distance_to_bar or DEFAULT_LOAD_DISTANCE
         self._distance_to_arrow = distance_to_arrow or DEFAULT_ARROW_DISTANCE
         self._show_text = show_text
+        self._decimals = decimals
+        self._sig_digits = sig_digits
         self._arrow_style = self._deep_style_merge(
             DEFAULT_POINT_FORCE, arrow_style or {}
         )
@@ -370,6 +420,9 @@ class LineLoadGeo(ObjectGeo):
             return self._load.pi / self._max_value
         return self._load.pj / self._max_value
 
+    def _round_value(self, value):
+        return round_value(abs(float(value)), self._decimals, self._sig_digits)
+
     @property
     def _text_values(self):
         if not self._show_text:
@@ -379,12 +432,13 @@ class LineLoadGeo(ObjectGeo):
         else:
             pi, pj = self._load.pi, self._load.pj
         if pi == pj:
-            return [abs(float(pi))]
-        return [abs(float(pi)), abs(float(pj))]
+            return [self._round_value(pi)]
+        return [self._round_value(pi), self._round_value(pj)]
 
     @staticmethod
     def _validate_line_load(
-            bar_coords, load, distance_to_bar, distance_to_arrow, show_text
+            bar_coords, load, distance_to_bar, distance_to_arrow, show_text,
+            decimals, sig_digits
     ):
         if (
             not isinstance(bar_coords, (tuple, list))
@@ -420,6 +474,21 @@ class LineLoadGeo(ObjectGeo):
                 f'{type(show_text).__name__!r}'
             )
 
+        if not isinstance(decimals, int):
+            raise TypeError(
+                f'"decimals" must be int or None, '
+                f'got {type(decimals).__name__!r}'
+            )
+
+        if not isinstance(sig_digits, (int, NoneType)):
+            raise TypeError(
+                f'"sig_digits" must be int or None, '
+                f'got {type(sig_digits).__name__!r}'
+            )
+
+        if sig_digits is not None and sig_digits <= 0:
+            raise ValueError('"sig_digits" has to be greater than zero.')
+
     @property
     def bar_coords(self):
         return self._bar_coords
@@ -440,6 +509,14 @@ class LineLoadGeo(ObjectGeo):
     def show_text(self):
         return self._show_text
 
+    @property
+    def decimals(self):
+        return self._decimals
+
+    @property
+    def sig_digits(self):
+        return self._sig_digits
+
     def __repr__(self):
         return (
             f'{self.__class__.__name__}('
@@ -449,6 +526,8 @@ class LineLoadGeo(ObjectGeo):
             f'distance_to_bar={self._distance_to_bar}, '
             f'distance_to_arrow={self._distance_to_arrow}, '
             f'show_text={self._show_text}, '
+            f'decimals={self._decimals}, '
+            f'sig_digits={self._sig_digits}, '
             f'line_style={self._line_style}, '
             f'text_style={self._text_style}, '
             f'Transform={self._transform})'
@@ -461,9 +540,11 @@ class TempGeo(ObjectGeo):
             self,
             bar_coords: tuple[list[float], list[float]],
             temp: BarTemp,
+            decimals: int = 2,
+            sig_digits: int | None = None,
             **kwargs
     ):
-        self._validate_temp(bar_coords, temp)
+        self._validate_temp(bar_coords, temp, decimals, sig_digits)
         super().__init__(
             origin=((bar_coords[0][0] + bar_coords[0][1]) / 2,
                     (bar_coords[1][0] + bar_coords[1][1]) / 2),
@@ -471,6 +552,8 @@ class TempGeo(ObjectGeo):
         )
         self._bar_coords = bar_coords
         self._temp = temp
+        self._decimals = decimals
+        self._sig_digits = sig_digits
         self._rotation = self._transform.rotation
 
     @cached_property
@@ -479,24 +562,28 @@ class TempGeo(ObjectGeo):
 
     @cached_property
     def text_elements(self):
-        to, tu = self._temp.temp_o, self._temp.temp_u
+        to = self._round_value(self._temp.temp_o)
+        tu = self._round_value(self._temp.temp_u)
 
         if to == 0.0 and tu == 0.0:
             return []
 
         return [
             (
-                *self._origin, [f'To = {to:g} K'], self._text_style, '0,0!',
+                *self._origin, [f'To = {to} K'], self._text_style, '0,0!',
                 self._rotation
             ),
             (
-                *self._origin, [f'Tu = {tu:g} K'], self._text_style, '0,2!',
+                *self._origin, [f'Tu = {tu} K'], self._text_style, '0,2!',
                 self._rotation
             )
         ]
 
+    def _round_value(self, value):
+        return round_value(float(value), self._decimals, self._sig_digits)
+
     @staticmethod
-    def _validate_temp(bar_coords, temp):
+    def _validate_temp(bar_coords, temp, decimals, sig_digits):
         if (
             not isinstance(bar_coords, (tuple, list))
             or len(bar_coords) != 2
@@ -513,6 +600,21 @@ class TempGeo(ObjectGeo):
                 f'"temp" must be BarTemp, got {type(temp).__name__!r}'
             )
 
+        if not isinstance(decimals, int):
+            raise TypeError(
+                f'"decimals" must be int or None, '
+                f'got {type(decimals).__name__!r}'
+            )
+
+        if not isinstance(sig_digits, (int, NoneType)):
+            raise TypeError(
+                f'"sig_digits" must be int or None, '
+                f'got {type(sig_digits).__name__!r}'
+            )
+
+        if sig_digits is not None and sig_digits <= 0:
+            raise ValueError('"sig_digits" has to be greater than zero.')
+
     @property
     def bar_coords(self):
         return self._bar_coords
@@ -521,12 +623,22 @@ class TempGeo(ObjectGeo):
     def temp(self):
         return self._temp
 
+    @property
+    def decimals(self):
+        return self._decimals
+
+    @property
+    def sig_digits(self):
+        return self._sig_digits
+
     def __repr__(self):
         return (
             f'{self.__class__.__name__}('
             f'origin={self._origin}, '
             f'bar_coords={self._bar_coords}, '
             f'temp={self._temp}, '
+            f'decimals={self._decimals}, '
+            f'sig_digits={self._sig_digits}, '
             f'text_style={self._text_style}, '
             f'Transform={self._transform})'
         )

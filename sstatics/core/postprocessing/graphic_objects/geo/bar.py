@@ -1,3 +1,4 @@
+from types import NoneType
 
 import numpy as np
 from functools import cached_property
@@ -30,14 +31,21 @@ class BarGeo(ObjectGeo):
             show_load: bool = True,
             show_load_text: bool = True,
             show_tensile_zone: bool = True,
+            decimals: int = 2,
+            sig_digits: int | None = None,
             **kwargs
     ):
-        self._validate_bar(bar, show_load, show_load_text, show_tensile_zone)
+        self._validate_bar(
+            bar, show_load, show_load_text, show_tensile_zone, decimals,
+            sig_digits
+        )
         super().__init__(origin=(bar.node_i.x, bar.node_i.z), **kwargs)
         self._bar = bar
         self._show_load = show_load
         self._show_load_text = show_load_text
         self._show_tensile_zone = show_tensile_zone
+        self._decimals = decimals
+        self._sig_digits = sig_digits
 
     @cached_property
     def graphic_elements(self):
@@ -159,6 +167,7 @@ class BarGeo(ObjectGeo):
                         inclination + (np.pi if load.position > 0.5 else 0)
                 ),
                 show_text=self._show_load_text,
+                decimals=self._decimals, sig_digits=self._sig_digits,
                 line_style=self._resolve_style(
                     load, DEFAULT_LINE, self._line_style
                 ),
@@ -181,6 +190,7 @@ class BarGeo(ObjectGeo):
                 distance_to_bar=DEFAULT_LOAD_DISTANCE * scale,
                 distance_to_arrow=DEFAULT_ARROW_DISTANCE * scale,
                 show_text=self._show_load_text,
+                decimals=self._decimals, sig_digits=self._sig_digits,
                 arrow_style={
                     k: v * scale for k, v in DEFAULT_POINT_FORCE.items()
                 },
@@ -197,11 +207,15 @@ class BarGeo(ObjectGeo):
     def _temp_elements(self):
         return [TempGeo(
             bar_coords=self._bar_coords, temp=self._bar.temp,
+            decimals=self._decimals, sig_digits=self._sig_digits,
             rotation=self._bar.inclination
         )] if self._show_load else []
 
     @staticmethod
-    def _validate_bar(bar, show_load, show_load_text, show_tensile_zone):
+    def _validate_bar(
+            bar, show_load, show_load_text, show_tensile_zone, decimals,
+            sig_digits
+    ):
         if not isinstance(bar, Bar):
             raise TypeError(f'"bar" must be a Bar, got {type(bar).__name__!r}')
 
@@ -223,6 +237,21 @@ class BarGeo(ObjectGeo):
                 f'{type(show_tensile_zone).__name__!r}'
             )
 
+        if not isinstance(decimals, int):
+            raise TypeError(
+                f'"decimals" must be int or None, '
+                f'got {type(decimals).__name__!r}'
+            )
+
+        if not isinstance(sig_digits, (int, NoneType)):
+            raise TypeError(
+                f'"sig_digits" must be int or None, '
+                f'got {type(sig_digits).__name__!r}'
+            )
+
+        if sig_digits is not None and sig_digits <= 0:
+            raise ValueError('"sig_digits" has to be greater than zero.')
+
     @property
     def bar(self):
         return self._bar
@@ -239,6 +268,14 @@ class BarGeo(ObjectGeo):
     def show_tensile_zone(self):
         return self._show_tensile_zone
 
+    @property
+    def decimals(self):
+        return self._decimals
+
+    @property
+    def sig_digits(self):
+        return self._sig_digits
+
     def __repr__(self):
         return (
             f'{self.__class__.__name__}('
@@ -247,6 +284,8 @@ class BarGeo(ObjectGeo):
             f'show_load={self._show_load}, '
             f'show_load_text={self._show_load_text}, '
             f'show_tensile_zone={self._show_tensile_zone}, '
+            f'decimals={self._decimals}, '
+            f'sig_digits={self._sig_digits}, '
             f'line_style={self._line_style}, '
             f'text_style={self._text_style}, '
             f'Transform={self._transform})'

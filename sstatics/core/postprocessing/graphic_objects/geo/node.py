@@ -1,5 +1,6 @@
 
 from functools import cached_property
+from types import NoneType
 
 import numpy as np
 
@@ -27,13 +28,19 @@ class NodeGeo(ObjectGeo):
             node: Node,
             show_load: bool = True,
             show_load_text: bool = True,
+            decimals: int = 2,
+            sig_digits: int | None = None,
             **kwargs
     ):
-        self._validate_node(node, show_load, show_load_text)
+        self._validate_node(
+            node, show_load, show_load_text, decimals, sig_digits
+        )
         super().__init__(origin=(node.x, node.z), **kwargs)
         self._node = node
         self._show_load = show_load
         self._show_load_text = show_load_text
+        self._decimals = decimals
+        self._sig_digits = sig_digits
 
     @cached_property
     def graphic_elements(self):
@@ -115,6 +122,7 @@ class NodeGeo(ObjectGeo):
         return [
             PointLoadGeo(
                 self._origin, load=load, show_text=self._show_load_text,
+                decimals=self._decimals, sig_digits=self._sig_digits,
                 line_style=self._resolve_style(
                     load, DEFAULT_LINE, self._line_style
                 ),
@@ -130,6 +138,7 @@ class NodeGeo(ObjectGeo):
             DisplacementGeo(
                 self._origin, displacement=displacement,
                 show_text=self._show_load_text,
+                decimals=self._decimals, sig_digits=self._sig_digits,
                 line_style=self._resolve_style(
                     displacement, DEFAULT_LINE, self._line_style
                 ),
@@ -140,7 +149,9 @@ class NodeGeo(ObjectGeo):
         ] if self._show_load else []
 
     @staticmethod
-    def _validate_node(node, show_load, show_load_text):
+    def _validate_node(
+            node, show_load, show_load_text, decimals, sig_digits
+    ):
         if not isinstance(node, Node):
             raise TypeError(
                 f'"node" must be a Node, got {type(node).__name__!r}'
@@ -158,6 +169,21 @@ class NodeGeo(ObjectGeo):
                 f'{type(show_load_text).__name__!r}'
             )
 
+        if not isinstance(decimals, int):
+            raise TypeError(
+                f'"decimals" must be int or None, '
+                f'got {type(decimals).__name__!r}'
+            )
+
+        if not isinstance(sig_digits, (int, NoneType)):
+            raise TypeError(
+                f'"sig_digits" must be int or None, '
+                f'got {type(sig_digits).__name__!r}'
+            )
+
+        if sig_digits is not None and sig_digits <= 0:
+            raise ValueError('"sig_digits" has to be greater than zero.')
+
     @property
     def node(self):
         return self._node
@@ -170,6 +196,14 @@ class NodeGeo(ObjectGeo):
     def show_load_text(self):
         return self._show_load_text
 
+    @property
+    def decimals(self):
+        return self._decimals
+
+    @property
+    def sig_digits(self):
+        return self._sig_digits
+
     def __repr__(self):
         return (
             f'{self.__class__.__name__}('
@@ -177,6 +211,8 @@ class NodeGeo(ObjectGeo):
             f'node={self._node}, '
             f'show_load={self._show_load}, '
             f'show_load_text={self._show_load_text}, '
+            f'decimals={self._decimals}, '
+            f'sig_digits={self._sig_digits}, '
             f'line_style={self._line_style}, '
             f'text_style={self._text_style}, '
             f'Transform={self._transform})'
