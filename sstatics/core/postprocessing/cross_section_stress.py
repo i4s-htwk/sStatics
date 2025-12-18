@@ -377,9 +377,10 @@ class CrossSectionStress:
         -------
         list of [tuple, list]
             A list containing:
+
             - Boundaries of the cross-section (zb)
             - List of normal stress values at top and bottom boundaries
-              [normal_stress_top, normal_stress_bottom]
+                [normal_stress_top, normal_stress_bottom]
 
         Notes
         -----
@@ -416,9 +417,10 @@ class CrossSectionStress:
         -------
         list of [tuple, list]
             A list containing:
+
             - Boundaries of the cross-section (zb)
             - List of bending stress values at top and bottom boundaries
-              [bending_stress_bottom, bending_stress_top]
+                [bending_stress_bottom, bending_stress_top]
 
         Notes
         -----
@@ -462,6 +464,7 @@ class CrossSectionStress:
         -------
         list of [array, list]
             A list containing:
+
             - Array of z-values from z_i to z_j with n_disc+1 points
             - List of shear stress values corresponding to each z-position
 

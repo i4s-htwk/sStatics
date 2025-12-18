@@ -6,7 +6,7 @@ Installation
 
 Make sure you have the following installed on your system:
 
-* `Python3 <https://www.python.org/downloads>`_, version 3.11 or higher
+* `Python3 <https://www.python.org/downloads>`_, version 3.11
 * `Git <https://git-scm.com/downloads>`_
 
 .. tip::
@@ -18,7 +18,7 @@ then create and activate it:
 
 .. code:: console
 
-   python -m venv venv
+   py -3.11 -m venv venv
    venv\Scripts\activate
 
 Download and install the current version of sStatics:

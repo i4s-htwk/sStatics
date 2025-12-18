@@ -9,10 +9,6 @@ displacements,  internal forces, and support reactions, and to visualise
 structural behavior under applied loads. The package supports second-order 
 analysis and influence lines for advanced structural assessment.
 
-<div align="center">
-  <img src="doc/source/images/tutorial1.png" alt="logo" width="600">
-</div>
-
 ## Getting Started
 
 This section explains how to install `sStatics` as a Python package so you can 
@@ -23,7 +19,7 @@ provided in the full documentation [sStatics Documentation](https://sStatics.rea
 
 ### Prerequisites
 
-- [Python 3 (version >= 3.11)](https://www.python.org/downloads/)
+- [Python 3 (version = 3.11)](https://www.python.org/downloads/)
 - [Git](https://git-scm.com/downloads)
 
 Open a terminal, navigate to your desired installation directory, and run 
