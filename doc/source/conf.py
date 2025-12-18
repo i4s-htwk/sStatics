@@ -54,4 +54,4 @@ html_theme = 'sphinx_book_theme'
 
 nbsphinx_codecell_lexer = 'python3'  # falls nötig
 nbsphinx_prompt_width = '0'            # keine Prompt-Nummern anzeigen
-# nbsphinx_execute = 'always'
+nbsphinx_execute = 'always'
