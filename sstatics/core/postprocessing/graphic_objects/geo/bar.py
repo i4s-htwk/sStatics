@@ -28,22 +28,33 @@ class BarGeo(ObjectGeo):
     def __init__(
             self,
             bar: Bar,
+            load_distances: dict | None = None,
+            global_max_line_load: float | None = None,
             show_load: bool = True,
-            show_load_text: bool = True,
+            show_point_load_text: bool = True,
+            show_line_load_texts: list[tuple[bool, bool]] | None = None,
             show_tensile_zone: bool = True,
+            show_full_hinges: tuple[bool, bool] = (True, True),
             decimals: int = 2,
             sig_digits: int | None = None,
             **kwargs
     ):
         self._validate_bar(
-            bar, show_load, show_load_text, show_tensile_zone, decimals,
-            sig_digits
+            bar, load_distances, global_max_line_load, show_load,
+            show_point_load_text, show_line_load_texts, show_tensile_zone,
+            show_full_hinges, decimals, sig_digits
         )
         super().__init__(origin=(bar.node_i.x, bar.node_i.z), **kwargs)
         self._bar = bar
+        self._load_distances = load_distances
+        self._global_max_line_load = global_max_line_load
         self._show_load = show_load
-        self._show_load_text = show_load_text
+        self._show_point_load_text = show_point_load_text
+        self._show_line_load_texts = show_line_load_texts or [
+            (True, True) for _ in bar.line_loads
+        ]
         self._show_tensile_zone = show_tensile_zone
+        self._show_full_hinges = show_full_hinges
         self._decimals = decimals
         self._sig_digits = sig_digits
 
@@ -121,6 +132,9 @@ class BarGeo(ObjectGeo):
             ).stretch(*self._free_bar)
         ]
 
+    def _hinge_rotation(self, idx):
+        return self._bar.inclination + (np.pi if idx == 1 else 0)
+
     @property
     def _hinge_elements(self):
         bar = self._bar
@@ -139,13 +153,15 @@ class BarGeo(ObjectGeo):
         ]
 
         for idx, hinge_list in enumerate(hinges):
+            if self._show_full_hinges[idx]:
+                continue
             combi_elements = [cls for val, cls in hinge_list if val]
             if len(combi_elements) != 3:
-                rotation = bar.inclination + (np.pi if idx == 1 else 0)
                 elements.append(
                     CombiHingeGeo(
                         positions[idx], *combi_elements,
-                        rotation=rotation, scaling=self._base_scale
+                        rotation=self._hinge_rotation(idx),
+                        scaling=self._base_scale
                     )
                 )
         return elements
@@ -160,13 +176,19 @@ class BarGeo(ObjectGeo):
             return []
 
         inclination = self._bar.inclination
+        scale = self._base_scale
         return [
             PointLoadGeo(
                 self._point_load_pos(load.position), load=load,
+                distance=(
+                        self._load_distances[load] / scale if
+                        self._load_distances and load in self._load_distances
+                        else None
+                ),
                 rotate_moment=(
                         inclination + (np.pi if load.position > 0.5 else 0)
                 ),
-                show_text=self._show_load_text,
+                show_text=self._show_point_load_text,
                 decimals=self._decimals, sig_digits=self._sig_digits,
                 line_style=self._resolve_style(
                     load, DEFAULT_LINE, self._line_style
@@ -174,9 +196,19 @@ class BarGeo(ObjectGeo):
                 text_style=self._resolve_style(
                     load, DEFAULT_TEXT, self._text_style
                 ),
-                scaling=self._base_scale
+                scaling=scale
             ) for load in self._bar.point_loads
         ]
+
+    @property
+    def _max_line_load_value(self):
+        return (
+            self._global_max_line_load if self._global_max_line_load else
+            max(
+                max((abs(load.pi), abs(load.pj)))
+                for load in self._bar.line_loads
+            )
+        )
 
     @property
     def _line_load_elements(self):
@@ -187,9 +219,14 @@ class BarGeo(ObjectGeo):
         return [
             LineLoadGeo(
                 self._bar_coords, load=load,
-                distance_to_bar=DEFAULT_LOAD_DISTANCE * scale,
+                distance_to_bar=(
+                        self._load_distances[load] if
+                        self._load_distances and load in self._load_distances
+                        else DEFAULT_LOAD_DISTANCE * scale
+                ),
                 distance_to_arrow=DEFAULT_ARROW_DISTANCE * scale,
-                show_text=self._show_load_text,
+                global_max_value=self._max_line_load_value,
+                show_texts=self._show_line_load_texts[i],
                 decimals=self._decimals, sig_digits=self._sig_digits,
                 arrow_style={
                     k: v * scale for k, v in DEFAULT_POINT_FORCE.items()
@@ -200,7 +237,7 @@ class BarGeo(ObjectGeo):
                 text_style=self._resolve_style(
                     load, DEFAULT_TEXT, self._text_style
                 )
-            ) for load in self._bar.line_loads
+            ) for i, load in enumerate(self._bar.line_loads)
         ]
 
     @property
@@ -213,11 +250,31 @@ class BarGeo(ObjectGeo):
 
     @staticmethod
     def _validate_bar(
-            bar, show_load, show_load_text, show_tensile_zone, decimals,
-            sig_digits
+            bar, load_distances, global_max_line_load, show_load,
+            show_point_load_text, show_line_load_texts, show_tensile_zone,
+            show_full_hinges, decimals, sig_digits
     ):
         if not isinstance(bar, Bar):
             raise TypeError(f'"bar" must be a Bar, got {type(bar).__name__!r}')
+
+        if not isinstance(load_distances, (dict, NoneType)):
+            raise TypeError(
+                f'"load_distances" must be dict or None, '
+                f'got {type(load_distances).__name__!r}'
+            )
+
+        if isinstance(load_distances, dict) and not all(
+                isinstance(v, (int, float)) for v in load_distances.values()
+        ):
+            raise TypeError(
+                'all values of load_distances must be int or float'
+            )
+
+        if not isinstance(global_max_line_load, (int, float, NoneType)):
+            raise TypeError(
+                f'"global_max_line_load" must be int, float or None, got '
+                f'{type(global_max_line_load).__name__!r}'
+            )
 
         if not isinstance(show_load, bool):
             raise TypeError(
@@ -225,16 +282,48 @@ class BarGeo(ObjectGeo):
                 f'{type(show_load).__name__!r}'
             )
 
-        if not isinstance(show_load_text, bool):
+        if not isinstance(show_point_load_text, bool):
             raise TypeError(
-                f'"show_load_text" must be a boolean, got '
-                f'{type(show_load_text).__name__!r}'
+                f'"show_point_load_text" must be a boolean, got '
+                f'{type(show_point_load_text).__name__!r}'
             )
+
+        if not isinstance(show_line_load_texts, (list, NoneType)):
+            raise TypeError(
+                f'"show_line_load_texts" must be list or None, got '
+                f'{type(show_line_load_texts).__name__!r}'
+            )
+
+        if (
+                isinstance(show_line_load_texts, list) and
+                not all(isinstance(v, tuple) for v in show_line_load_texts)
+        ):
+            raise TypeError('values of show_line_load_texts must be tuple')
+
+        if isinstance(show_line_load_texts, list) and not all(
+                isinstance(v, bool) for value in show_line_load_texts
+                for v in value
+        ):
+            raise TypeError('values of show_line_load_texts must be boolean')
 
         if not isinstance(show_tensile_zone, bool):
             raise TypeError(
                 f'"show_tensile_zone" must be a boolean, got '
                 f'{type(show_tensile_zone).__name__!r}'
+            )
+
+        if not isinstance(show_full_hinges, tuple):
+            raise TypeError(
+                f'"show_full_hinges" must be a tuple, got '
+                f'{type(show_full_hinges).__name__!r}'
+            )
+
+        if (
+                isinstance(show_full_hinges, tuple)
+                and not all(isinstance(v, bool) for v in show_full_hinges)
+        ):
+            raise TypeError(
+                'every element of "show_full_hinges" must be a bool'
             )
 
         if not isinstance(decimals, int):
@@ -257,16 +346,32 @@ class BarGeo(ObjectGeo):
         return self._bar
 
     @property
+    def load_distances(self):
+        return self._load_distances
+
+    @property
+    def global_max_line_load(self):
+        return self._global_max_line_load
+
+    @property
     def show_load(self):
         return self._show_load
 
     @property
-    def show_load_text(self):
-        return self._show_load_text
+    def show_point_load_text(self):
+        return self._show_point_load_text
+
+    @property
+    def show_line_load_texts(self):
+        return self._show_line_load_texts
 
     @property
     def show_tensile_zone(self):
         return self._show_tensile_zone
+
+    @property
+    def show_full_hinges(self):
+        return self._show_full_hinges
 
     @property
     def decimals(self):
@@ -281,9 +386,12 @@ class BarGeo(ObjectGeo):
             f'{self.__class__.__name__}('
             f'origin={self._origin}, '
             f'bar={self._bar}, '
+            f'global_max_line_load={self._global_max_line_load}, '
             f'show_load={self._show_load}, '
-            f'show_load_text={self._show_load_text}, '
+            f'show_point_load_texts={self._show_point_load_text}, '
+            f'show_line_load_texts={self._show_line_load_texts}, '
             f'show_tensile_zone={self._show_tensile_zone}, '
+            f'show_full_hinges={self._show_full_hinges}, '
             f'decimals={self._decimals}, '
             f'sig_digits={self._sig_digits}, '
             f'line_style={self._line_style}, '

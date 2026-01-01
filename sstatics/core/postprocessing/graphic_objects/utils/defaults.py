@@ -144,6 +144,11 @@ DEFAULT_MOMENT_HINGE = dict(
     height=0.5
 )
 
+DEFAULT_FULL_MOMENT_HINGE = dict(
+    width=0.6,
+    height=0.6
+)
+
 DEFAULT_FILL_WHITE = dict(
     fillcolor='white'
 )

@@ -284,15 +284,16 @@ class LineLoadGeo(ObjectGeo):
             load: BarLineLoad,
             distance_to_bar: float | None = None,
             distance_to_arrow: float | None = None,
-            show_text: bool = True,
+            global_max_value: float | None = None,
+            show_texts: tuple[bool, bool] = (True, True),
             decimals: int = 2,
             sig_digits: int | None = None,
             arrow_style: dict | None = None,
             **kwargs
     ):
         self._validate_line_load(
-            bar_coords, load, distance_to_bar, distance_to_arrow, show_text,
-            decimals, sig_digits
+            bar_coords, load, distance_to_bar, distance_to_arrow,
+            global_max_value, show_texts, decimals, sig_digits
         )
         super().__init__(
             origin=((bar_coords[0][0] + bar_coords[0][1]) / 2,
@@ -303,7 +304,8 @@ class LineLoadGeo(ObjectGeo):
         self._load = load
         self._distance_to_bar = distance_to_bar or DEFAULT_LOAD_DISTANCE
         self._distance_to_arrow = distance_to_arrow or DEFAULT_ARROW_DISTANCE
-        self._show_text = show_text
+        self._global_max_value = global_max_value
+        self._show_texts = show_texts
         self._decimals = decimals
         self._sig_digits = sig_digits
         self._arrow_style = self._deep_style_merge(
@@ -398,7 +400,10 @@ class LineLoadGeo(ObjectGeo):
 
     @property
     def _max_value(self):
-        return max(abs(self._load.pi), abs(self._load.pj))
+        return (
+            self._global_max_value if self._global_max_value else
+            max(abs(self._load.pi), abs(self._load.pj))
+        )
 
     @property
     def _is_special_case(self):
@@ -425,7 +430,7 @@ class LineLoadGeo(ObjectGeo):
 
     @property
     def _text_values(self):
-        if not self._show_text:
+        if not any(self._show_texts):
             return ''
         if self._is_special_case:
             pi, pj = self._load.pj, self._load.pi
@@ -433,12 +438,17 @@ class LineLoadGeo(ObjectGeo):
             pi, pj = self._load.pi, self._load.pj
         if pi == pj:
             return [self._round_value(pi)]
-        return [self._round_value(pi), self._round_value(pj)]
+
+        values = []
+        for show, value in zip(self._show_texts, [pi, pj]):
+            values.append(self._round_value(value) if show else '')
+
+        return values
 
     @staticmethod
     def _validate_line_load(
-            bar_coords, load, distance_to_bar, distance_to_arrow, show_text,
-            decimals, sig_digits
+            bar_coords, load, distance_to_bar, distance_to_arrow,
+            global_max_value, show_texts, decimals, sig_digits
     ):
         if (
             not isinstance(bar_coords, (tuple, list))
@@ -468,11 +478,20 @@ class LineLoadGeo(ObjectGeo):
                 f'{type(distance_to_arrow).__name__!r}'
             )
 
-        if not isinstance(show_text, bool):
+        if not isinstance(global_max_value, (int, float, NoneType)):
             raise TypeError(
-                f'"show_text" must be a boolean, got '
-                f'{type(show_text).__name__!r}'
+                f'"global_max_value" must be int, float or None, got '
+                f'{type(global_max_value).__name__!r}'
             )
+
+        if not isinstance(show_texts, tuple):
+            raise TypeError(
+                f'"show_texts" must be a tuple, got '
+                f'{type(show_texts).__name__!r}'
+            )
+
+        if not all(isinstance(v, bool) for v in show_texts):
+            raise TypeError('values of show_texts must be booleans')
 
         if not isinstance(decimals, int):
             raise TypeError(
@@ -506,8 +525,12 @@ class LineLoadGeo(ObjectGeo):
         return self._distance_to_arrow
 
     @property
-    def show_text(self):
-        return self._show_text
+    def global_max_value(self):
+        return self._global_max_value
+
+    @property
+    def show_texts(self):
+        return self._show_texts
 
     @property
     def decimals(self):
@@ -525,7 +548,8 @@ class LineLoadGeo(ObjectGeo):
             f'load={self._load}, '
             f'distance_to_bar={self._distance_to_bar}, '
             f'distance_to_arrow={self._distance_to_arrow}, '
-            f'show_text={self._show_text}, '
+            f'global_max_value={self._global_max_value}, '
+            f'show_texts={self._show_texts}, '
             f'decimals={self._decimals}, '
             f'sig_digits={self._sig_digits}, '
             f'line_style={self._line_style}, '

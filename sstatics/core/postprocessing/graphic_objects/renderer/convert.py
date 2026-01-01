@@ -75,12 +75,14 @@ def convert_plotly_to_mpl(style: dict) -> dict:
         sm = style['marker']
         mpl_style['marker'] = 'o'
         if 'size' in sm:
-            mpl_style['markersize'] = sm['size'] ** 0.5 * 4
+            mpl_style['markersize'] = sm['size']
         if 'color' in sm:
             mpl_style['markerfacecolor'] = convert_color_to_mpl(sm['color'])
         sml = sm.get('line', {})
         if 'color' in sml:
             mpl_style['markeredgecolor'] = convert_color_to_mpl(sml['color'])
+        else:
+            mpl_style['markeredgecolor'] = convert_color_to_mpl(sm['color'])
         if 'width' in sml:
             mpl_style['markeredgewidth'] = sml['width'] * 2 / 3
         if 'opacity' in sm:
@@ -90,7 +92,7 @@ def convert_plotly_to_mpl(style: dict) -> dict:
     if 'text' in mode:
         st = style.get('textfont', {})
         if 'size' in st:
-            mpl_style['fontsize'] = st['size']
+            mpl_style['fontsize'] = st['size'] * 3 / 4
         if 'color' in st:
             mpl_style['color'] = convert_color_to_mpl(st['color'])
         if 'family' in st:

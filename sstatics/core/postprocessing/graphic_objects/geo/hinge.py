@@ -12,7 +12,7 @@ from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
     ObjectGeo
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
     DEFAULT_HINGE, DEFAULT_NORMAL_HINGE, DEFAULT_SHEAR_HINGE,
-    DEFAULT_MOMENT_HINGE, DEFAULT_FILL_WHITE
+    DEFAULT_MOMENT_HINGE, DEFAULT_FILL_WHITE, DEFAULT_FULL_MOMENT_HINGE
 )
 
 
@@ -162,6 +162,10 @@ class MomentHingeGeo(HingeGeo):
             self._origin, self._width, self._height,
             show_outline=False, line_style=DEFAULT_FILL_WHITE
         )
+
+
+class FullMomentHingeGeo(MomentHingeGeo):
+    CLASS_DIMENSIONS = DEFAULT_FULL_MOMENT_HINGE
 
 
 class CombiHingeGeo(ObjectGeo):

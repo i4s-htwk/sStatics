@@ -26,6 +26,7 @@ class NodeGeo(ObjectGeo):
     def __init__(
             self,
             node: Node,
+            load_distances: dict | None = None,
             show_load: bool = True,
             show_load_text: bool = True,
             decimals: int = 2,
@@ -33,10 +34,12 @@ class NodeGeo(ObjectGeo):
             **kwargs
     ):
         self._validate_node(
-            node, show_load, show_load_text, decimals, sig_digits
+            node, load_distances, show_load, show_load_text, decimals,
+            sig_digits
         )
         super().__init__(origin=(node.x, node.z), **kwargs)
         self._node = node
+        self._load_distances = load_distances
         self._show_load = show_load
         self._show_load_text = show_load_text
         self._decimals = decimals
@@ -119,9 +122,16 @@ class NodeGeo(ObjectGeo):
 
     @property
     def _load_elements(self):
+        scale = self._transform.scaling
         return [
             PointLoadGeo(
-                self._origin, load=load, show_text=self._show_load_text,
+                self._origin, load=load,
+                distance=(
+                        self._load_distances[load] / scale if
+                        self._load_distances and load in self._load_distances
+                        else None
+                ),
+                show_text=self._show_load_text,
                 decimals=self._decimals, sig_digits=self._sig_digits,
                 line_style=self._resolve_style(
                     load, DEFAULT_LINE, self._line_style
@@ -134,9 +144,18 @@ class NodeGeo(ObjectGeo):
 
     @property
     def _displacement_elements(self):
+        scale = self._transform.scaling
         return [
             DisplacementGeo(
                 self._origin, displacement=displacement,
+                distance=(
+                        self._load_distances[displacement] / scale
+                        if (
+                                self._load_distances
+                                and displacement in self._load_distances
+                        )
+                        else None
+                ),
                 show_text=self._show_load_text,
                 decimals=self._decimals, sig_digits=self._sig_digits,
                 line_style=self._resolve_style(
@@ -150,11 +169,25 @@ class NodeGeo(ObjectGeo):
 
     @staticmethod
     def _validate_node(
-            node, show_load, show_load_text, decimals, sig_digits
+            node, load_distances, show_load, show_load_text, decimals,
+            sig_digits
     ):
         if not isinstance(node, Node):
             raise TypeError(
                 f'"node" must be a Node, got {type(node).__name__!r}'
+            )
+
+        if not isinstance(load_distances, (dict, NoneType)):
+            raise TypeError(
+                f'"load_distances" must be dict or None, '
+                f'got {type(load_distances).__name__!r}'
+            )
+
+        if isinstance(load_distances, dict) and not all(
+                isinstance(v, (int, float)) for v in load_distances.values()
+        ):
+            raise TypeError(
+                'all values of load_distances must be int or float'
             )
 
         if not isinstance(show_load, bool):
@@ -193,6 +226,10 @@ class NodeGeo(ObjectGeo):
         return self._show_load
 
     @property
+    def load_distances(self):
+        return self._load_distances
+
+    @property
     def show_load_text(self):
         return self._show_load_text
 
@@ -209,6 +246,7 @@ class NodeGeo(ObjectGeo):
             f'{self.__class__.__name__}('
             f'origin={self._origin}, '
             f'node={self._node}, '
+            f'load_distances={self._load_distances}, '
             f'show_load={self._show_load}, '
             f'show_load_text={self._show_load_text}, '
             f'decimals={self._decimals}, '

@@ -20,7 +20,8 @@ from sstatics.core.postprocessing.graphic_objects.geo.geometry import (
 )
 from sstatics.core.postprocessing.graphic_objects.geo.hatch import HatchGeo
 from sstatics.core.postprocessing.graphic_objects.geo.hinge import (
-    CombiHingeGeo, MomentHingeGeo, NormalHingeGeo, ShearHingeGeo
+    CombiHingeGeo, FullMomentHingeGeo, MomentHingeGeo, NormalHingeGeo,
+    ShearHingeGeo
 )
 from sstatics.core.postprocessing.graphic_objects.geo.node import NodeGeo
 from sstatics.core.postprocessing.graphic_objects.geo.text import TextGeo
@@ -46,6 +47,7 @@ __all__ = [
     'FixedSupportUWGeo',
     'FixedSupportWPhiGeo',
     'FreeNodeGeo',
+    'FullMomentHingeGeo',
     'HatchGeo',
     'IsoscelesTriangleGeo',
     'LineArrowGeo',
