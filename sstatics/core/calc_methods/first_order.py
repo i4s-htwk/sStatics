@@ -95,8 +95,6 @@ class FirstOrder(Solver):
         ValueError
             If the mode is invalid.
         """
-        if kind == 'bending_line':
-            return None
         valid_kinds = ['normal', 'shear', 'moment', 'u', 'w', 'phi',
                        'bending_line']
         if kind not in valid_kinds:
