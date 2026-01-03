@@ -65,6 +65,7 @@ class SystemGeo(ObjectGeo):
     def text_elements(self):
         return []
 
+    @property
     def _raw_graphic_elements(self):
         x, z = [], []
         for node in self._nodes:
@@ -83,8 +84,11 @@ class SystemGeo(ObjectGeo):
     @property
     def _max_line_load_value(self):
         return max(
-            max((abs(load.pi), abs(load.pj)))
-            for bar in self._system.bars for load in bar.line_loads
+            (
+                max((abs(load.pi), abs(load.pj)))
+                for bar in self._system.bars for load in bar.line_loads
+            ),
+            default=None
         )
 
     def _count_bars_and_hinges(self, node: Node):
