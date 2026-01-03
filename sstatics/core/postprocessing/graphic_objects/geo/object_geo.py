@@ -12,38 +12,60 @@ from ..utils.transform import Transform
 
 
 class ObjectGeo(abc.ABC):
-    r"""
-    Abstract base class for all graphic objects in 2D space.
+    """
+    Abstract base class for all geometric graphic objects in 2D space.
 
-    This class defines the interface and common functionality for objects that
-    can be represented graphically with lines and text. It handles
-    transformation (post_translation, scaling, rotation) and style management.
+    This class defines the common interface and shared functionality for all
+    objects that can be rendered in a 2D statical system plot. It provides a
+    unified transformation pipeline (translation, rotation, scaling), style
+    handling, and recursive composition of graphic elements.
+
+    Concrete subclasses represent geometric entities such as bars, nodes,
+    loads, support symbols, or result visualizations (e.g. internal force
+    diagrams).
 
     Parameters
     ----------
     origin : tuple[float, float], default=(0.0, 0.0)
-        Pivot point for rotation and scaling.
+        Local reference point used as pivot for rotation and scaling.
     rotation : float, default=0.0
-        Rotation angle in radians, counterclockwise.
+        Rotation angle in radians, applied counterclockwise.
     scaling : float, default=1.0
-        Uniform scaling factor applied relative to the origin.
+        Uniform scaling factor applied relative to :py:attr:`origin`.
     pre_translation : tuple[float, float], default=(0.0, 0.0)
-        Translation vector applied before rotation and scaling.
+        Translation applied before rotation and scaling.
     post_translation : tuple[float, float], default=(0.0, 0.0)
-        Translation vector applied after rotation and scaling.
-    text : str, default=''
-        Content of the label or annotation.
+        Translation applied after rotation and scaling.
+    text : str or list[str], default=''
+        Text labels or annotations associated with the object.
     line_style : dict, optional
-        Dictionary specifying line style attributes (color, width, etc.).
-        Overrides default line style.
+        Style parameters for line-based graphic elements.
+        Overrides default and class-level styles.
+    point_style : dict, optional
+        Style parameters for point-based graphic elements.
     text_style : dict, optional
-        Dictionary specifying text style attributes (font size, color, etc.).
-        Overrides default text style.
+        Style parameters for text rendering.
+    global_scale : float, optional
+        Global scaling factor used to normalize size-dependent visual
+        elements. If provided, it overrides the automatically computed base
+        scale.
 
     Raises
     ------
     TypeError
-        If `line_style` or `text_style` is not a dictionary.
+        If `text` is not a valid scalar or sequence type.
+    TypeError
+        If any of the style arguments is not a dictionary.
+    TypeError
+        If `global_scale` is not ``float``, ``int`` or ``None``.
+
+    Notes
+    -----
+    This class is purely geometric and rendering-oriented. It does **not**
+    perform any statical computations.
+
+    Subclasses are expected to implement at least
+    :py:meth:`graphic_elements` and :py:meth:`text_elements`.
     """
     _DEFAULT_STYLES = {
         'line': DEFAULT_LINE,
@@ -107,19 +129,26 @@ class ObjectGeo(abc.ABC):
         ObjectGeo | tuple[list[float], list[float], dict]
     ]:
         """
-        Return a list of polylines representing the object.
+        Return the geometric point or line elements representing the object.
 
-        Each polyline is a sequence of (x, z) tuples.
+        Each element is either
+        - another :py:class:`ObjectGeo` instance (composite object), or
+        - a tuple ``(x, z, style)`` describing a polyline in local coordinates.
+
+        The returned elements are interpreted recursively and transformed
+        automatically by the object's transformation pipeline.
 
         Returns
         -------
-        list[list[tuple[float, float]]]
-            List of polylines for rendering.
+        list[ObjectGeo | tuple[list[float], list[float], dict]]
+            A list of graphic elements used for rendering.
 
         Notes
         -----
-        Subclasses must override this method. Can return an empty list if the
-        object has no line representation.
+        Subclasses must override this property.
+
+        An empty list may be returned if the object has no visible point or
+        line representation.
         """
         return []
 
@@ -127,42 +156,62 @@ class ObjectGeo(abc.ABC):
     @abc.abstractmethod
     def text_elements(self) -> list[tuple[float, float, str, dict]]:
         """
-        Return a list of text objects associated with the graphic object.
+        Return the text elements associated with the object.
 
-        Each text object could include position, content, and style.
+        Each text element is defined by its position, content and style.
 
         Returns
         -------
-        list[dict]
-            List of text objects for rendering.
+        list[tuple[float, float, str, dict]]
+            Tuples of the form ``(x, z, text, style)``.
 
         Notes
         -----
-        Subclasses must override this method. Can return an empty list if the
-        object has no text.
+        Subclasses must override this property.
+
+        An empty list may be returned if the object has no text annotations.
         """
         return []
 
+    @property
     def _raw_graphic_elements(self):
+        """Return the unprocessed graphic elements of the object.
+
+        This method provides direct access to the elements returned by
+        :py:meth:`graphic_elements` without applying any recursive resolution
+        or transformation.
+
+        Returns
+        -------
+        list
+            Raw graphic elements as defined by :py:meth:`graphic_elements`.
+
+        Notes
+        -----
+        This method exists mainly to support recursive traversal of composite
+        :py:class:`ObjectGeo` instances. It can also be overridden by
+        subclasses.
+        """
         return self.graphic_elements
 
     @cached_property
     def _boundaries(self) -> tuple[float, float, float, float]:
-        """Return the outer geometric boundaries of the object.
+        """Return the geometric bounding box of the object.
 
-        This method computes the minimum and maximum coordinates of all
-        polylines returned by :py:meth:`graphic_elements`. The result defines
-        the rectangular bounding box that encloses the entire object.
+        The boundaries are computed from all recursively resolved graphic
+        elements returned by :py:meth:`graphic_elements`, after applying all
+        transformations.
 
         Returns
         -------
         tuple[float, float, float, float]
-            A tuple ``(x_min, x_max, z_min, z_max)`` representing the extreme
-            coordinates of the object.
+            Tuple ``(x_min, x_max, z_min, z_max)`` defining the enclosing
+            rectangle.
 
         Notes
         -----
-        If the object has no polylines, all values are returned as ``0.0``.
+        If the object contains no geometric elements, all values are returned
+        as ``0.0``.
         """
         x_coords, z_coords = [], []
 
@@ -177,9 +226,30 @@ class ObjectGeo(abc.ABC):
         return min(x_coords), max(x_coords), min(z_coords), max(z_coords)
 
     def _iter_raw_graphic_elements(self, obj=None):
-        for element in obj._raw_graphic_elements():
+        """Iterate recursively over all graphic elements of an object.
+
+        This generator resolves nested :py:class:`ObjectGeo` instances and
+        yields fully transformed geometric primitives.
+
+        Parameters
+        ----------
+        obj : :py:class:`ObjectGeo`, optional
+            Object whose graphic elements are to be traversed. If omitted,
+            the current instance is used.
+
+        Yields
+        ------
+        tuple[list[float], list[float], dict]
+            Transformed x- and z-coordinate lists together with the associated
+            style dictionary.
+
+        Notes
+        -----
+        Transformations are applied hierarchically, such that child objects
+        inherit the transformation of their parent objects.
+        """
+        for element in obj.raw_graphic_elements:
             if self._is_geo_object(element):
-                # Rekursion in Kindobjekte
                 for x, z, style in self._iter_raw_graphic_elements(element):
                     x, z = obj.transform(x, z)
                     yield x, z, style
@@ -188,9 +258,30 @@ class ObjectGeo(abc.ABC):
                 x, z = obj.transform(x, z)
                 yield x, z, style
 
-    def _is_geo_object(self, obj):
-        return hasattr(obj, "_raw_graphic_elements") and callable(
-            obj._raw_graphic_elements)
+    @staticmethod
+    def _is_geo_object(obj):
+        """Check whether an object behaves like a geometric graphic object.
+
+        Parameters
+        ----------
+        obj : any
+            Object to be tested.
+
+        Returns
+        -------
+        bool
+            ``True`` if the object exposes a callable
+            :py:meth:`raw_graphic_elements` method, ``False`` otherwise.
+
+        Notes
+        -----
+        This method is used internally to distinguish between composite
+        :py:class:`ObjectGeo` instances and primitive graphic elements.
+        """
+        return (
+                hasattr(obj, "_raw_graphic_elements")
+                and callable(obj.raw_graphic_elements)
+        )
 
     @cached_property
     def _max_dimensions(self) -> tuple[float, float]:
@@ -218,9 +309,9 @@ class ObjectGeo(abc.ABC):
     def _base_scale(self) -> float:
         """Return a normalized scaling factor based on the object size.
 
-        The base scale is used to ensure that visual elements such as text or
-        markers maintain consistent proportions across objects of different
-        sizes. It depends on the maximum geometric extent of the object.
+        The base scale is used to ensure that visual elements maintain
+        consistent proportions across objects of different sizes. It depends
+        on the maximum geometric extent of the object.
 
         Returns
         -------
@@ -231,8 +322,7 @@ class ObjectGeo(abc.ABC):
 
         Notes
         -----
-        This property is primarily used for adjusting text or symbol positions
-        relative to the object size.
+        If :py:attr:`global_scale` is set, it is returned directly.
         """
         if self._global_scale is not None:
             return self._global_scale
@@ -245,6 +335,30 @@ class ObjectGeo(abc.ABC):
             class_style: dict | None = None,
             user_style: dict | None = None
     ) -> dict:
+        """Merge default, class-level and user-defined styles.
+
+        Styles are merged in increasing order of priority:
+        default > class-level > user-defined
+
+        Parameters
+        ----------
+        default_style : dict
+            Base style dictionary.
+        class_style : dict, optional
+            Style dictionary defined at class level.
+        user_style : dict, optional
+            Style dictionary provided by the user.
+
+        Returns
+        -------
+        dict
+            Merged style dictionary.
+
+        Notes
+        -----
+        Nested dictionaries are merged recursively using
+        :py:meth:`_deep_style_merge`.
+        """
         result = dict(default_style)
         for layer in (class_style, user_style):
             if layer:
@@ -288,6 +402,33 @@ class ObjectGeo(abc.ABC):
         return result
 
     def _resolve_style(self, element, default_style, user_style):
+        """Resolve the effective style for a specific graphic element.
+
+        The resolution order is:
+        1. Explicit style for the given element
+        2. Style matching the element's class name
+        3. Default style entry
+        4. Fallback to the provided default style
+
+        Parameters
+        ----------
+        element : any
+            Graphic element or identifier.
+        default_style : dict
+            Base style dictionary.
+        user_style : dict
+            User-defined style configuration.
+
+        Returns
+        -------
+        dict
+            Resolved style dictionary.
+
+        Notes
+        -----
+        This method enables fine-grained styling of individual elements while
+        maintaining sensible defaults.
+        """
         if not user_style:
             return default_style
 
@@ -307,29 +448,6 @@ class ObjectGeo(abc.ABC):
     def _validate_base(
             text, line_style, text_style, point_style, global_scale
     ):
-        """
-        Validate text, line_style and text_style parameters.
-
-        Parameters
-        ----------
-        text : str
-            Label or annotation.
-        line_style : dict
-            Style dictionary for lines.
-        text_style : dict
-            Style dictionary for text.
-
-        Raises
-        ------
-        TypeError
-            If `text` is not String, list, tuple, int or float.
-            If `line_style` or `text_style` is not a dictionary.
-
-        Notes
-        -----
-        This method is called by the constructor to ensure the object receives
-        valid style dictionaries.
-        """
         if not isinstance(text, (str, list, tuple, int, float)):
             raise TypeError(
                 f'"text" must be string, list, tuple, int or float, got '
@@ -392,3 +510,7 @@ class ObjectGeo(abc.ABC):
     @property
     def global_scale(self):
         return self._base_scale
+
+    @property
+    def raw_graphic_elements(self):
+        return self._raw_graphic_elements

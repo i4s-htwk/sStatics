@@ -16,6 +16,12 @@ from ..utils.utils import is_clockwise
 
 
 class PointGeo(ObjectGeo):
+    """
+    Graphic representation of a single point.
+
+    The point is located at the specified origin and styled according to
+    the `_point_style`. Optional text can be displayed at the point.
+    """
 
     def __init__(
             self,
@@ -26,11 +32,29 @@ class PointGeo(ObjectGeo):
 
     @cached_property
     def graphic_elements(self):
+        """
+        Return the graphical coordinates of the point.
+
+        Returns
+        -------
+        list[tuple[list[float], list[float], dict]]
+            A list containing a single tuple with x and z coordinates and
+            the point style.
+        """
         ox, oz = self._origin
         return [([ox], [oz], self._point_style)]
 
     @cached_property
     def text_elements(self):
+        """
+        Return the text elements associated with this point.
+
+        Returns
+        -------
+        list[tuple[float, float, str, dict]]
+            A list containing a single tuple with the point coordinates,
+            text, and text style.
+        """
         return [(*self._origin, self._text, self._text_style)]
 
     def __repr__(self):
@@ -45,6 +69,12 @@ class PointGeo(ObjectGeo):
 
 
 class OpenCurveGeo(ObjectGeo):
+    """
+    Graphic representation of an open curve (line) between multiple points.
+
+    Can be defined either by explicit x/z coordinates, a center and length,
+    or slope and intercept. Optional text can be displayed along the line.
+    """
 
     def __init__(
             self,
@@ -64,10 +94,32 @@ class OpenCurveGeo(ObjectGeo):
 
     @cached_property
     def graphic_elements(self):
+        """
+        Return the graphical coordinates for the line.
+
+        Returns
+        -------
+        list[tuple[list[float], list[float], dict]]
+            A list with one tuple containing the x and z coordinates of the
+            line and its line style.
+        """
         return [(self._x, self._z, self._line_style)]
 
     @cached_property
     def text_elements(self):
+        """
+        Return the text elements for the line.
+
+        Supports multiple text labels evenly distributed along the points.
+
+        Returns
+        -------
+        list[tuple[
+        float, float, list[str], dict] | tuple[float, float, str, dict, str
+        ]]
+            A list of tuples with coordinates, text, text style, and optional
+            preferred position for a single text entry.
+        """
         text = self._text
         if not text:
             return []
@@ -114,6 +166,24 @@ class OpenCurveGeo(ObjectGeo):
 
     @classmethod
     def from_center(cls, origin: tuple[float, float], length: float, **kwargs):
+        """
+        Create an OpenCurveGeo centered at a given point with a specified
+        length.
+
+        Parameters
+        ----------
+        origin : tuple[float, float]
+            The center point of the line.
+        length : float
+            The total length of the line.
+        **kwargs
+            Additional keyword arguments passed to the constructor.
+
+        Returns
+        -------
+        OpenCurveGeo
+            The created line object.
+        """
         cls._validate_center(origin, length)
         ox, oz = origin
         x = [ox - length / 2, ox + length / 2]
@@ -126,6 +196,26 @@ class OpenCurveGeo(ObjectGeo):
             boundaries: tuple[float, float, float, float] = (-5, 5, -5, 5),
             **kwargs
     ):
+        """
+        Create an OpenCurveGeo from a line equation (slope and intercept)
+        within specified boundaries.
+
+        Parameters
+        ----------
+        slope : float | None
+            The slope of the line. If None, creates a vertical line.
+        intercept : float
+            The intercept of the line.
+        boundaries : tuple[float, float, float, float]
+            The plotting boundaries (x_max, x_min, z_max, z_min).
+        **kwargs
+            Additional keyword arguments passed to the constructor.
+
+        Returns
+        -------
+        OpenCurveGeo
+            The created line object.
+        """
         cls._validate_slop_intercept(slope, intercept, boundaries)
         x_max, x_min, z_max, z_min = boundaries
         if slope is None:
@@ -138,6 +228,21 @@ class OpenCurveGeo(ObjectGeo):
         return cls(x, z, **kwargs)
 
     def stretch(self, start: float = 0.0, end: float = 0.0):
+        """
+        Extend the line at its start and end by a given amount.
+
+        Parameters
+        ----------
+        start : float
+            Distance to stretch at the start of the line.
+        end : float
+            Distance to stretch at the end of the line.
+
+        Returns
+        -------
+        OpenCurveGeo
+            The modified line object (self) with updated coordinates.
+        """
         self._validate_stretch(start, end)
         (x0, z0), (x1, z1) = (
             (self._x[0], self._z[0]), (self._x[-1], self._z[-1])
@@ -260,6 +365,13 @@ class OpenCurveGeo(ObjectGeo):
 
 
 class ClosedCurveGeo(ObjectGeo, abc.ABC):
+    """
+    Base class for closed curves (polygons, ellipses, etc.).
+
+    Supports optional center point and hatch pattern. Subclasses must
+    define `_point_coords` to provide the shape coordinates.
+    """
+
     DEFAULT_HATCH_STYLE = DEFAULT_HATCH
 
     def __init__(
@@ -284,6 +396,16 @@ class ClosedCurveGeo(ObjectGeo, abc.ABC):
 
     @cached_property
     def graphic_elements(self):
+        """
+        Return all graphical elements of the closed curve.
+
+        Includes shape coordinates, optional center point, and optional hatch.
+
+        Returns
+        -------
+        list
+            A list of graphical objects representing the closed curve.
+        """
         elements = []
         elements.extend(self._point_coords)
         if self._show_center:
@@ -294,23 +416,118 @@ class ClosedCurveGeo(ObjectGeo, abc.ABC):
 
     @cached_property
     def text_elements(self):
+        """
+        Return the text elements for the closed curve.
+
+        By default, returns an empty list.
+
+        Returns
+        -------
+        list
+            Text elements associated with the curve (empty by default).
+        """
         return []
 
     @cached_property
     @abc.abstractmethod
     def _point_coords(self):
+        """
+        Return the coordinates of the shape as x, z arrays and style.
+
+        Must be implemented by subclasses.
+
+        Returns
+        -------
+        list[tuple[list[float], list[float], dict]]
+            List of tuples containing x, z coordinates and line style.
+        """
         pass
 
     @cached_property
     def _center_geo(self):
+        """
+        Return the graphical representation of the curve's center.
+
+        Uses the origin as the center position and includes text and point
+        style.
+
+        Returns
+        -------
+        PointGeo
+            A PointGeo object representing the center of the closed curve.
+        """
         return PointGeo(
                 self._origin, text=self._text, point_style=self._point_style
             )
 
     @cached_property
     def _hatch_geo(self):
+        """
+        Return the hatch pattern graphic for the closed curve.
+
+        Uses the hatch style defined for the object. If no hatch style is set,
+        this property will not be included in the graphic_elements.
+
+        Returns
+        -------
+        HatchGeo
+            A HatchGeo object representing the filled hatch pattern.
+        """
         from .hatch import HatchGeo
         return HatchGeo(self, **self._hatch_style)
+
+    def _set_hatch_style(self, show_hatch, user_hatch):
+        """
+        Determine the hatch style to use for the closed curve.
+
+        Combines default, class-level, and user-provided hatch styles.
+        If `show_hatch` is False, returns None.
+
+        Parameters
+        ----------
+        show_hatch : bool | None
+            Whether to show a hatch pattern.
+        user_hatch : dict[str, Any] | None
+            User-provided hatch style overrides.
+
+        Returns
+        -------
+        dict[str, Any] | None
+            Merged hatch style dictionary or None if no hatch is shown.
+        """
+        if show_hatch is False:
+            return None
+        class_hatch = getattr(self, 'CLASS_HATCH_STYLE', {})
+        hatch = show_hatch or user_hatch or class_hatch
+        if hatch:
+            return self._merge_style(
+                self.DEFAULT_HATCH_STYLE,
+                class_hatch,
+                user_hatch or {}
+            )
+        return None
+
+    @staticmethod
+    def _style_without_outline(style: dict[str, Any]) -> dict[str, Any]:
+        """
+        Return a copy of the style dictionary with the outline disabled.
+
+        Sets the line width to zero and ensures fill is applied if necessary.
+
+        Parameters
+        ----------
+        style : dict[str, Any]
+            Original line and fill style dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            Modified style dictionary with no outline.
+        """
+        style = {**style, 'line': {**style.get('line', {}), 'width': 0}}
+        if 'fill' not in style and 'fillcolor' in style:
+            style['fill'] = 'toself'
+        return style
 
     @staticmethod
     def _validate_curve(show_center, show_hatch, hatch_style, show_outline):
@@ -338,26 +555,6 @@ class ClosedCurveGeo(ObjectGeo, abc.ABC):
                 f'{type(show_outline).__name__}.'
             )
 
-    def _set_hatch_style(self, show_hatch, user_hatch):
-        if show_hatch is False:
-            return None
-        class_hatch = getattr(self, 'CLASS_HATCH_STYLE', {})
-        hatch = show_hatch or user_hatch or class_hatch
-        if hatch:
-            return self._merge_style(
-                self.DEFAULT_HATCH_STYLE,
-                class_hatch,
-                user_hatch or {}
-            )
-        return None
-
-    @staticmethod
-    def _style_without_outline(style: dict[str, Any]) -> dict[str, Any]:
-        style = {**style, 'line': {**style.get('line', {}), 'width': 0}}
-        if 'fill' not in style and 'fillcolor' in style:
-            style['fill'] = 'toself'
-        return style
-
     @property
     def show_center(self):
         return self._show_center
@@ -380,6 +577,13 @@ class ClosedCurveGeo(ObjectGeo, abc.ABC):
 
 
 class PolygonGeo(ClosedCurveGeo):
+    """
+    Graphic representation of a polygon.
+
+    Can include multiple holes. Coordinates are automatically ordered
+    clockwise for proper rendering.
+    """
+
     CLASS_STYLES = {
         'line': DEFAULT_POLYGON,
         'point': DEFAULT_CENTER_OF_MASS
@@ -400,6 +604,15 @@ class PolygonGeo(ClosedCurveGeo):
 
     @cached_property
     def _point_coords(self):
+        """
+        Return the coordinates of the polygon including holes.
+
+        Returns
+        -------
+        list[tuple[list[float], list[float], dict]]
+            Tuples containing x and z coordinates of the polygon and line
+            style.
+        """
         x, z = list(self._ex), list(self._ez)
         if not is_clockwise(x, z):
             x.reverse()
@@ -436,6 +649,11 @@ class PolygonGeo(ClosedCurveGeo):
 
 
 class EllipseGeo(ClosedCurveGeo):
+    """
+    Graphic representation of an ellipse.
+
+    Supports arbitrary width, height, angular range, and number of points.
+    """
 
     def __init__(
             self,
@@ -457,6 +675,15 @@ class EllipseGeo(ClosedCurveGeo):
 
     @cached_property
     def _point_coords(self):
+        """
+        Return the coordinates of the ellipse points.
+
+        Returns
+        -------
+        list[tuple[list[float], list[float], dict]]
+            Tuples containing x and z coordinates of the ellipse and line
+            style.
+        """
         angles = np.linspace(
             self._angle_range[0], self._angle_range[1], self._n_points
         )
@@ -532,6 +759,11 @@ class EllipseGeo(ClosedCurveGeo):
 
 
 class IsoscelesTriangleGeo(ClosedCurveGeo):
+    """
+    Graphic representation of an isosceles triangle.
+
+    Positioned by its base center (origin) with given width and height.
+    """
 
     def __init__(
             self,
@@ -549,6 +781,15 @@ class IsoscelesTriangleGeo(ClosedCurveGeo):
 
     @cached_property
     def _point_coords(self):
+        """
+        Return the coordinates of the triangle vertices.
+
+        Returns
+        -------
+        list[tuple[list[float], list[float], dict]]
+            Tuples containing x and z coordinates of the triangle and line
+            style.
+        """
         x0, z0 = self._origin
         x_off = self._width / 2
         x = x0 - x_off, x0 + x_off, x0, x0 - x_off
@@ -584,6 +825,11 @@ class IsoscelesTriangleGeo(ClosedCurveGeo):
 
 
 class RectangleGeo(ClosedCurveGeo):
+    """
+    Graphic representation of a rectangle.
+
+    Positioned by its center (origin) with specified width and height.
+    """
 
     def __init__(
             self,
@@ -601,6 +847,15 @@ class RectangleGeo(ClosedCurveGeo):
 
     @cached_property
     def _point_coords(self):
+        """
+        Return the coordinates of the rectangle corners.
+
+        Returns
+        -------
+        list[tuple[list[float], list[float], dict]]
+            Tuples containing x and z coordinates of the rectangle and line
+            style.
+        """
         x0, z0 = self._origin
         x_off, z_off = self._width / 2, self._height / 2
         x = x0 - x_off, x0 + x_off, x0 + x_off, x0 - x_off, x0 - x_off

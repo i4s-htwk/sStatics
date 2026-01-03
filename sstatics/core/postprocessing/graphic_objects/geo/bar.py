@@ -73,6 +73,7 @@ class BarGeo(ObjectGeo):
     def text_elements(self):
         return []
 
+    @property
     def _raw_graphic_elements(self):
         return [self._single_bar]
 
