@@ -249,7 +249,6 @@ class ObjectGeo(abc.ABC):
         inherit the transformation of their parent objects.
         """
         for element in obj.raw_graphic_elements:
-            print(element)
             if isinstance(element, ObjectGeo):
                 for x, z, style in self._iter_raw_graphic_elements(element):
                     x, z = obj.transform(x, z)
