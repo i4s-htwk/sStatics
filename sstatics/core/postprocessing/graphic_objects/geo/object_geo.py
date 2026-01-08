@@ -249,39 +249,19 @@ class ObjectGeo(abc.ABC):
         inherit the transformation of their parent objects.
         """
         for element in obj.raw_graphic_elements:
-            if self._is_geo_object(element):
+            print(element)
+            if isinstance(element, ObjectGeo):
                 for x, z, style in self._iter_raw_graphic_elements(element):
                     x, z = obj.transform(x, z)
                     yield x, z, style
-            else:
+            elif isinstance(element, tuple) and len(element) == 3:
                 x, z, style = element
                 x, z = obj.transform(x, z)
                 yield x, z, style
-
-    @staticmethod
-    def _is_geo_object(obj):
-        """Check whether an object behaves like a geometric graphic object.
-
-        Parameters
-        ----------
-        obj : any
-            Object to be tested.
-
-        Returns
-        -------
-        bool
-            ``True`` if the object exposes a callable
-            :py:meth:`raw_graphic_elements` method, ``False`` otherwise.
-
-        Notes
-        -----
-        This method is used internally to distinguish between composite
-        :py:class:`ObjectGeo` instances and primitive graphic elements.
-        """
-        return (
-                hasattr(obj, "_raw_graphic_elements")
-                and callable(obj.raw_graphic_elements)
-        )
+            else:
+                raise TypeError(
+                    f"Invalid graphic element type: {type(element).__name__}"
+                )
 
     @cached_property
     def _max_dimensions(self) -> tuple[float, float]:

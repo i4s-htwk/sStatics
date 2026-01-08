@@ -708,9 +708,9 @@ class SecondOrder(LoggerMixin):
         nodes = system.nodes()
         dof = 3
 
-        def get_delta(i):
-            u_curr = node_deform_curr[i * dof:(i + 1) * dof]
-            u_prev = node_deform_prev[i * dof:(i + 1) * dof]
+        def get_delta(idx):
+            u_curr = node_deform_curr[idx * dof:(idx + 1) * dof]
+            u_prev = node_deform_prev[idx * dof:(idx + 1) * dof]
             return u_curr - u_prev
 
         for i_bar, bar in enumerate(system.bars):
@@ -718,8 +718,8 @@ class SecondOrder(LoggerMixin):
             i = nodes.index(bar.node_i)
             j = nodes.index(bar.node_j)
 
-            delta_i = get_delta(i)
-            delta_j = get_delta(j)
+            delta_i = get_delta(i).flatten()
+            delta_j = get_delta(j).flatten()
 
             deform_x_i, deform_z_i = float(delta_i[0]), float(delta_i[1])
             deform_x_j, deform_z_j = float(delta_j[0]), float(delta_j[1])
