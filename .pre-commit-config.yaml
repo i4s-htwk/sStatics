@@ -5,7 +5,7 @@ repos:
       - id: unittest
         name: Run python -m sstatics test
         language: system
-        entry: python -m sstatics test
+        entry: /Users/kjell/Python/_sstatics-dev/sStatics/venv/bin/python -m sstatics test
         pass_filenames: false
 
   # Pylint
@@ -14,7 +14,7 @@ repos:
       - id: pylint
         name: pylint
         language: python
-        entry: pylint
+        entry: /Users/kjell/Python/_sstatics-dev/sStatics/venv/bin/pylint
         args: [sstatics]
         pass_filenames: false
 
@@ -24,6 +24,6 @@ repos:
       - id: flake8
         name: flake8
         language: python
-        entry: flake8
+        entry: /Users/kjell/Python/_sstatics-dev/sStatics/venv/bin/flake8
         args: [sstatics]
         pass_filenames: false

@@ -21,4 +21,4 @@ help:
 
 # sphinx-autobuild command.
 livehtml:
-    sphinx-autobuild "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) --open-browser --watch ../sstatics/ $(O)
+	sphinx-autobuild "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) --open-browser --watch ../sstatics/ $(O)
