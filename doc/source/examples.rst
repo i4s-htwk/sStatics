@@ -15,7 +15,6 @@ Cross-Section
     examples/01_cross_section/rectangle_cross_section
     examples/01_cross_section/beam_slab_cross_section
     examples/01_cross_section/ipe_cross_section
-    examples/01_cross_section/Test
 
 
 First Order
