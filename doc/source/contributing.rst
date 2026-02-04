@@ -50,10 +50,17 @@ More information on installing and using Pandoc can be found here:
 
 To build the documentation and start a live preview server:
 
+...if you are using Windows:
 .. code:: console
 
    cd doc
    start make livehtml
+
+...if you are using macOS:
+.. code:: console
+
+   cd doc
+   make livehtml
 
 This command launches a live server that automatically rebuilds the
 documentation whenever you edit source files or notebooks, allowing you
