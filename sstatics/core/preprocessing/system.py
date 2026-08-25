@@ -364,6 +364,59 @@ class System:
         """
         self._mesh = Mesh(bars=self.bars, user_divisions=user_divisions)()
 
+    def plot(
+            self,
+            mode: Literal['mpl', 'plotly'] = 'plotly',
+            mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
+            show_load: bool = True,
+            show_bar_text: bool = False,
+            show_node_text: bool = True,
+            show_load_text: bool = True,
+            show_full_hinges: bool = True,
+            decimals: int = 2,
+            sig_digits: int | None = None
+    ):
+        r"""Plot the static system without analysis results.
+
+        Parameters
+        ----------
+        mode : {'mpl', 'plotly'}, default='plotly'
+        mesh_type : {'bars', 'user_mesh', 'mesh'}, default='bars'
+            Geometry used for the plot.
+        show_load : bool, default=True
+            Whether loads are displayed.
+        show_bar_text : bool, default=False
+            Whether bar labels are displayed.
+        show_node_text : bool, default=True
+            Whether node labels are displayed.
+        show_load_text : bool, default=True
+            Whether load labels are displayed.
+        show_full_hinges : bool, default=True
+            Whether full hinge symbols are displayed.
+        decimals : int, default=2
+            Number of decimals for labels.
+        sig_digits : int | None, default=None
+            Number of significant digits for labels.
+        """
+        # Local imports avoid a cycle: preprocessing.System -> SystemGeo ->
+        # preprocessing.
+        from sstatics.core.postprocessing.graphic_objects import (
+            ObjectRenderer, SystemGeo
+        )
+
+        system_geo = SystemGeo(
+            self,
+            mesh_type=mesh_type,
+            show_load=show_load,
+            show_bar_text=show_bar_text,
+            show_node_text=show_node_text,
+            show_load_text=show_load_text,
+            show_full_hinges=show_full_hinges,
+            decimals=decimals,
+            sig_digits=sig_digits
+        )
+        ObjectRenderer(system_geo, mode).show()
+
 
 @dataclass(eq=False)
 class Mesh:

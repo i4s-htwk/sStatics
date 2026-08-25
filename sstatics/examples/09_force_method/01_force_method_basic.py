@@ -15,6 +15,8 @@ The system includes:
 """
 
 # 1. Import required modules
+import sys
+
 from sstatics.core.calc_methods import FirstOrder, ForceMethod
 from sstatics.core.preprocessing import (
     Node, Bar, Material, CrossSection, System, BarLineLoad, BarPointLoad
@@ -50,7 +52,9 @@ bars = [b1, b2, b3]
 system = System(bars)
 
 # Show system graphic
-ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+# ObjectRenderer(SystemGeo(system, show_bar_text=True), 'plotly').show()
+system.plot(show_bar_text=True, mode='plotly')
+
 
 # 7. Initialize Force Method
 force_method = ForceMethod(system)
@@ -161,3 +165,6 @@ print(force_method.work_of(
     uls_index_j=1,
     sum=False
 ))
+
+
+sys.exit()
