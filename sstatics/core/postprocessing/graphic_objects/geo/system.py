@@ -5,6 +5,9 @@ from functools import cached_property
 
 from sstatics.core.preprocessing import Bar, Node, System
 
+from sstatics.core.postprocessing.graphic_objects.geo.dimensioning import DimensioningGeo, \
+    DimensioningGeo                                                                   #neu      
+
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import \
     DEFAULT_BAR, DEFAULT_CIRCLE_TEXT, DEFAULT_LINE, DEFAULT_TEXT
 from sstatics.core.postprocessing.graphic_objects.geo.object_geo import \
@@ -23,20 +26,23 @@ class SystemGeo(ObjectGeo):
             system: System,
             mesh_type: Literal['bars', 'user_mesh', 'mesh'] = 'bars',
             show_load: bool = True,
-            show_bar_text: bool = False,
+            show_bar_text: bool = True,
             show_node_text: bool = True,
             show_load_text: bool = True,
             show_tensile_zone: dict[Bar: bool] | None = None,
             show_full_hinges: bool = True,
+            show_dimensions: bool = True,           # ein- und ausschalten der Bemaßung
             decimals: int = 2,
             sig_digits: int | None = None,
             load_distances: dict | None = None,
+            dimensions: list[tuple] | None = None,
+            dimension_gap: float = 1.0,             # Abstand der Bemaßungslinien von den Objekten
             **kwargs
     ):
         self._validate_system(
             system, mesh_type, show_load, show_bar_text, show_node_text,
-            show_load_text, show_full_hinges, show_tensile_zone, decimals,
-            sig_digits, load_distances
+            show_load_text, show_full_hinges, show_tensile_zone, show_dimensions,
+            decimals, sig_digits, load_distances
         )
         self._system = system
         self._mesh_type = mesh_type
@@ -46,9 +52,12 @@ class SystemGeo(ObjectGeo):
         self._show_load_text = show_load_text
         self._show_full_hinges = show_full_hinges
         self._show_tensile_zone = show_tensile_zone or {}
+        self._show_dimensions = show_dimensions
         self._decimals = decimals
         self._sig_digits = sig_digits
         self._load_distances = load_distances
+        self._dimensions = dimensions                   # neu
+        self._dimension_gap = dimension_gap             # neu
         super().__init__(
             origin=(system.bars[0].node_i.x, system.bars[0].node_i.z), **kwargs
         )
@@ -58,8 +67,62 @@ class SystemGeo(ObjectGeo):
         return [
             *self._bar_elements,
             *self._node_elements,
-            *self._full_hinge_elements
+            *self._full_hinge_elements,
+            *self._dimensioning_elements          # neu hinzugefügt
         ]
+
+    @staticmethod                       # für die Auflösung von Punkten (Node-Objekte oder rohe Tupel)
+    def _resolve_point(point):
+        """Erlaubt sowohl rohe (x, z)-Tupel als auch Node-Objekte als Bemaßungs-Endpunkte, damit man z.B. direkt node_1, node_2 statt (node_1.x, node_1.z) schreiben kann."""
+        if hasattr(point, 'x') and hasattr(point, 'z'):
+            return point.x, point.z
+        return point
+
+    @property                           # Liefert die grafischen Elemente für die Bemaßung
+    def _dimensioning_elements(self):
+        if not self._show_dimensions:
+            return []
+        
+        specs = (
+            self._auto_dimension_specs if self._dimensions is None    # None führt zu automatisch generieren
+            else self._dimensions
+        )
+        
+        elements = []
+        for dim in specs:
+            point_i, point_j, distance = dim[0], dim[1], dim[2]
+            measure = dim[3] if len(dim) > 3 else None
+            dim_type = dim[4] if len(dim) > 4 else None
+            elements.append(DimensioningGeo(
+                self._resolve_point(point_i), self._resolve_point(point_j),
+                distance, measure=measure, dim_type=dim_type,
+                line_style=self._line_style, text_style=self._text_style
+            ))
+        return elements
+    
+    @property
+    def _auto_dimension_specs(self):
+        """Erzeugt automatisch eine Bemaßungskette: 
+        alle eindeutigen x-Koordinaten der Knoten (horizontal, unterhalb des Systems)
+        alle eindeutigen z-Koordinaten (vertikal, links vom System)
+        Jeweils als Kette aufeinanderfolgender Abschnitte.
+        Keine schrägen Bemaßungen möglich.
+        Wird nur benutzt, wenn "dimensions" nicht explizit gesetzt wurde (automatisch generiert, wenn None)."""
+        xs = sorted({round(node.x, 4) for node in self._nodes})
+        zs = sorted({round(node.z, 4) for node in self._nodes})
+
+        gap = self._dimension_gap
+        x_min = min(xs) if xs else 0.0
+        z_max = max(zs) if zs else 0.0
+        h_line = z_max + gap     # eine gemeinsame Linie UNTERHALB des ganzen Systems
+        v_line = x_min - gap     # eine gemeinsame Linie LINKS vom ganzen System
+
+        specs = []
+        for x0, x1 in zip(xs, xs[1:]):
+            specs.append(((x0, 0.0), (x1, 0.0), h_line, None, 1))
+        for z0, z1 in zip(zs, zs[1:]):
+            specs.append(((0.0, z0), (0.0, z1), v_line, None, 2))
+        return specs
 
     @cached_property
     def text_elements(self):
@@ -270,8 +333,8 @@ class SystemGeo(ObjectGeo):
     @staticmethod
     def _validate_system(
             system, mesh_type, show_load, show_bar_text, show_node_text,
-            show_load_text, show_full_hinges, show_tensile_zone, decimals,
-            sig_digits, load_distances
+            show_load_text, show_full_hinges, show_tensile_zone, show_dimensions,       # show_dimensions hinzugefügt
+            decimals, sig_digits, load_distances
     ):
         if not isinstance(system, System):
             raise TypeError(
@@ -338,6 +401,12 @@ class SystemGeo(ObjectGeo):
                 f'{type(show_full_hinges).__name__!r}'
             )
 
+        if not isinstance(show_dimensions, bool):                          # Überprüfung, ob show_dimensions ein boolescher Wert ist
+            raise TypeError(                                
+                f'"show_dimensions" must be a boolean, got '
+                f'{type(show_dimensions).__name__!r}'       
+            )
+
         if not isinstance(decimals, int):
             raise TypeError(
                 f'"decimals" must be int or None, '
@@ -398,6 +467,10 @@ class SystemGeo(ObjectGeo):
     def show_full_hinges(self):
         return self._show_full_hinges
 
+    @property                             # Liefert, ob die Bemaßungen angezeigt werden sollen oder ausgeblendet werden.
+    def show_dimensions(self):
+        return self._show_dimensions
+
     @property
     def decimals(self):
         return self._decimals
@@ -422,6 +495,7 @@ class SystemGeo(ObjectGeo):
             f'show_load_text={self._show_load_text}, '
             f'show_tensile_zone={self._show_tensile_zone}, '
             f'show_full_hinges={self._show_full_hinges}, '
+            f'show_dimensions={self._show_dimensions}, '                # neu hinzugefügt
             f'decimals={self._decimals}, '
             f'sig_digits={self._sig_digits}, '
             f'load_distances={self._load_distances}, '

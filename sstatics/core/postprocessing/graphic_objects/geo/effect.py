@@ -36,6 +36,7 @@ class PointEffectGeo(ObjectGeo):
             show_text: bool = True,
             decimals: int = 2,
             sig_digits: int | None = None,
+            element_type: str = 'load',                        # Typ des Elements (z.B. 'load' oder 'reaction')
             **kwargs
     ):
         super().__init__(origin=origin, **kwargs)
@@ -47,6 +48,7 @@ class PointEffectGeo(ObjectGeo):
         self._show_text = show_text
         self._decimals = decimals
         self._sig_digits = sig_digits
+        self._element_type = element_type
 
     @cached_property
     def graphic_elements(self):
@@ -57,11 +59,11 @@ class PointEffectGeo(ObjectGeo):
         elements = []
         if effect.x:
             elements.append(self._create_force(
-                np.pi / 2 + effect_rot, (0.0, 0.0), effect.x
+                np.pi / 2 + effect_rot, (0.0, 0.0), effect.x, axis='x'
             ))
         if effect.z:
             elements.append(self._create_force(
-                effect_rot, (0.0, post_trans_z), effect.z)
+                effect_rot, (0.0, post_trans_z), effect.z, axis='z')
             )
         if effect.phi:
             elements.append(self._create_moment(effect_rot + flip_rot))
@@ -73,25 +75,49 @@ class PointEffectGeo(ObjectGeo):
 
     def _create_force(
             self, rotation: float, post_trans: tuple[float, float],
-            value: float
+            value: float, axis: str = 'z'
     ):
         sign_rot = 0 if value > 0 else np.pi
+        load_style = {                                                 
+        **self._line_style,                                             # bestehenden Stil übernehmen
+        'element_type': self._element_type,                             # markiert Kopf+Schaft als "Last"
+        'load_origin': self._origin,                                    # exakter Angriffspunkt (Weltkoordinaten)
+        'load_value': self._round_value(value),                         # angezeigter Zahlenwert
+        'load_axis': axis,                                             # Achse der Kraft ('x' oder 'z')
+        }
+        load_text_style = {**self._text_style, 'element_type': 'load'}  # markiert Text als "Last"
         return StraightArrowGeo(
             self._origin, **self._DEFAULT_FORCE, distance=self._distance,
             text=self._text_value(value, is_phi=False),
             rotation=rotation + sign_rot, post_translation=post_trans,
-            line_style=self._line_style, text_style=self._text_style
+            line_style=load_style, text_style=load_text_style           # bestehenden Stil übernehmen
         )
 
     def _create_moment(self, rotation: float):
         angle_span = self._DEFAULT_MOMENT['angle_span']
+        clockwise = self._effect.phi >= 0               # Richtung: im Uhrzeigersinn
         if self._effect.phi < 0:
             angle_span = angle_span[::-1]
+        moment_style = {
+            **self._line_style,
+            'element_type': self._element_type,
+            'load_kind': 'moment',                      # Unterscheidung Moment von Einzelkraft
+            'load_clockwise': clockwise,
+            'load_origin': self._origin,
+            'load_value': self._round_value(self._effect.phi),
+            'load_rotation_rad': rotation,                      # für \load-Rotation
+            'load_radius': self._DEFAULT_MOMENT['radius'],      # für \load-Radius
+            'load_angle_span_deg': (                            # für \load-Winkel
+                float(np.degrees(angle_span[0])),
+                float(np.degrees(angle_span[1]))
+            ),
+        }
+        moment_text_style = {**self._text_style, 'element_type': 'load'}
         return CurvedArrowGeo(
             self._origin, **{**self._DEFAULT_MOMENT, 'angle_span': angle_span},
             text=self._text_value(self._effect.phi, is_phi=True),
             rotation=rotation,
-            line_style=self._line_style, text_style=self._text_style
+            line_style=moment_style, text_style=moment_text_style
         )
 
     def _round_value(self, value):
@@ -335,14 +361,45 @@ class LineLoadGeo(ObjectGeo):
             load_values = self._handle_x_direction(
                 load, x0, x1, z0, z1, load_angle, arrow_angle
             )
+        lineload_style = {
+            **self._line_style,
+            'element_type': 'lineload',
+            'lineload_type': self._stanli_lineload_type(load),
+            'lineload_start': load_values['start'],
+            'lineload_end': load_values['end'],
+            'lineload_value_i': self._start_scale,
+            'lineload_value_j': self._end_scale,
+            'lineload_distance': self._distance_to_bar,
+            'lineload_angle_deg': float(np.degrees(load_values['load_angle'])),   # Winkel der Linienlast in Grad um in TikZ korrekt darzustellen
+            'lineload_labels': self._text_values,                                 # Beschriftungen der Linienlast
+            'lineload_axis': load.direction,
+            'lineload_bar_x_i': x0,
+            'lineload_bar_x_j': x1,
+        }
 
         return [LineArrowGeo(
             **load_values, load_distance=self._distance_to_bar,
             arrow_spacing=self._distance_to_arrow,
             start_scale=self._start_scale, end_scale=self._end_scale,
             **self._arrow_style, text=self._text_values,
-            line_style=self._line_style, text_style=self._text_style
+            line_style=lineload_style, 
+            text_style={**self._text_style, 'element_type': 'lineload'}         # Markierung des Textes als zu einer Linienlast gehörig
         )]
+
+    @staticmethod
+    def _stanli_lineload_type(load):
+        """Ordnet die BarLineLoad-Attribute (direction/coord/length) dem stanli-\\lineload-Typ zu:
+        1 = auf Stab in lokale z-Achse, 2 = auf Stab in globale z-Achse, 3 = projiziert auf den Stab in globale z-Achse.
+        """
+        if load.direction == 'z' and load.coord == 'system' and load.length == 'proj':
+            return 3
+        if load.direction == 'x' and load.coord == 'system' and load.length == 'proj':
+            return 'x_proj'                 # kein passender stanli-Typ, wird in TikZ eigenständig gezeichnet
+        if load.direction == 'x' and load.coord == 'bar':
+            return 'x_axial'                # axial in x-Richtung am Stab (auch kein passender stanli-Typ vorhanden)
+        if load.coord == 'bar':
+            return 1
+        return 2
 
     @cached_property
     def text_elements(self):
@@ -359,12 +416,12 @@ class LineLoadGeo(ObjectGeo):
     def _handle_z_direction(
             self, load, x0, x1, z0, z1, load_angle, arrow_angle
     ):
-        if x0 != x1:
+        if load.coord == 'bar':
+            load_angle = self._inclination      # Außerhalb von if x0 != x1, gilt jetzt auch für senkrechte Stäbe
+        elif x0 != x1:
             if load.coord == 'system' and load.length == 'proj':
                 z0 = z1 = min(z0, z1)
                 x0, x1 = sorted((x0, x1))
-            elif load.coord == 'bar':
-                load_angle = self._inclination
         else:
             if load.coord == 'system' and load.length == 'exact':
                 arrow_angle = np.pi / 2
@@ -378,7 +435,7 @@ class LineLoadGeo(ObjectGeo):
             self, load, x0, x1, z0, z1, load_angle, arrow_angle
     ):
         if load.coord == 'bar':
-            load_angle = 0 if x0 == x1 else self._inclination
+            load_angle = self._inclination                  # ohne Bedingung für x0 != x1, gilt jetzt auch für senkrechte Stäbe
             arrow_angle = np.pi / 2
         elif load.coord == 'system' and load.length == 'proj':
             x0 = x1 = min(x0, x1)
@@ -387,7 +444,7 @@ class LineLoadGeo(ObjectGeo):
             if x0 == x1:
                 z0, z1 = max(z0, z1), min(z0, z1)
             else:
-                load_angle = np.pi / 2
+                load_angle = np.pi / 2 + self._inclination
         return dict(
             start=(x0, z0), end=(x1, z1), load_angle=load_angle,
             arrow_angle=arrow_angle

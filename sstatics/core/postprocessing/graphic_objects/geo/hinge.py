@@ -52,6 +52,7 @@ class HingeGeo(ObjectGeo, abc.ABC):
         'line': DEFAULT_HINGE
     }
     CLASS_DIMENSIONS: dict[str, float]
+    STANLI_TYPE: str | None = None
 
     def __init_subclass__(cls):
         """
@@ -85,6 +86,28 @@ class HingeGeo(ObjectGeo, abc.ABC):
         self._width = width
         self._height = height
         self._x0, self._z0 = self._origin
+        
+    def _tag(self, style):                    # neue Methode um Gelenktypen in STANLI für TikzRenderer zu taggen
+        """Reichert einen line_style um stanli-Metadaten an, damit TikzRenderer daraus einen \\hinge-Befehl bauen kann. 
+        Wenn keine STANLI_TYPE-Zuordnung existiert, wird der line_style unverändert zurückgegeben und eine normale Zeichnung erzeugt.
+        Falsche Positionierung von Teilgelenken wird durch das 'hinge_origin_override'-Feld korrigiert.
+        Für den Normalfall wird weiterhin die ursprüngliche Position self._origin verwendet."""
+        if self.STANLI_TYPE is None:
+            return style
+        origin = style.get('hinge_origin_override', self._origin)           # Korrektur der Position bei Teilgelenken, Ursache ist eine bereits platzierte Koordinate eines übergeordneten Elements
+        return {
+            **style,
+            'element_type': 'hinge',
+            'hinge_type': self.STANLI_TYPE,
+            'hinge_origin': origin,
+        }
+
+    def _suppress_if_tagged(self, style):      # neue Methode um bei getaggten Gelenken den Hintergrund zu unterdrücken, um eine weiße Füllung zu erstellen
+        """Für den weißen Hintergrund/Maskenkreis zeichnet \\hinge seine eigene weiße Füllung selbst, jedoch könnte sich der eigene Hintergrund darüberlegen und wird deshalb bei getaggten Gelenken komplett unterdrückt.
+        Bleibt für mpl/plotly unverändert, da diese das 'element_type'-Feld ignorieren."""
+        if self.STANLI_TYPE is None:
+            return style
+        return {**style, 'element_type': 'suppress_tikz'}
 
     @cached_property
     def graphic_elements(self):
@@ -176,6 +199,7 @@ class NormalHingeGeo(HingeGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_NORMAL_HINGE
+    STANLI_TYPE = '4-1'                     # Normalkraftgelenk
 
     @cached_property
     def _curve(self):
@@ -187,13 +211,14 @@ class NormalHingeGeo(HingeGeo):
             self._z0 - 1 / 2 * self._height, self._z0 - 1 / 2 * self._height,
             self._z0 + 1 / 2 * self._height, self._z0 + 1 / 2 * self._height
         ]
-        return [OpenCurveGeo(x, z, line_style=self._line_style)]
+        return [OpenCurveGeo(x, z, line_style=self._tag(self._line_style))]
 
     @cached_property
     def _background(self):
         return RectangleGeo(
             (self._x0 - 1 / 8 * self._width, self._z0), self._width / 4,
-            self._height, show_outline=False, line_style=DEFAULT_FILL_WHITE
+            self._height, show_outline=False, 
+            line_style=self._suppress_if_tagged(DEFAULT_FILL_WHITE)
         )
 
 
@@ -206,6 +231,7 @@ class ShearHingeGeo(HingeGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_SHEAR_HINGE
+    STANLI_TYPE = '3-1'                             # Querkraftgelenk
 
     @cached_property
     def _curve(self):
@@ -213,7 +239,7 @@ class ShearHingeGeo(HingeGeo):
         return [
             OpenCurveGeo.from_center(
                 (self._x0 + dx, self._z0), self._height,
-                rotation=np.pi / 2, line_style=self._line_style
+                rotation=np.pi / 2, line_style=self._tag(self._line_style)
             ) for dx in offsets
         ]
 
@@ -221,7 +247,8 @@ class ShearHingeGeo(HingeGeo):
     def _background(self):
         return RectangleGeo(
             self._origin, self._width, self._height,
-            show_outline=False, line_style=DEFAULT_FILL_WHITE
+            show_outline=False, 
+            line_style=self._suppress_if_tagged(DEFAULT_FILL_WHITE)
         )
 
 
@@ -233,19 +260,21 @@ class MomentHingeGeo(HingeGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_MOMENT_HINGE
+    STANLI_TYPE = '1-1'                                 # kleines Momentengelenk
 
     @cached_property
     def _curve(self):
         return [EllipseGeo(
             self._origin, self._width, self._height,
-            line_style=self._line_style
+            line_style=self._tag(self._line_style)
         )]
 
     @cached_property
     def _background(self):
         return EllipseGeo(
             self._origin, self._width, self._height,
-            show_outline=False, line_style=DEFAULT_FILL_WHITE
+            show_outline=False, 
+            line_style=self._suppress_if_tagged(DEFAULT_FILL_WHITE)
         )
 
 
@@ -257,6 +286,7 @@ class FullMomentHingeGeo(MomentHingeGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_FULL_MOMENT_HINGE
+    STANLI_TYPE = '1-2'                          # überschreibt MomentHingeGeo's kleines Gelenk (großes Momentengelenk/Vollgelenk)
 
 
 class CombiHingeGeo(ObjectGeo):
@@ -315,8 +345,16 @@ class CombiHingeGeo(ObjectGeo):
         for i, hinge in enumerate(self._hinges):
             x += self._x_off(i)
             hinge_cls = type(hinge)
+            
+            final_x, final_z = self._transform.apply(x, z)              # zieht die Koordinaten durch die Transformation des CombiHingeGeo
+            final_x, final_z = float(final_x), float(final_z)           # konvertiert die Koordinaten in normale floats
+
+            child_style = {                                             # erstellt den Stil für das Kind-Hinge-Objekt, einschließlich der Ursprung-Override-Koordinaten
+                **hinge.line_style,
+                'hinge_origin_override': (final_x, final_z)
+            }
             elements.append(hinge_cls(
-                (x, z), hinge.width, hinge.height, line_style=hinge.line_style
+                (x, z), hinge.width, hinge.height, line_style=child_style
             ))
         return elements
 

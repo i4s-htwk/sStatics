@@ -99,11 +99,13 @@ class BarGeo(ObjectGeo):
         line_style = self._resolve_style(
             self._bar, DEFAULT_BAR, self._line_style
         )
-        text_style = self._resolve_style(
-            self._bar, DEFAULT_CIRCLE_TEXT, self._text_style
+        line_style = {**line_style, 'element_type': 'beam'}             # neu hinzugefügt: markiert die Stabachse für \beam
+        text_style = self._merge_style(
+            DEFAULT_CIRCLE_TEXT, 
+            {**self._text_style, 'label_type': 'bar_number'}
         )
         return OpenCurveGeo(
-            *self._bar_coords, text=self._text, preferred_text_pos='0,2',
+            *self._bar_coords, text=self._text, preferred_text_pos='0,2',       # bei 0,0 bessere Stabnummernposition
             line_style=line_style, text_style=text_style
         )
 
@@ -125,6 +127,7 @@ class BarGeo(ObjectGeo):
         line_style = self._resolve_style(
             self._bar, DEFAULT_TENSILE_ZONE, self._line_style
         )
+        line_style = {**line_style, 'element_type': 'suppress_tikz'}   # durch \beam zeichnet sich Zugzone schon selbst
         return [
             OpenCurveGeo(
                 *self._bar_coords,

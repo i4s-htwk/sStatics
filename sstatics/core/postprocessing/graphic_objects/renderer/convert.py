@@ -55,6 +55,9 @@ def convert_style(style: dict, target: str) -> dict:
 
     if target == 'plotly' and style_type == 'mpl':
         return convert_mpl_to_plotly(style)
+    
+    if target == 'tikz' and style_type == 'plotly':      # neu hinzugefügt, um Plotly-Stile in TikZ zu konvertieren 
+        return convert_plotly_to_tikz(style)             # Hier müsste die Funktion convert_plotly_to_tikz implementiert werden
 
     raise ValueError(
         f'Stil konnte nicht erkannt oder konvertiert werden: {style}'
@@ -266,6 +269,148 @@ def convert_mpl_to_plotly(style: dict) -> dict:
             plotly_style['mode'] = 'lines'
 
     return plotly_style
+
+def convert_plotly_to_tikz(style: dict) -> dict:
+    """konvertiert einen Plotly-Stil in einen TikZ-kompatiblen Stil."""
+    tikz_style = {}
+    mode = style.get('mode', '')
+ 
+    # für Markierungen (marker) und Linien (line) werden die entsprechenden TikZ-Optionen gesetzt
+    if 'markers' in mode and 'marker' in style:
+        sm = style['marker']
+        tikz_style['marker'] = True
+        tikz_style['marker_size'] = sm.get('size', 4) / 8
+        if 'color' in sm:
+            tikz_style['marker_fill_rgba'] = convert_color_to_mpl(sm['color'])
+        sml = sm.get('line', {})
+        if 'color' in sml:
+            tikz_style['marker_stroke_rgba'] = convert_color_to_mpl(
+                sml['color']
+            )
+        elif 'color' in sm:
+            tikz_style['marker_stroke_rgba'] = convert_color_to_mpl(
+                sm['color']
+            )
+ 
+    # für Text (text) werden die entsprechenden TikZ-Optionen gesetzt
+    if 'text' in mode:
+        st = style.get('textfont', {})
+        tikz_style['is_text'] = True
+        # Plotly-Fontgröße (px-ähnlich) grob in pt umrechnen
+        tikz_style['font_size_pt'] = st.get('size', 12) * 0.75
+        if 'color' in st:
+            tikz_style['text_rgba'] = convert_color_to_mpl(st['color'])
+ 
+    # für Linien (line) werden die entsprechenden TikZ-Optionen gesetzt
+    line_color = style.get('line_color')
+    if line_color:
+        tikz_style['stroke_rgba'] = convert_color_to_mpl(line_color)
+ 
+    sl = style.get('line', {})
+    if 'width' in sl:
+        tikz_style['linewidth_pt'] = sl['width']
+    if 'dash' in sl:
+        dash = sl['dash']
+        tikz_dash_map = {
+            'solid': 'solid',
+            'dot': 'dotted',
+            'dash': 'dashed',
+            'longdash': 'dashed',
+            'dashdot': 'dashdotted',
+        }
+        if dash not in tikz_dash_map:
+            raise ValueError(f'Unrecognized line dash style: {dash}')
+        tikz_style['dash'] = tikz_dash_map[dash]
+ 
+    # für Füllungen (fill) werden die entsprechenden TikZ-Optionen gesetzt
+    if 'fillcolor' in style:
+        tikz_style['fill'] = True
+        tikz_style['fill_rgba'] = convert_color_to_mpl(style['fillcolor'])
+ 
+    # die globale Deckkraft (opacity) wird ebenfalls übernommen
+    if 'opacity' in style:
+        tikz_style['opacity'] = style['opacity']
+    
+    # optionale label_type-Informationen werden übernommen, falls vorhanden
+    if 'label_type' in style:
+        tikz_style['label_type'] = style['label_type']
+    
+    # stanli-style-Informationen
+    if 'element_type' in style:
+        tikz_style['element_type'] = style['element_type']
+    if 'load_origin' in style:                              
+        tikz_style['load_origin'] = style['load_origin']    
+    if 'load_value' in style:                               
+        tikz_style['load_value'] = style['load_value']
+    if 'load_axis' in style:
+        tikz_style['load_axis'] = style['load_axis']
+        
+    if 'support_type' in style:  
+        tikz_style['support_type'] = style['support_type']
+    if 'support_origin' in style:                         
+        tikz_style['support_origin'] = style['support_origin'] 
+    if 'support_rotation' in style:
+        tikz_style['support_rotation'] = style['support_rotation']
+    
+    if 'load_kind' in style:                                                    # Moment
+        tikz_style['load_kind'] = style['load_kind']
+    if 'load_clockwise' in style:
+        tikz_style['load_clockwise'] = style['load_clockwise']
+        
+    if 'lineload_type' in style:                                                # Linienlast
+        tikz_style['lineload_type'] = style['lineload_type']
+    if 'lineload_start' in style:
+        tikz_style['lineload_start'] = style['lineload_start']
+    if 'lineload_end' in style:
+        tikz_style['lineload_end'] = style['lineload_end']
+    if 'lineload_value_i' in style:
+        tikz_style['lineload_value_i'] = style['lineload_value_i']
+    if 'lineload_value_j' in style:
+        tikz_style['lineload_value_j'] = style['lineload_value_j']
+    if 'lineload_distance' in style:
+        tikz_style['lineload_distance'] = style['lineload_distance']
+    if 'lineload_angle_deg' in style:
+        tikz_style['lineload_angle_deg'] = style['lineload_angle_deg']
+    if 'lineload_labels' in style:
+        tikz_style['lineload_labels'] = style['lineload_labels']
+    if 'lineload_axis' in style:                                            # Richtung: 'x' oder 'z'
+        tikz_style['lineload_axis'] = style['lineload_axis']
+    if 'lineload_bar_x_i' in style:
+        tikz_style['lineload_bar_x_i'] = style['lineload_bar_x_i']
+    if 'lineload_bar_x_j' in style:
+        tikz_style['lineload_bar_x_j'] = style['lineload_bar_x_j']
+        
+    if 'hinge_type' in style:                       
+        tikz_style['hinge_type'] = style['hinge_type']
+    if 'hinge_origin' in style:                     
+        tikz_style['hinge_origin'] = style['hinge_origin']
+        
+    if 'anchor' in style:
+        tikz_style['anchor'] = style['anchor']
+        
+    if 'dim_point_i' in style:                             # 
+        tikz_style['dim_point_i'] = style['dim_point_i']
+    if 'dim_point_j' in style:
+        tikz_style['dim_point_j'] = style['dim_point_j']
+    if 'dim_distance' in style:
+        tikz_style['dim_distance'] = style['dim_distance']
+    if 'dim_measure' in style:
+        tikz_style['dim_measure'] = style['dim_measure']
+    if 'dim_type' in style:
+        tikz_style['dim_type'] = style['dim_type']
+        
+    if 'sf_pivot' in style:                                  # Für Schnittkraftflächen
+        for key in (
+                'sf_pivot', 'sf_rotation_deg', 'sf_length', 'sf_index',
+                'sf_value_i', 'sf_value_j', 'sf_slope_i', 'sf_slope_j',
+                'sf_labels'
+        ):
+            if key in style:
+                tikz_style[key] = style[key]
+        
+    return tikz_style
+
+    # TODO: erster Versuch, spätere Bearbeitung nötig
 
 
 def convert_color_to_plotly(color):

@@ -5,9 +5,9 @@ import numpy as np
 
 from .convert import convert_style
 from ..geo.object_geo import ObjectGeo
-from ..utils.defaults import PLOTLY, MPL, DEFAULT_NUMBER_OF_TEXT_RINGS, \
+from ..utils.defaults import PLOTLY, MPL, TIKZ, DEFAULT_NUMBER_OF_TEXT_RINGS, \
     DEFAULT_NUMBER_OF_TEXT_POSITIONS
-
+    # TIKZ neu als Import hinzugefügt
 
 class AbstractRenderer(ABC):
 
@@ -31,6 +31,8 @@ class AbstractRenderer(ABC):
         for o in obj:
             for x, z, style in self._iter_graphic_elements(o):
                 self._all_graphic_elements.append((x, z, style))
+                if style.get('element_type') == 'dimensioning' and self._mode != TIKZ:          # Bemaßung wird nur in Tikz zugelassen bzw. für die anderen übersprungen, da fehlerhaft in anderen Modi
+                    continue
                 style = convert_style(style, self._mode)
                 self.add_graphic(x, z, **style)
 
@@ -40,6 +42,8 @@ class AbstractRenderer(ABC):
             for (
                     x, z, text, style, preferred, rotation
             ) in self._iter_text_elements(o):
+                if style.get('element_type') == 'dimensioning' and self._mode != TIKZ:          # siehe Kommentar oben: Bemaßung wird nur in Tikz zugelassen bzw. für die anderen übersprungen, da fehlerhaft in anderen Modi
+                    continue
                 x, z = self._find_optimal_text_position(
                     x, z, text, preferred, rotation
                 )
@@ -317,9 +321,9 @@ class AbstractRenderer(ABC):
             raise TypeError(
                 f'mode must be a string, got {type(mode).__name__!r}'
             )
-        if mode not in (PLOTLY, MPL):
+        if mode not in (PLOTLY, MPL, TIKZ):  # TIKZ als gültiger Modus hinzugefügt
             raise ValueError(
-                f'Invalid mode {mode!r}. Expected one of: {PLOTLY!r}, {MPL!r}.'
+                f'Invalid mode {mode!r}. Expected one of: {PLOTLY!r}, {MPL!r}, {TIKZ!r}.'   # TIKZ als gültiger Modus hinzugefügt
             )
 
     @property

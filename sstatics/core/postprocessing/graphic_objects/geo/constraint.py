@@ -59,6 +59,8 @@ class ConstraintGeo(ObjectGeo, abc.ABC):
         'line': DEFAULT_SUPPORT
     }
     CLASS_DIMENSIONS: dict[str, float]
+    STANLI_TYPE: str | None = None          # NEU: welcher stanli-\support-Typ
+    STANLI_ROTATION_OFFSET: float = 0       # Korrekturwinkel in Grad, um den stanli-\support-Typ zu drehen
 
     def __init_subclass__(cls):
         """Validate subclass definitions.
@@ -84,6 +86,7 @@ class ConstraintGeo(ObjectGeo, abc.ABC):
             origin: tuple[float, float],
             width: float | None = None,
             height: float | None = None,
+            is_support: bool = True,        # True = eigenständiges Auflager, False = nur interner Baustein
             **kwargs
     ):
         width = width if width is not None else self.CLASS_DIMENSIONS['width']
@@ -94,7 +97,23 @@ class ConstraintGeo(ObjectGeo, abc.ABC):
         super().__init__(origin=origin, **kwargs)
         self._width = width
         self._height = height
+        self._is_support = is_support       # neu hinzugefügt
         self._x0, self._z0 = self._origin
+    
+    def _tag(self, style):                   # neu erstellte Methode, um stanli-spezifische Informationen zu übergeben
+        if not self._is_support or self.STANLI_TYPE is None:
+            return style
+        rotation_deg = (
+            np.degrees(self._transform.rotation)          # Rotation aus dem bestehenden Transform lesen
+            + self.STANLI_ROTATION_OFFSET
+        )
+        return {
+            **style,
+            'element_type': 'support',
+            'support_type': self.STANLI_TYPE,
+            'support_origin': self._origin,
+            'support_rotation': rotation_deg,
+        }
 
     @cached_property
     @abc.abstractmethod
@@ -126,7 +145,8 @@ class ConstraintGeo(ObjectGeo, abc.ABC):
         list[tuple[float, float, str, dict]]
             List containing a single text element.
         """
-        return [(*self._origin, self._text, self._text_style)]
+        text_style = {**self._text_style, 'label_type': 'support'}      # neu hinzugefügt: markiert den Text als zugehörig zum Auflager
+        return [(*self._origin, self._text, text_style)]
 
     @staticmethod
     def _validate_support(width, height):
@@ -174,24 +194,25 @@ class LineHatchGeo(ConstraintGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_CHAMPED_SUPPORT
+    STANLI_TYPE = '3-1'                       # dreiwertiges Auflager (u,w,phi sind fixiert) = vollständig eingespannt
 
     @cached_property
     def graphic_elements(self):
         line = OpenCurveGeo.from_center(
             self._origin, length=self._height, rotation=np.pi / 2,
-            line_style=self._line_style
+            line_style=self._tag(self._line_style)                  # geändert zu _tag(self._line_style)
         )
         hatch_style = DEFAULT_CHAMPED_SUPPORT_HATCH.copy()
-        hatch_style['line_style'] = self._line_style
+        hatch_style['line_style'] = self._tag(self._line_style)     # geändert zu _tag(self._line_style)
         hatch = RectangleGeo(
             (self._x0 - self._width / 2, self._z0), width=self._width,
             height=self._height, hatch_style=hatch_style, show_outline=False,
-            line_style=self._line_style,
+            line_style=self._tag(self._line_style),                 # geändert zu _tag(self._line_style)
         )
         return [line, hatch]
 
 
-class DoubleLineHatchGeo(ConstraintGeo):
+class DoubleLineHatchGeo(ConstraintGeo):    
     """
     Geometric representation of a double-hatched clamped support.
 
@@ -203,17 +224,19 @@ class DoubleLineHatchGeo(ConstraintGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_FIXED_SUPPORT_UPHI
+    STANLI_TYPE = '4-1'                        # u & phi fest, w frei = Typ 4 um 90° gedreht
+    STANLI_ROTATION_OFFSET = 90.0              # Korrekturwinkel in Grad, um den stanli-\support-Typ zu drehen
 
     @cached_property
     def graphic_elements(self):
         line = OpenCurveGeo.from_center(
             self._origin, length=self._height, rotation=np.pi / 2,
-            line_style=self._line_style
+            line_style=self._tag(self._line_style) 
         )
         line_hatch = LineHatchGeo(
             (self._x0 - self._width / 2, self._z0),
             width=self._width / 2, height=self._height,
-            line_style=self._line_style
+            line_style=self._tag(self._line_style), is_support=False
         )
         return [line, line_hatch]
 
@@ -242,16 +265,17 @@ class RollerSupportGeo(ConstraintGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_ROLLER_SUPPORT
+    STANLI_TYPE = '2-1'                         # einwertiges Auflager (u fixiert, w & phi sind frei) = Rollenlager/Gleitlager
 
     @cached_property
     def graphic_elements(self):
         triangle = IsoscelesTriangleGeo(
             origin=self._origin, width=self._width,
-            height=3 / 4 * self._height, line_style=self._line_style
+            height=3 / 4 * self._height, line_style=self._tag(self._line_style)
         )
         line = OpenCurveGeo.from_center(
             origin=(self._x0, self._z0 + self._height), length=self._width,
-            line_style=self._line_style
+            line_style=self._tag(self._line_style)
         )
         return [triangle, line]
 
@@ -264,23 +288,23 @@ class PinnedSupportGeo(ConstraintGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_PINNED_SUPPORT
-
+    # kein STANLI_TYPE vorhanden (nur Moment wird gehalten)
     @cached_property
     def graphic_elements(self):
         top_line = OpenCurveGeo.from_center(
             (self._x0 + 3 / 14 * self._width,
              self._z0 - 3 / 8 * self._height), length=5 / 7 * self._width,
-            line_style=self._line_style
+            line_style=self._tag(self._line_style)
         )
         bottom_line = OpenCurveGeo.from_center(
             (self._x0 + 3 / 14 * self._width,
              self._z0 + 3 / 8 * self._height), length=5 / 7 * self._width,
-            line_style=self._line_style
+            line_style=self._tag(self._line_style)
         )
         double_line_hatch = DoubleLineHatchGeo(
             (self._x0 - self._width / 7, self._z0),
             width=2 / 7 * self._width, height=self._height,
-            line_style=self._line_style
+            line_style=self._tag(self._line_style), is_support=False
         )
         point = PointGeo(self._origin, point_style=self._point_style)
         return [top_line, bottom_line, double_line_hatch, point]
@@ -293,20 +317,21 @@ class FixedSupportUWGeo(ConstraintGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_FIXED_SUPPORT_UW
+    STANLI_TYPE = '1-1'                         # zweiwertiges Auflager (u & w sind fixiert, phi frei) = Festlager mit Schraffur
 
     @cached_property
     def graphic_elements(self):
         triangle = IsoscelesTriangleGeo(
             self._origin, self._width, 3 / 4 * self._height,
-            line_style=self._line_style
+            line_style=self._tag(self._line_style)
         )
         hatch_style = DEFAULT_SUPPORT_HATCH.copy()
-        hatch_style['line_style'] = self._line_style
+        hatch_style['line_style'] = self._tag(self._line_style)
         hatch = RectangleGeo(
             (self._x0, self._z0 + 7 / 8 * self._height),
             width=self._width, height=self._height / 4,
             hatch_style=hatch_style, show_outline=False,
-            line_style=self._line_style,
+            line_style=self._tag(self._line_style),
         )
         return [triangle, hatch]
 
@@ -323,21 +348,22 @@ class FixedSupportWPhiGeo(ConstraintGeo):
     """
 
     CLASS_DIMENSIONS = DEFAULT_FIXED_SUPPORT_WPHI
+    STANLI_TYPE = '4-1'                         # w & phi fest, u frei
 
     @cached_property
     def graphic_elements(self):
         top_line = OpenCurveGeo.from_center(
             (self._x0 + self._width / 4, self._z0 - 3 / 8 * self._height),
-            length=5 / 6 * self._width, line_style=self._line_style
+            length=5 / 6 * self._width, line_style=self._tag(self._line_style)
         )
         bottom_line = OpenCurveGeo.from_center(
             (self._x0 + self._width / 4, self._z0 + 3 / 8 * self._height),
-            length=5 / 6 * self._width, line_style=self._line_style
+            length=5 / 6 * self._width, line_style=self._tag(self._line_style)
         )
         line_hatch = LineHatchGeo(
             (self._x0 - self._width / 6, self._z0),
             width=self._width / 6, height=self._height,
-            line_style=self._line_style
+            line_style=self._line_style, is_support=False
         )
         point = PointGeo(self._origin, point_style=self._point_style)
         return [top_line, bottom_line, line_hatch, point]
@@ -359,6 +385,7 @@ class TranslationalSpringGeo(ConstraintGeo):
     from :py:attr:`CLASS_DIMENSIONS` are used.
     """
     CLASS_DIMENSIONS = DEFAULT_TRANSLATIONAL_SPRING
+    STANLI_TYPE = '5-1'                         # Auflager mit Federsymbol
 
     @cached_property
     def graphic_elements(self):
@@ -372,17 +399,17 @@ class TranslationalSpringGeo(ConstraintGeo):
             *[self._z0 + i / 11 * self._height for i in range(2, 10)],
             self._z0 + self._height
         ]
-        zigzag = OpenCurveGeo(x, z, line_style=self._line_style)
+        zigzag = OpenCurveGeo(x, z, line_style=self._tag(self._line_style))
 
         bottom_line = OpenCurveGeo(
             [self._x0 - self._width / 2, self._x0 + self._width / 2],
             [self._z0 + self._height, self._z0 + self._height],
-            line_style=self._line_style
+            line_style=self._tag(self._line_style)
         )
 
         circle = EllipseGeo(
             origin=(self._x0, self._z0 + self.height), width=self._width / 8,
-            height=self._height / 11, line_style=self._line_style
+            height=self._height / 11, line_style=self._tag(self._line_style)
         )
 
         background = EllipseGeo(
@@ -409,18 +436,19 @@ class TorsionalSpringGeo(ConstraintGeo):
     torsional effect.
     """
     CLASS_DIMENSIONS = DEFAULT_TORSIONAL_SPRING
+    STANLI_TYPE = '6-2'                         # Auflager mit Drehfeder-Symbol
 
     @cached_property
     def graphic_elements(self):
         line = OpenCurveGeo.from_center(
             (self._x0 - self._width / 2, self._z0 + self._height * 7 / 16),
             length=self._z0 + self._height / 4,
-            line_style=self._line_style, rotation=np.pi / 2
+            line_style=self._tag(self._line_style), rotation=np.pi / 2
         )
 
         ellipse = EllipseGeo(
             origin=(self._x0 - self._width / 2, self._z0), width=self._width,
             height=self._height * 7 / 8, angle_range=(np.pi / 2, 2 * np.pi),
-            line_style=self._line_style
+            line_style=self._tag(self._line_style)
         )
         return [line, ellipse]

@@ -262,7 +262,8 @@ DEFAULT_STATE_LINE_TEXT = dict(
 
 PLOTLY = 'plotly'
 MPL = 'mpl'
-VALID_MODES = (PLOTLY, MPL)
+TIKZ = 'tikz'                        # neu hinzugefügt, um TikZ als Rendering-Option zu unterstützen
+VALID_MODES = (PLOTLY, MPL, TIKZ)    # TIKZ zur Liste der gültigen Modi hinzugefügt
 DEFAULT_MODE = PLOTLY
 
 DEFAULT_LAYOUT_X = dict(

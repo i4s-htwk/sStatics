@@ -4,8 +4,9 @@ from functools import cache
 from ..geo.object_geo import ObjectGeo
 from .plotly_renderer import PlotlyRenderer
 from .mpl_renderer import MplRenderer
+from .tikz_renderer import TikzRenderer         # neu hinzugefügt
 from sstatics.core.postprocessing.graphic_objects.utils.defaults import (
-    DEFAULT_MODE, PLOTLY, MPL
+    DEFAULT_MODE, PLOTLY, MPL, TIKZ             # TIKZ ergänzt
 )
 
 
@@ -25,7 +26,7 @@ class ObjectRenderer:
         pending_objects = []
         for obj in objects:
 
-            if isinstance(obj, str) and obj.lower() in (PLOTLY, MPL):
+            if isinstance(obj, str) and obj.lower() in (PLOTLY, MPL, TIKZ):     # TIKZ ergänzt
                 for po in pending_objects:
                     self._groups.append((
                         po if isinstance(po, (list, tuple)) else [po],
@@ -54,47 +55,56 @@ class ObjectRenderer:
             ))
 
     def show(
-            self, show_axis=True, show_grid=False,
-            x_opts: dict | None = None, y_opts: dict | None = None
+            self, show_axis=None, show_grid=None,
+            x_opts: dict | None = None, y_opts: dict | None = None,
+            **tikz_kwargs
     ):
         for renderer in self._render(
-                show_axis, show_grid, x_opts, y_opts
+                show_axis, show_grid, x_opts, y_opts, **tikz_kwargs
         ):
             renderer.show()
 
     @cache
-    def figure(self, show_axis=True, show_grid=False):
+    def figure(self, show_axis=None, show_grid=None):
         figs = []
         for renderer in self._render(show_axis, show_grid):
             figs.append(renderer.figure)
         return figs
 
     def _render(
-            self, show_axis=True, show_grid=False,
-            x_opts: dict | None = None, y_opts: dict | None = None
+            self, show_axis=None, show_grid=None,
+            x_opts: dict | None = None, y_opts: dict | None = None,
+            **tikz_kwargs
     ):
         figures = []
         for objs, mode in self._groups:
             renderer = self._make_renderer(
-                mode, show_axis, show_grid, x_opts, y_opts
+                mode, show_axis, show_grid, x_opts, y_opts, **tikz_kwargs
             )
             renderer.add_objects(*objs)
             figures.append(renderer)
         return figures
 
     @staticmethod
-    def _make_renderer(mode, show_axis, show_grid, x_opts, y_opts):
+    def _make_renderer(mode, show_axis, show_grid, x_opts, y_opts, **tikz_kwargs):
         renderer_cases = {
             PLOTLY: PlotlyRenderer,
-            MPL: MplRenderer
+            MPL: MplRenderer,
+            TIKZ: TikzRenderer      # neu hinzugefügt, um TikZ-Renderer zu unterstützen
         }
         case = renderer_cases.get(mode)
         if case is None:
-            raise ValueError(f'mode must be PLOTLY or MPL, got {mode!r}')
-        return case(
-            show_axis=show_axis, show_grid=show_grid,
-            x_opts=x_opts, y_opts=y_opts
-        )
+            raise ValueError(f'mode must be PLOTLY, MPL, or TIKZ, got {mode!r}')    # TIKZ hinzugefügt
+        kwargs = {'x_opts': x_opts, 'y_opts': y_opts}                               # die Optionen für die Achsen übergeben
+        if show_axis is not None:                                                   # nur setzen, wenn explizit angegeben
+            kwargs['show_axis'] = show_axis
+        if show_grid is not None:                                                   # nur setzen, wenn explizit angegeben, wie show_axis
+            kwargs['show_grid'] = show_grid 
+        
+        if mode == TIKZ:
+            kwargs.update(tikz_kwargs)
+            
+        return case(**kwargs)
 
     @property
     def groups(self):
